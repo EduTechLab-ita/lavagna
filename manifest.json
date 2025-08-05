@@ -1,7 +1,7 @@
 {
     "name": "LIM PWA Editor",
     "short_name": "Lavagna LIM",
-    "start_url": "/lavagna/index.html",
+    "start_url": "/lavagna/",
     "scope": "/lavagna/",
     "display": "standalone",
     "background_color": "#ffffff",
