@@ -1,0 +1,121 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    margin: 0;
+    background-color: #f0f0f0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+header {
+    background-color: #333;
+    color: white;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+#user-session {
+    display: flex;
+    align-items: center;
+}
+#user-profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+#user-pic {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}
+#login-btn, #logout-btn {
+    background-color: #4285F4;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+#logout-btn {
+    background-color: #db4437;
+}
+
+.toolbar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px;
+    background-color: #e9e9e9;
+    border-bottom: 1px solid #ccc;
+    flex-wrap: wrap;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.toolbar button, .toolbar-btn-label {
+    padding: 8px 12px;
+    font-size: 1.2rem;
+    border: 1px solid #ccc;
+    background-color: white;
+    cursor: pointer;
+    border-radius: 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.toolbar button:hover, .toolbar-btn-label:hover {
+    background-color: #f0f0f0;
+}
+
+.toolbar button.active {
+    background-color: #cce5ff;
+    border-color: #007bff;
+}
+
+.toolbar input[type="color"] {
+    width: 40px;
+    height: 40px;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    background: none;
+}
+
+main {
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
+    overflow: hidden;
+}
+
+canvas {
+    border: 1px solid #ccc;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    background-color: white;
+}
+
+.app-footer {
+    padding: 10px 20px;
+    background-color: #f8f9fa;
+    border-top: 1px solid #e7e7e7;
+    text-align: center;
+    font-size: 0.8rem;
+    color: #6c757d;
+    flex-shrink: 0;
+}
+
+.app-footer p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.app-footer strong {
+    color: #343a40;
+}
