@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIM PWA Editor</title>
+    
+    <!-- Collegamenti ai file CSS e Manifest -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Icona per dispositivi Apple -->
+    <link rel="apple-touch-icon" href="images/apple-touch-icon.png">
+    
+    <!-- Colore della barra del browser -->
+    <meta name="theme-color" content="#333333"/>
+</head>
+<body>
+    <header>
+        <h1>La Mia Lavagna Interattiva</h1>
+        <div id="user-session">
+            <button id="login-btn">Accedi con Google</button>
+            <div id="user-profile" style="display: none;">
+                <span id="user-name"></span>
+                <img id="user-pic" src="" alt="User photo" />
+                <button id="logout-btn">Logout</button>
+            </div>
+        </div>
+    </header>
+    
+    <div class="toolbar">
+        <!-- Strumenti -->
+        <button id="draw-btn" title="Disegna">✏️</button>
+        <button id="select-btn" title="Seleziona">👆</button>
+        <button id="eraser-btn" title="Gomma">Eraser</button>
+        <button id="ruler-btn" title="Righello">📏</button>
+        
+        <!-- Controlli -->
+        <label for="color-picker">Colore:</label>
+        <input type="color" id="color-picker" value="#000000">
+        <label for="brush-size">Spessore:</label>
+        <input type="range" id="brush-size" min="1" max="50" value="5">
+        
+        <!-- Caricamento File -->
+        <label for="image-loader" class="toolbar-btn-label" title="Carica Immagine">🖼️
+            <input type="file" id="image-loader" accept="image/*" style="display: none;">
+        </label>
+        <label for="pdf-loader" class="toolbar-btn-label" title="Carica PDF">📄
+            <input type="file" id="pdf-loader" accept="application/pdf" style="display: none;">
+        </label>
+        
+        <!-- Azioni -->
+        <button id="save-btn" title="Salva su Drive" style="display: none;">💾 Salva</button>
+        <button id="load-btn" title="Carica da Drive" style="display: none;">📂 Carica</button>
+        <button id="clear-btn" title="Pulisci Lavagna">🗑️</button>
+    </div>
+
+    <main>
+        <canvas id="whiteboard"></canvas>
+    </main>
+
+    <footer class="app-footer">
+        <p>
+            <strong>LIM PWA Editor v2.0</strong> - Programma professionale per Lavagne Interattive Multimediali e DigitalBoard  
+
+            © 2025 EduTechLab Italia - Sviluppato da Fabio Rizzotto  
+
+            <em>Applicazione gratuita e open source - Progressive Web App (PWA)</em>
+        </p>
+    </footer>
+
+    <!-- Librerie Esterne -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.102/pdf.min.js"></script>
+    
+    <!-- API di Google -->
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded( )"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded( )"></script>
+
+    <!-- Il nostro script principale -->
+    <script src="app.js"></script>
+</body>
+</html>
