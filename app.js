@@ -1,19 +1,24 @@
-// --- Inizializzazione ---
-const canvas = new fabric.Canvas('whiteboard', { objectCaching: false });
+// --- Inizializzazione Canvas e Librerie ---
+const canvas = new fabric.Canvas('whiteboard', { 
+    objectCaching: false // Ottimizzazione per oggetti dinamici come il righello
+});
 
+// Funzione per ridimensionare il canvas in base allo spazio disponibile
 function resizeCanvas() {
     const mainElement = document.querySelector('main');
-    canvas.setWidth(mainElement.offsetWidth - 32);
+    canvas.setWidth(mainElement.offsetWidth - 32); // 32px per il padding (1rem * 2)
     canvas.setHeight(mainElement.offsetHeight - 32);
     canvas.renderAll();
 }
 window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
+resizeCanvas(); // Ridimensiona subito al caricamento
 
+// Impostazioni iniziali del pennello
 canvas.isDrawingMode = true;
 canvas.freeDrawingBrush.width = 5;
 canvas.freeDrawingBrush.color = '#000000';
 
+// Impostazione del worker per PDF.js (necessario per il suo funzionamento)
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.102/pdf.worker.min.js`;
 console.log('Lavagna PWA pronta!' );
 
@@ -28,9 +33,9 @@ const imageLoader = document.getElementById('image-loader');
 const pdfLoader = document.getElementById('pdf-loader');
 const clearBtn = document.getElementById('clear-btn');
 
-// --- Variabili e API Google ---
-const CLIENT_ID = 'IL_TUO_CLIENT_ID_DI_GOOGLE.apps.googleusercontent.com'; // <-- SOSTITUISCI
-const API_KEY = 'LA_TUA_API_KEY_DI_GOOGLE'; // <-- SOSTITUISCI
+// --- Variabili e Inizializzazione API Google ---
+const CLIENT_ID = 'IL_TUO_CLIENT_ID_DI_GOOGLE.apps.googleusercontent.com'; // <-- SOSTITUISCI QUI
+const API_KEY = 'LA_TUA_API_KEY_DI_GOOGLE'; // <-- SOSTITUISCI QUI
 const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest", "https://www.googleapis.com/discovery/v1/apis/oauth2/v2/rest"];
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
@@ -44,6 +49,7 @@ const userProfile = document.getElementById('user-profile');
 const saveBtn = document.getElementById('save-btn');
 const loadBtn = document.getElementById('load-btn');
 
+// Funzione chiamata quando la libreria GAPI (per le API di Drive) è caricata
 function gapiLoaded() {
     gapi.load('client:picker', () => {
         gapiInited = true;
@@ -51,22 +57,25 @@ function gapiLoaded() {
     });
 }
 
+// Funzione chiamata quando la libreria GIS (per il Login) è caricata
 function gisLoaded() {
     tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: SCOPES,
-        callback: '',
+        callback: '', // Il callback viene gestito nella richiesta del token
     });
     gisInited = true;
     maybeEnableButtons();
 }
 
+// Abilita il pulsante di login solo quando entrambe le librerie sono pronte
 function maybeEnableButtons() {
     if (gapiInited && gisInited) {
         loginBtn.style.display = 'block';
     }
 }
 
+// --- Logica di Autenticazione ---
 loginBtn.addEventListener('click', () => {
     tokenClient.callback = async (resp) => {
         if (resp.error !== undefined) {
@@ -112,6 +121,7 @@ function updateUiOnLogout() {
     document.getElementById('user-pic').src = '';
 }
 
+// --- Logica di Salvataggio e Caricamento su Drive ---
 saveBtn.addEventListener('click', () => {
     const boardContent = JSON.stringify(canvas.toJSON());
     const blob = new Blob([boardContent], { type: 'application/json' });
@@ -127,7 +137,7 @@ saveBtn.addEventListener('click', () => {
         body: form,
     }).then(res => res.json()).then(file => {
         alert(`File "${file.name}" salvato con successo!`);
-    });
+    }).catch(err => console.error("Errore nel salvataggio:", err));
 });
 
 loadBtn.addEventListener('click', () => {
@@ -151,11 +161,11 @@ function pickerCallback(data) {
                 canvas.renderAll();
                 alert('Lavoro caricato con successo!');
             });
-        });
+        }).catch(err => console.error("Errore nel caricamento:", err));
     }
 }
 
-// --- Logica Toolbar ---
+// --- Logica della Toolbar ---
 function updateActiveButton(activeBtn) {
     document.querySelectorAll('.toolbar button').forEach(btn => btn.classList.remove('active'));
     if (activeBtn) activeBtn.classList.add('active');
@@ -172,7 +182,7 @@ selectBtn.addEventListener('click', () => {
 });
 eraserBtn.addEventListener('click', () => {
     canvas.isDrawingMode = true;
-    canvas.freeDrawingBrush.color = '#ffffff';
+    canvas.freeDrawingBrush.color = '#ffffff'; // La gomma disegna con il colore dello sfondo
     canvas.freeDrawingBrush.width = parseInt(brushSize.value, 10);
     updateActiveButton(eraserBtn);
 });
@@ -184,15 +194,15 @@ brushSize.addEventListener('input', (e) => {
     canvas.freeDrawingBrush.width = parseInt(e.target.value, 10);
 });
 clearBtn.addEventListener('click', () => {
-    if (confirm('Sei sicuro di voler cancellare tutto?')) {
+    if (confirm('Sei sicuro di voler cancellare tutto il contenuto della lavagna?')) {
         canvas.clear();
         canvas.backgroundColor = '#ffffff';
         canvas.renderAll();
     }
 });
-updateActiveButton(drawBtn);
+updateActiveButton(drawBtn); // Imposta il disegno come modalità predefinita
 
-// --- Logica Righello ---
+// --- Logica del Righello Interattivo ---
 let ruler = null;
 function createRuler() {
     const rulerBody = new fabric.Rect({ width: 500, height: 60, fill: 'rgba(200, 200, 200, 0.7)', stroke: '#666', strokeWidth: 2, originX: 'center', originY: 'center' });
@@ -203,6 +213,7 @@ function createRuler() {
         angleText.set('text', `${angle}°`);
     });
     canvas.add(ruler);
+    ruler.center();
 }
 rulerBtn.addEventListener('click', () => {
     if (ruler) {
@@ -255,7 +266,7 @@ function getSnappedPoint(pointer) {
     return fabric.util.transformPoint(transformedPoint, ruler.calcTransformMatrix());
 }
 
-// --- Logica Caricamento File ---
+// --- Logica di Caricamento File (Immagini e PDF) ---
 imageLoader.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -269,8 +280,9 @@ imageLoader.addEventListener('change', (e) => {
         });
     };
     reader.readAsDataURL(file);
-    e.target.value = '';
+    e.target.value = ''; // Permette di ricaricare lo stesso file
 });
+// Drag and Drop Immagini
 canvas.wrapperEl.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
 canvas.wrapperEl.addEventListener('drop', (e) => {
     e.preventDefault();
@@ -289,6 +301,7 @@ canvas.wrapperEl.addEventListener('drop', (e) => {
         reader.readAsDataURL(file);
     }
 });
+// Caricamento PDF
 pdfLoader.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file || file.type !== 'application/pdf') return;
@@ -318,10 +331,10 @@ pdfLoader.addEventListener('change', (e) => {
         });
     };
     fileReader.readAsArrayBuffer(file);
-    e.target.value = '';
+    e.target.value = ''; // Permette di ricaricare lo stesso file
 });
 
-// --- Registrazione Service Worker ---
+// --- Registrazione del Service Worker ---
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/lavagna/sw.js').then(reg => {
