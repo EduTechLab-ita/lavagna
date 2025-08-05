@@ -1,21 +1,55 @@
+/* Import a modern and clean font from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* --- Variabili Globali per Colori e Stili (CSS Variables) --- */
+/* Questo rende facile cambiare il tema in futuro! */
+:root {
+    --background-main: #F8F9FA; /* Sfondo principale, quasi bianco */
+    --background-secondary: #FFFFFF; /* Sfondo per elementi come la toolbar e la lavagna */
+    --text-primary: #1E293B; /* Colore testo principale, scuro ma non nero */
+    --text-secondary: #64748B; /* Colore testo secondario, grigio */
+    --border-color: #E2E8F0; /* Colore per i bordi, molto leggero */
+    --accent-primary: #4F46E5; /* Colore primario (viola/blu), per selezione e bottoni */
+    --accent-primary-hover: #4338CA; /* Versione più scura per hover */
+    --accent-danger: #DC2626; /* Colore per azioni distruttive (es. logout, pulisci) */
+    --accent-danger-hover: #B91C1C;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --border-radius: 8px; /* Angoli arrotondati, più morbidi */
+}
+
+/* --- Stile Generale del Body --- */
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     margin: 0;
-    background-color: #f0f0f0;
+    background-color: var(--background-main);
+    color: var(--text-primary);
     display: flex;
     flex-direction: column;
     height: 100vh;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased; /* Testo più leggibile su Mac */
+    -moz-osx-font-smoothing: grayscale; /* Testo più leggibile su Firefox */
 }
 
+/* --- Header Moderno --- */
 header {
-    background-color: #333;
-    color: white;
-    padding: 10px 20px;
+    background-color: var(--background-secondary);
+    color: var(--text-primary);
+    padding: 12px 24px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-shrink: 0;
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    z-index: 10; /* Assicura che sia sempre sopra altri elementi */
+}
+
+header h1 {
+    font-size: 1.125rem; /* 18px */
+    font-weight: 600;
+    margin: 0;
 }
 
 #user-session {
@@ -25,89 +59,153 @@ header {
 #user-profile {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
 }
 #user-pic {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
-}
-#login-btn, #logout-btn {
-    background-color: #4285F4;
-    color: white;
-    border: none;
-    padding: 10px 15px;
-    border-radius: 5px;
-    cursor: pointer;
-}
-#logout-btn {
-    background-color: #db4437;
+    border: 2px solid var(--border-color);
 }
 
+/* Stile base per i bottoni nell'header */
+#login-btn, #logout-btn {
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.875rem; /* 14px */
+    transition: background-color 0.2s ease-in-out;
+}
+
+#login-btn {
+    background-color: var(--accent-primary);
+}
+#login-btn:hover {
+    background-color: var(--accent-primary-hover);
+}
+
+#logout-btn {
+    background-color: var(--accent-danger);
+}
+#logout-btn:hover {
+    background-color: var(--accent-danger-hover);
+}
+
+/* --- Toolbar Stile "Figma/Miro" --- */
 .toolbar {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 10px;
-    background-color: #e9e9e9;
-    border-bottom: 1px solid #ccc;
+    padding: 8px;
+    background-color: var(--background-secondary);
+    border: 1px solid var(--border-color);
     flex-wrap: wrap;
-    gap: 10px;
-    flex-shrink: 0;
+    gap: 8px;
+    /* La posizioniamo in alto al centro, sopra la canvas */
+    position: absolute;
+    top: 80px; /* Sotto l'header (60px di header + 20px di spazio) */
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-md);
+    z-index: 5;
 }
 
+/* Bottoni della Toolbar */
 .toolbar button, .toolbar-btn-label {
-    padding: 8px 12px;
-    font-size: 1.2rem;
-    border: 1px solid #ccc;
-    background-color: white;
+    padding: 10px;
+    font-size: 1.25rem; /* Dimensione per le icone emoji */
+    border: none; /* Niente bordi! */
+    background-color: transparent; /* Sfondo trasparente di base */
+    color: var(--text-secondary);
     cursor: pointer;
-    border-radius: 5px;
+    border-radius: var(--border-radius);
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    width: 44px;
+    height: 44px;
 }
 
 .toolbar button:hover, .toolbar-btn-label:hover {
-    background-color: #f0f0f0;
+    background-color: #F1F5F9; /* Un grigio molto leggero per hover */
+    color: var(--text-primary);
 }
 
+/* Bottone attivo/selezionato */
 .toolbar button.active {
-    background-color: #cce5ff;
-    border-color: #007bff;
+    background-color: #EEF2FF; /* Viola/blu molto chiaro */
+    color: var(--accent-primary);
+}
+
+/* Controlli (colore, spessore) */
+.toolbar label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-left: 8px;
+    margin-right: 4px;
 }
 
 .toolbar input[type="color"] {
-    width: 40px;
-    height: 40px;
-    border: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 32px;
+    height: 32px;
     padding: 0;
+    border: none;
+    border-radius: 50%; /* Cerchio perfetto */
     cursor: pointer;
-    background: none;
+    background-color: transparent;
+    border: 2px solid var(--border-color);
+}
+/* Stile per il "preview" del colore */
+.toolbar input[type="color"]::-webkit-color-swatch {
+    border-radius: 50%;
+    border: none;
+}
+.toolbar input[type="color"]::-moz-color-swatch {
+    border-radius: 50%;
+    border: none;
 }
 
+.toolbar input[type="range"] {
+    cursor: pointer;
+    width: 100px;
+}
+
+/* --- Area di Lavoro Principale --- */
 main {
     flex-grow: 1;
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 1rem;
-    overflow: hidden;
+    /* Rimuoviamo il padding per far occupare tutta l'area alla canvas,
+       ma aggiungiamo un po' di spazio in alto per la toolbar */
+    padding: 0; 
+    padding-top: 80px; 
+    overflow: auto; /* Permette di scrollare se la canvas è più grande */
 }
 
 canvas {
-    border: 1px solid #ccc;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    background-color: white;
+    /* La canvas ora si integra con lo sfondo, ma le diamo uno sfondo suo
+       per distinguerla se dovesse essere più piccola dell'area main */
+    background-color: var(--background-secondary);
+    /* Le dimensioni verranno gestite da JavaScript per la responsività */
 }
 
+/* --- Footer Pulito e Minimale --- */
 .app-footer {
-    padding: 10px 20px;
-    background-color: #f8f9fa;
-    border-top: 1px solid #e7e7e7;
+    padding: 12px 24px;
+    background-color: var(--background-secondary);
+    border-top: 1px solid var(--border-color);
     text-align: center;
-    font-size: 0.8rem;
-    color: #6c757d;
+    font-size: 0.75rem; /* 12px */
+    color: var(--text-secondary);
     flex-shrink: 0;
 }
 
@@ -117,5 +215,6 @@ canvas {
 }
 
 .app-footer strong {
-    color: #343a40;
+    color: var(--text-primary);
+    font-weight: 500;
 }
