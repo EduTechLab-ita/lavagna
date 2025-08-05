@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lavagna-pwa-cache-v1';
+const CACHE_NAME = 'lavagna-pwa-cache-v2';
 const urlsToCache = [
     '/lavagna/',
     '/lavagna/index.html',
