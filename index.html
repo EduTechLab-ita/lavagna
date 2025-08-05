@@ -1,107 +1,144 @@
-<!-- === MODAL CONTAINER === -->
-<!-- Contenitore per le finestre di dialogo, inizialmente nascosto -->
-<div id="modal-container" class="modal-container" style="display: none;">
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lavagna Interattiva PWA</title>
     
-    <!-- Modale per Conferma (es. pulisci lavagna) -->
-    <div id="confirm-modal" class="modal-content">
-        <h3 id="confirm-title">Sei sicuro?</h3>
-        <p id="confirm-text">Vuoi davvero cancellare tutto il contenuto della lavagna?</p>
-        <div class="modal-buttons">
-            <button id="confirm-cancel-btn" class="modal-btn secondary">Annulla</button>
-            <button id="confirm-ok-btn" class="modal-btn danger">Conferma</button>
+    <!-- Collegamento al font "Inter" da Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Collegamenti ai file CSS e Manifest -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Icona per dispositivi Apple -->
+    <link rel="apple-touch-icon" href="icona-touch-apple.png">
+    
+    <!-- Colore della barra del browser, abbinato al nuovo stile dell'header -->
+    <meta name="theme-color" content="#FFFFFF"/>
+</head>
+<body>
+    <!-- Header dell'applicazione -->
+    <header>
+        <h1>Lavagna Interattiva</h1>
+        <div id="user-session">
+            <!-- Bottone di login, gestito da JS -->
+            <button id="login-btn" style="display: none;">Accedi con Google</button>
+            <!-- Profilo utente, inizialmente nascosto -->
+            <div id="user-profile" style="display: none;">
+                <span id="user-name"></span>
+                <img id="user-pic" src="" alt="Foto utente" />
+                <button id="logout-btn">Logout</button>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Toolbar flottante con tutti gli strumenti -->
+    <div class="toolbar">
+        <!-- Strumenti di disegno -->
+        <button id="draw-btn" title="Disegna">✏️</button>
+        <button id="select-btn" title="Seleziona">👆</button>
+        <button id="eraser-btn" title="Gomma">Eraser</button> <!-- Potresti voler usare un'icona emoji anche qui -->
+        <button id="ruler-btn" title="Righello">📏</button>
+        
+        <!-- Controlli per colore e spessore -->
+        <label for="color-picker">Colore:</label>
+        <input type="color" id="color-picker" value="#000000">
+        <label for="brush-size">Spessore:</label>
+        <input type="range" id="brush-size" min="1" max="50" value="5">
+        
+        <!-- Pulsanti per caricamento file (l'input è nascosto, si clicca l'etichetta) -->
+        <label for="image-loader" class="toolbar-btn-label" title="Carica Immagine">🖼️
+            <input type="file" id="image-loader" accept="image/*" style="display: none;">
+        </label>
+        <label for="pdf-loader" class="toolbar-btn-label" title="Carica PDF">📄
+            <input type="file" id="pdf-loader" accept="application/pdf" style="display: none;">
+        </label>
+        
+        <!-- Azioni (Salva, Carica, Pulisci) -->
+        <button id="save-btn" title="Salva su Drive" style="display: none;">💾</button>
+        <button id="load-btn" title="Carica da Drive" style="display: none;">📂</button>
+        <button id="clear-btn" title="Pulisci Lavagna">🗑️</button>
+    </div>
+
+    <!-- Area di lavoro principale che contiene la lavagna -->
+    <main>
+        <canvas id="whiteboard"></canvas>
+    </main>
+
+    <!-- Footer dell'applicazione -->
+    <footer class="app-footer">
+        <p>
+            <strong>Lavagna PWA</strong> - © 2025 EduTechLab Italia - Sviluppato da Fabio Rizzotto
+        </p>
+    </footer>
+
+    <!-- === Finestre di Dialogo (Modali) === -->
+    <!-- Contenitore per i modali, inizialmente nascosto -->
+    <div id="modal-container" style="display: none;">
+        
+        <!-- Modale per Conferma (es. pulisci lavagna) -->
+        <div id="confirm-modal" class="modal-content">
+            <h3 id="confirm-title"></h3>
+            <p id="confirm-text"></p>
+            <div class="modal-buttons">
+                <button id="confirm-cancel-btn" class="modal-btn secondary">Annulla</button>
+                <button id="confirm-ok-btn" class="modal-btn danger">Conferma</button>
+            </div>
+        </div>
+
+        <!-- Modale per Input (es. nome file) -->
+        <div id="prompt-modal" class="modal-content">
+            <h3 id="prompt-title"></h3>
+            <p id="prompt-text"></p>
+            <input type="text" id="prompt-input" class="modal-input">
+            <div class="modal-buttons">
+                <button id="prompt-cancel-btn" class="modal-btn secondary">Annulla</button>
+                <button id="prompt-ok-btn" class="modal-btn primary">Salva</button>
+            </div>
+        </div>
+
+        <!-- Modale per Avviso Semplice (es. salvataggio completato) -->
+        <div id="alert-modal" class="modal-content">
+            <h3 id="alert-title"></h3>
+            <p id="alert-text"></p>
+            <div class="modal-buttons">
+                <button id="alert-ok-btn" class="modal-btn primary">OK</button>
+            </div>
         </div>
     </div>
 
-    <!-- Modale per Input (es. nome file) -->
-    <div id="prompt-modal" class="modal-content">
-        <h3 id="prompt-title">Nome del File</h3>
-        <p id="prompt-text">Come vuoi chiamare il file?</p>
-        <input type="text" id="prompt-input" class="modal-input" placeholder="lavagna.json">
-        <div class="modal-buttons">
-            <button id="prompt-cancel-btn" class="modal-btn secondary">Annulla</button>
-            <button id="prompt-ok-btn" class="modal-btn primary">Salva</button>
-        </div>
-    </div>
+    <!-- Stile per i modali (incluso qui per semplicità) -->
+    <style>
+        .modal-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
+        .modal-container.visible { opacity: 1; pointer-events: auto; }
+        .modal-content { display: none; background-color: white; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1); width: 90%; max-width: 400px; transform: scale(0.95); transition: transform 0.3s ease; }
+        .modal-container.visible .modal-content { transform: scale(1); }
+        .modal-content h3 { margin-top: 0; font-weight: 600; color: #1E293B; }
+        .modal-content p { margin-top: 8px; margin-bottom: 24px; color: #64748B; }
+        .modal-input { width: 100%; padding: 10px; border: 1px solid #E2E8F0; border-radius: 8px; font-size: 1rem; box-sizing: border-box; }
+        .modal-buttons { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+        .modal-btn { padding: 10px 20px; border: none; border-radius: 8px; font-weight: 500; cursor: pointer; transition: background-color 0.2s ease; }
+        .modal-btn.primary { background-color: #4F46E5; color: white; }
+        .modal-btn.primary:hover { background-color: #4338CA; }
+        .modal-btn.danger { background-color: #DC2626; color: white; }
+        .modal-btn.danger:hover { background-color: #B91C1C; }
+        .modal-btn.secondary { background-color: #E2E8F0; color: #1E293B; }
+        .modal-btn.secondary:hover { background-color: #CBD5E1; }
+    </style>
 
-    <!-- Modale per Avviso Semplice (es. salvataggio completato) -->
-    <div id="alert-modal" class="modal-content">
-        <h3 id="alert-title">Operazione Completata</h3>
-        <p id="alert-text">Il file è stato salvato con successo!</p>
-        <div class="modal-buttons">
-            <button id="alert-ok-btn" class="modal-btn primary">OK</button>
-        </div>
-    </div>
+    <!-- Librerie Esterne -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.102/pdf.min.js"></script>
+    
+    <!-- API di Google (le funzioni di callback sono definite in app.js) -->
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 
-</div>
-
-<!-- Stile per i modali, da aggiungere all'HTML per semplicità -->
-<style>
-    .modal-container {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 1000;
-        opacity: 0;
-        transition: opacity 0.3s ease;
-    }
-    .modal-container.visible {
-        opacity: 1;
-    }
-    .modal-content {
-        background-color: white;
-        padding: 24px;
-        border-radius: 12px;
-        box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-        width: 90%;
-        max-width: 400px;
-        transform: scale(0.95);
-        transition: transform 0.3s ease;
-    }
-    .modal-container.visible .modal-content {
-        transform: scale(1);
-    }
-    .modal-content h3 {
-        margin-top: 0;
-        font-weight: 600;
-        color: #1E293B;
-    }
-    .modal-content p {
-        margin-top: 8px;
-        margin-bottom: 24px;
-        color: #64748B;
-    }
-    .modal-input {
-        width: 100%;
-        padding: 10px;
-        border: 1px solid #E2E8F0;
-        border-radius: 8px;
-        font-size: 1rem;
-        box-sizing: border-box;
-    }
-    .modal-buttons {
-        display: flex;
-        justify-content: flex-end;
-        gap: 12px;
-        margin-top: 24px;
-    }
-    .modal-btn {
-        padding: 10px 20px;
-        border: none;
-        border-radius: 8px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-    }
-    .modal-btn.primary { background-color: #4F46E5; color: white; }
-    .modal-btn.primary:hover { background-color: #4338CA; }
-    .modal-btn.danger { background-color: #DC2626; color: white; }
-    .modal-btn.danger:hover { background-color: #B91C1C; }
-    .modal-btn.secondary { background-color: #E2E8F0; color: #1E293B; }
-    .modal-btn.secondary:hover { background-color: #CBD5E1; }
-</style>
+    <!-- Il nostro script principale -->
+    <script src="app.js"></script>
+</body>
+</html>
