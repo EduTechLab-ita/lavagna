@@ -129,45 +129,73 @@ class EduBoard {
 
     setupFloatingToolbar() {
         const toolbar = document.getElementById('floating-toolbar');
-        const handle = toolbar;
         let isDragging = false;
         let startX, startY, initialX, initialY;
+        let dragThreshold = 5; // Soglia minima per iniziare il drag
+        let hasMoved = false;
 
         const handleMouseDown = (e) => {
-            isDragging = true;
+            // Solo se non è un click su un bottone
+            if (e.target.closest('.toolbar-btn')) {
+                return; // Non iniziare il drag se si clicca su un bottone
+            }
+            
             startX = e.clientX;
             startY = e.clientY;
             const rect = toolbar.getBoundingClientRect();
             initialX = rect.left;
             initialY = rect.top;
-            handle.style.cursor = 'grabbing';
+            hasMoved = false;
             e.preventDefault();
         };
 
         const handleMouseMove = (e) => {
-            if (isDragging) {
+            if (startX !== undefined && startY !== undefined) {
                 const deltaX = e.clientX - startX;
                 const deltaY = e.clientY - startY;
-                const newX = Math.max(0, Math.min(window.innerWidth - toolbar.offsetWidth, initialX + deltaX));
-                const newY = Math.max(0, Math.min(window.innerHeight - toolbar.offsetHeight, initialY + deltaY));
-                toolbar.style.left = `${newX}px`;
-                toolbar.style.top = `${newY}px`;
-                toolbar.style.right = 'auto';
-                toolbar.style.bottom = 'auto';
+                
+                // Controlla se abbiamo superato la soglia di drag
+                if (!isDragging && (Math.abs(deltaX) > dragThreshold || Math.abs(deltaY) > dragThreshold)) {
+                    isDragging = true;
+                    toolbar.style.cursor = 'grabbing';
+                    hasMoved = true;
+                }
+                
+                if (isDragging) {
+                    const newX = Math.max(0, Math.min(window.innerWidth - toolbar.offsetWidth, initialX + deltaX));
+                    const newY = Math.max(0, Math.min(window.innerHeight - toolbar.offsetHeight, initialY + deltaY));
+                    toolbar.style.left = `${newX}px`;
+                    toolbar.style.top = `${newY}px`;
+                    toolbar.style.right = 'auto';
+                    toolbar.style.bottom = 'auto';
+                }
             }
         };
 
         const handleMouseUp = () => {
             isDragging = false;
-            handle.style.cursor = 'grab';
+            startX = undefined;
+            startY = undefined;
+            toolbar.style.cursor = 'default';
+            
+            // Reset hasMoved dopo un breve delay per permettere ai click di funzionare
+            setTimeout(() => {
+                hasMoved = false;
+            }, 10);
         };
 
-        handle.addEventListener('mousedown', handleMouseDown);
+        // Aggiungi event listener solo alla toolbar, non ai bottoni
+        toolbar.addEventListener('mousedown', handleMouseDown);
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
 
         // Touch events
-        handle.addEventListener('touchstart', (e) => {
+        toolbar.addEventListener('touchstart', (e) => {
+            // Solo se non è un touch su un bottone
+            if (e.target.closest('.toolbar-btn')) {
+                return;
+            }
+            
             const touch = e.touches[0];
             handleMouseDown({
                 clientX: touch.clientX,
@@ -177,7 +205,7 @@ class EduBoard {
         });
 
         document.addEventListener('touchmove', (e) => {
-            if (isDragging) {
+            if (isDragging && e.touches[0]) {
                 const touch = e.touches[0];
                 handleMouseMove({
                     clientX: touch.clientX,
@@ -187,6 +215,15 @@ class EduBoard {
         });
 
         document.addEventListener('touchend', handleMouseUp);
+        
+        // Previeni il drag quando si clicca sui bottoni
+        toolbar.addEventListener('click', (e) => {
+            if (hasMoved) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        }, true);
     }
 
     setupToolbarEvents() {
