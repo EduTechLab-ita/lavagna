@@ -5,7 +5,7 @@ class EduBoard {
         this.isDrawing = false;
         this.currentTool = 'pencil';
         this.currentColor = '#000000';
-        this.currentSize = 5;
+        this.currentSize = 6;
         this.history = [];
         this.historyStep = -1;
         this.projects = JSON.parse(localStorage.getItem('eduboardProjects')) || {};
@@ -18,6 +18,7 @@ class EduBoard {
         this.loadProjects();
         this.saveState();
         this.setupPWA();
+        this.setupFloatingToolbar();
     }
 
     initializeCanvas() {
@@ -27,8 +28,7 @@ class EduBoard {
         this.ctx.lineCap = 'round';
         this.ctx.lineJoin = 'round';
         this.ctx.imageSmoothingEnabled = true;
-        this.ctx.strokeStyle = this.currentColor;
-        this.ctx.lineWidth = this.currentSize;
+        this.updateCanvasStyle();
     }
 
     resizeCanvas() {
@@ -43,25 +43,29 @@ class EduBoard {
         
         // Ripristina il contenuto
         this.ctx.putImageData(imageData, 0, 0);
-        
-        // Ripristina le impostazioni del contesto
+        this.updateCanvasStyle();
+    }
+
+    updateCanvasStyle() {
         this.ctx.lineCap = 'round';
         this.ctx.lineJoin = 'round';
         this.ctx.strokeStyle = this.currentColor;
         this.ctx.lineWidth = this.currentSize;
+        this.ctx.globalAlpha = 1.0;
     }
 
     setupEventListeners() {
-        // Eventi canvas per mouse
+        // Eventi canvas
         this.canvas.addEventListener('mousedown', (e) => this.startDrawing(e));
         this.canvas.addEventListener('mousemove', (e) => this.draw(e));
         this.canvas.addEventListener('mouseup', () => this.stopDrawing());
         this.canvas.addEventListener('mouseout', () => this.stopDrawing());
 
-        // Eventi touch per dispositivi mobili e digital board
+        // Eventi touch
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             const touch = e.touches[0];
+            const rect = this.canvas.getBoundingClientRect();
             const mouseEvent = new MouseEvent('mousedown', {
                 clientX: touch.clientX,
                 clientY: touch.clientY
@@ -85,68 +89,21 @@ class EduBoard {
             this.canvas.dispatchEvent(mouseEvent);
         });
 
-        // Menu flottante trascinabile
-        this.setupFloatingMenu();
-        
-        // Menu buttons
-        document.getElementById('tools-btn').addEventListener('click', () => this.toggleSubmenu('tools-submenu'));
-        document.getElementById('background-btn').addEventListener('click', () => this.toggleSubmenu('background-submenu'));
-        document.getElementById('geometry-btn').addEventListener('click', () => this.toggleSubmenu('geometry-submenu'));
+        // Header buttons
+        document.getElementById('fullscreen-btn').addEventListener('click', () => this.toggleFullscreen());
+        document.getElementById('save-btn').addEventListener('click', () => this.showSaveModal());
+        document.getElementById('load-btn').addEventListener('click', () => this.toggleSidebar());
+        document.getElementById('new-btn').addEventListener('click', () => this.newProject());
 
-        // Opzioni strumenti nel pannello
-        document.querySelectorAll('.tool-option').forEach(option => {
-            option.addEventListener('click', (e) => {
-                const tool = e.currentTarget.dataset.tool;
-                this.setTool(tool);
-                document.querySelectorAll('.tool-option').forEach(opt => opt.classList.remove('active'));
-                e.currentTarget.classList.add('active');
-            });
-        });
+        // Toolbar events
+        this.setupToolbarEvents();
 
-        // Opzioni dimensioni
-        document.querySelectorAll('.size-option').forEach(option => {
-            option.addEventListener('click', (e) => {
-                const size = parseInt(e.currentTarget.dataset.size);
-                this.currentSize = size;
-                this.ctx.lineWidth = this.currentSize;
-                document.querySelectorAll('.size-option').forEach(opt => opt.classList.remove('active'));
-                e.currentTarget.classList.add('active');
-            });
-        });
+        // Modal events
+        document.getElementById('confirm-save').addEventListener('click', () => this.saveProject());
+        document.getElementById('cancel-save').addEventListener('click', () => this.hideSaveModal());
 
-        // Palette colori nel pannello
-        document.querySelectorAll('.color-swatch').forEach(swatch => {
-            swatch.addEventListener('click', (e) => {
-                this.setColor(e.target.dataset.color);
-                document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-                e.target.classList.add('active');
-            });
-        });
-
-        // Color picker personalizzato
-        document.getElementById('custom-color-btn').addEventListener('click', () => {
-            document.getElementById('color-picker').click();
-        });
-
-        document.getElementById('color-picker').addEventListener('change', (e) => {
-            this.setColor(e.target.value);
-            // Aggiorna la selezione visiva
-            document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-        });
-
-        // Opzioni sfondi
-        document.querySelectorAll('.bg-option').forEach(option => {
-            option.addEventListener('click', (e) => {
-                const bg = e.currentTarget.dataset.bg;
-                this.setBackground(bg);
-                document.querySelectorAll('.bg-option').forEach(opt => opt.classList.remove('active'));
-                e.currentTarget.classList.add('active');
-            });
-        });
-
-        // Strumenti geometrici
-        document.getElementById('ruler-tool').addEventListener('click', () => this.toggleRuler());
-        document.getElementById('protractor-tool').addEventListener('click', () => this.toggleProtractor());
+        // Sidebar
+        document.getElementById('close-sidebar').addEventListener('click', () => this.toggleSidebar());
 
         // File upload
         document.getElementById('upload-btn').addEventListener('click', () => {
@@ -154,46 +111,25 @@ class EduBoard {
         });
         document.getElementById('file-input').addEventListener('change', (e) => this.handleFileUpload(e));
 
-        // Azioni toolbar
+        // Actions
         document.getElementById('clear-btn').addEventListener('click', () => this.clearCanvas());
         document.getElementById('undo-btn').addEventListener('click', () => this.undo());
         document.getElementById('redo-btn').addEventListener('click', () => this.redo());
 
-        // Header buttons
-        document.getElementById('fullscreen-btn').addEventListener('click', () => this.toggleFullscreen());
-        document.getElementById('save-btn').addEventListener('click', () => this.showSaveModal());
-        document.getElementById('load-btn').addEventListener('click', () => this.toggleSidebar());
-        document.getElementById('new-btn').addEventListener('click', () => this.newProject());
-
-        // Modal eventi
-        document.getElementById('confirm-save').addEventListener('click', () => this.saveProject());
-        document.getElementById('cancel-save').addEventListener('click', () => this.hideSaveModal());
-
-        // Sidebar
-        document.getElementById('close-sidebar').addEventListener('click', () => this.toggleSidebar());
-
-        // Calibrazione
-        document.getElementById('start-calibration').addEventListener('click', () => this.startCalibration());
-        document.getElementById('skip-calibration').addEventListener('click', () => this.hideCalibrationModal());
-
-        // Drag & Drop
-        this.setupDragAndDrop();
-
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => this.handleKeyboard(e));
-        
-        // Chiudi submenu quando si clicca fuori
+
+        // Close panels when clicking outside
         document.addEventListener('click', (e) => {
-            const floatingMenu = document.getElementById('floating-menu');
-            if (!floatingMenu.contains(e.target)) {
-                this.closeAllSubmenus();
+            if (!e.target.closest('.floating-toolbar')) {
+                this.closeAllPanels();
             }
         });
     }
-    
-    setupFloatingMenu() {
-        const menu = document.getElementById('floating-menu');
-        const handle = document.getElementById('menu-handle');
+
+    setupFloatingToolbar() {
+        const toolbar = document.getElementById('floating-toolbar');
+        const handle = document.getElementById('toolbar-handle');
         let isDragging = false;
         let startX, startY, initialX, initialY;
 
@@ -201,10 +137,10 @@ class EduBoard {
             isDragging = true;
             startX = e.clientX;
             startY = e.clientY;
-            const rect = menu.getBoundingClientRect();
+            const rect = toolbar.getBoundingClientRect();
             initialX = rect.left;
             initialY = rect.top;
-            menu.style.cursor = 'grabbing';
+            handle.style.cursor = 'grabbing';
             e.preventDefault();
         };
 
@@ -212,18 +148,18 @@ class EduBoard {
             if (isDragging) {
                 const deltaX = e.clientX - startX;
                 const deltaY = e.clientY - startY;
-                const newX = Math.max(0, Math.min(window.innerWidth - menu.offsetWidth, initialX + deltaX));
-                const newY = Math.max(0, Math.min(window.innerHeight - menu.offsetHeight, initialY + deltaY));
-                menu.style.left = `${newX}px`;
-                menu.style.top = `${newY}px`;
-                menu.style.right = 'auto';
-                menu.style.bottom = 'auto';
+                const newX = Math.max(0, Math.min(window.innerWidth - toolbar.offsetWidth, initialX + deltaX));
+                const newY = Math.max(0, Math.min(window.innerHeight - toolbar.offsetHeight, initialY + deltaY));
+                toolbar.style.left = `${newX}px`;
+                toolbar.style.top = `${newY}px`;
+                toolbar.style.right = 'auto';
+                toolbar.style.bottom = 'auto';
             }
         };
 
         const handleMouseUp = () => {
             isDragging = false;
-            menu.style.cursor = 'default';
+            handle.style.cursor = 'grab';
         };
 
         handle.addEventListener('mousedown', handleMouseDown);
@@ -252,29 +188,118 @@ class EduBoard {
 
         document.addEventListener('touchend', handleMouseUp);
     }
-    
-    toggleSubmenu(submenuId) {
-        const submenu = document.getElementById(submenuId);
-        const isOpen = submenu.classList.contains('open');
-        
-        // Chiudi tutti i submenu
-        this.closeAllSubmenus();
-        
-        // Apri quello selezionato se non era già aperto
-        if (!isOpen) {
-            submenu.classList.add('open');
-            const arrow = submenu.previousElementSibling.querySelector('.expand-arrow');
-            if (arrow) arrow.textContent = '▲';
-        }
+
+    setupToolbarEvents() {
+        // Tools toggle
+        document.getElementById('tools-toggle').addEventListener('click', () => {
+            this.togglePanel('tools-panel');
+        });
+
+        // Backgrounds toggle
+        document.getElementById('backgrounds-toggle').addEventListener('click', () => {
+            this.togglePanel('backgrounds-panel');
+        });
+
+        // Geometry toggle
+        document.getElementById('geometry-toggle').addEventListener('click', () => {
+            this.togglePanel('geometry-panel');
+        });
+
+        // Tool buttons
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const tool = e.currentTarget.dataset.tool;
+                this.setTool(tool);
+                this.updateToolSelection(e.currentTarget);
+                this.updateMainToolButton(tool);
+            });
+        });
+
+        // Size buttons
+        document.querySelectorAll('.size-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const size = parseInt(e.currentTarget.dataset.size);
+                this.currentSize = size;
+                this.updateCanvasStyle();
+                document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+            });
+        });
+
+        // Color buttons
+        document.querySelectorAll('.color-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                if (e.currentTarget.id === 'custom-color') {
+                    document.getElementById('color-picker').click();
+                } else {
+                    const color = e.currentTarget.dataset.color;
+                    this.setColor(color);
+                    document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+                    e.currentTarget.classList.add('active');
+                }
+            });
+        });
+
+        // Custom color picker
+        document.getElementById('color-picker').addEventListener('change', (e) => {
+            this.setColor(e.target.value);
+            document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+        });
+
+        // Background buttons
+        document.querySelectorAll('.bg-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const bg = e.currentTarget.dataset.bg;
+                this.setBackground(bg);
+                document.querySelectorAll('.bg-btn').forEach(b => b.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+            });
+        });
+
+        // Geometry tools
+        document.getElementById('ruler-btn').addEventListener('click', () => this.toggleRuler());
+        document.getElementById('protractor-btn').addEventListener('click', () => this.toggleProtractor());
     }
-    
-    closeAllSubmenus() {
-        document.querySelectorAll('.submenu').forEach(submenu => {
-            submenu.classList.remove('open');
+
+    togglePanel(panelId) {
+        this.closeAllPanels();
+        const panel = document.getElementById(panelId);
+        panel.classList.add('active');
+    }
+
+    closeAllPanels() {
+        document.querySelectorAll('.tool-panel').forEach(panel => {
+            panel.classList.remove('active');
         });
-        document.querySelectorAll('.expand-arrow').forEach(arrow => {
-            arrow.textContent = '▼';
-        });
+    }
+
+    updateToolSelection(selectedBtn) {
+        document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+        selectedBtn.classList.add('active');
+    }
+
+    updateMainToolButton(tool) {
+        const mainBtn = document.getElementById('tools-toggle');
+        const toolNames = {
+            'pencil': 'Matita',
+            'pen': 'Biro',
+            'marker': 'Evidenziatore',
+            'fountain': 'Stilografica',
+            'eraser': 'Gomma',
+            'text': 'Testo'
+        };
+        
+        const toolIcons = {
+            'pencil': '✏️',
+            'pen': '🖊️',
+            'marker': '🖍️',
+            'fountain': '🖋️',
+            'eraser': '🧽',
+            'text': '📝'
+        };
+
+        mainBtn.querySelector('.tool-icon').textContent = toolIcons[tool];
+        mainBtn.querySelector('.tool-label').textContent = toolNames[tool];
     }
 
     getCanvasCoordinates(e) {
@@ -310,8 +335,19 @@ class EduBoard {
 
     setColor(color) {
         this.currentColor = color;
-        this.ctx.strokeStyle = color;
-        this.ctx.fillStyle = color;
+        this.updateCanvasStyle();
+    }
+
+    setBackground(type) {
+        // Rimuovi tutte le classi di sfondo
+        this.canvas.classList.remove('canvas-lines', 'canvas-squares', 'canvas-music', 'canvas-dots');
+        
+        // Aggiungi la nuova classe se non è bianco
+        if (type !== 'blank') {
+            this.canvas.classList.add(`canvas-${type}`);
+        }
+        
+        this.showNotification(`Sfondo "${type}" applicato!`);
     }
 
     startDrawing(e) {
@@ -320,38 +356,68 @@ class EduBoard {
         const x = coords.x;
         const y = coords.y;
 
-        if (this.currentTool === 'eraser') {
-            this.ctx.globalCompositeOperation = 'destination-out';
-            this.ctx.lineWidth = this.currentSize * 2;
-        } else if (this.currentTool === 'text') {
+        if (this.currentTool === 'text') {
             this.addText(x, y);
             return;
-        } else {
-            this.ctx.globalCompositeOperation = 'source-over';
-            this.ctx.strokeStyle = this.currentColor;
-            this.ctx.lineWidth = this.currentSize;
-            
-            // Diversi stili per diversi strumenti
-            switch(this.currentTool) {
-                case 'pencil':
-                    this.ctx.globalAlpha = 0.8;
-                    break;
-                case 'pen':
-                    this.ctx.globalAlpha = 1.0;
-                    break;
-                case 'marker':
-                    this.ctx.globalAlpha = 0.4;
-                    this.ctx.lineWidth = this.currentSize * 3;
-                    break;
-                case 'fountain':
-                    this.ctx.globalAlpha = 0.9;
-                    this.ctx.lineWidth = this.currentSize * 1.5;
-                    break;
-            }
         }
 
         this.ctx.beginPath();
         this.ctx.moveTo(x, y);
+        
+        // Configura lo stile in base allo strumento
+        this.configureToolStyle();
+    }
+
+    configureToolStyle() {
+        switch(this.currentTool) {
+            case 'pencil':
+                this.ctx.globalCompositeOperation = 'source-over';
+                this.ctx.globalAlpha = 0.6; // Trasparente come una matita
+                this.ctx.strokeStyle = this.currentColor;
+                this.ctx.lineWidth = this.currentSize;
+                this.ctx.lineCap = 'round';
+                this.ctx.lineJoin = 'round';
+                break;
+                
+            case 'pen':
+                this.ctx.globalCompositeOperation = 'source-over';
+                this.ctx.globalAlpha = 1.0; // Marcato come una biro
+                this.ctx.strokeStyle = this.currentColor;
+                this.ctx.lineWidth = this.currentSize;
+                this.ctx.lineCap = 'round';
+                this.ctx.lineJoin = 'round';
+                break;
+                
+            case 'marker':
+                this.ctx.globalCompositeOperation = 'source-over';
+                this.ctx.globalAlpha = 0.4; // Trasparente
+                // Solo colori tipici degli evidenziatori
+                const markerColors = ['#FFEB3B', '#4CAF50', '#2196F3', '#FF9800', '#E91E63'];
+                if (!markerColors.includes(this.currentColor)) {
+                    this.ctx.strokeStyle = '#FFEB3B'; // Default giallo
+                } else {
+                    this.ctx.strokeStyle = this.currentColor;
+                }
+                this.ctx.lineWidth = this.currentSize * 4; // Punta larga
+                this.ctx.lineCap = 'square'; // Punta tagliata
+                this.ctx.lineJoin = 'miter';
+                break;
+                
+            case 'fountain':
+                this.ctx.globalCompositeOperation = 'source-over';
+                this.ctx.globalAlpha = 0.9; // Effetto inchiostro
+                this.ctx.strokeStyle = this.currentColor;
+                this.ctx.lineWidth = this.currentSize * 1.8; // Più spesso per le "pance"
+                this.ctx.lineCap = 'square'; // Punta tagliata per stilografica
+                this.ctx.lineJoin = 'miter'; // Angoli netti
+                break;
+                
+            case 'eraser':
+                this.ctx.globalCompositeOperation = 'destination-out';
+                this.ctx.lineWidth = this.currentSize * 2;
+                this.ctx.lineCap = 'round';
+                break;
+        }
     }
 
     draw(e) {
@@ -377,22 +443,11 @@ class EduBoard {
         const text = prompt('Inserisci il testo:');
         if (text) {
             this.ctx.globalCompositeOperation = 'source-over';
+            this.ctx.globalAlpha = 1.0;
             this.ctx.fillStyle = this.currentColor;
             this.ctx.font = `${this.currentSize * 8}px Inter, sans-serif`;
             this.ctx.fillText(text, x, y);
             this.saveState();
-        }
-    }
-
-    setBackground(type) {
-        const canvas = this.canvas;
-        
-        // Rimuovi tutte le classi di sfondo
-        canvas.classList.remove('canvas-lines', 'canvas-squares', 'canvas-music', 'canvas-dots');
-        
-        // Aggiungi la nuova classe se non è bianco
-        if (type !== 'blank') {
-            canvas.classList.add(`canvas-${type}`);
         }
     }
 
@@ -442,17 +497,16 @@ class EduBoard {
                 mark.style.bottom = '0';
                 mark.style.width = '1px';
                 mark.style.height = i % 5 === 0 ? '15px' : '10px';
-                mark.style.backgroundColor = 'var(--primary-color)';
+                mark.style.backgroundColor = '#667eea';
                 rulerMarks.appendChild(mark);
                 
-                // Aggiungi numeri ogni 5 tacche
                 if (i % 5 === 0 && i > 0) {
                     const number = document.createElement('div');
                     number.style.position = 'absolute';
                     number.style.left = `${i * 10 - 5}px`;
                     number.style.bottom = '16px';
                     number.style.fontSize = '8px';
-                    number.style.color = 'var(--primary-color)';
+                    number.style.color = '#667eea';
                     number.textContent = i;
                     rulerMarks.appendChild(number);
                 }
@@ -492,7 +546,7 @@ class EduBoard {
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
 
-        // Touch events per dispositivi mobili
+        // Touch events
         element.addEventListener('touchstart', (e) => {
             const touch = e.touches[0];
             handleMouseDown({
@@ -513,29 +567,6 @@ class EduBoard {
         });
 
         document.addEventListener('touchend', handleMouseUp);
-    }
-
-    setupDragAndDrop() {
-        const dropOverlay = document.getElementById('drop-overlay');
-        
-        document.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropOverlay.style.display = 'flex';
-        });
-
-        document.addEventListener('dragleave', (e) => {
-            if (e.clientX === 0 && e.clientY === 0) {
-                dropOverlay.style.display = 'none';
-            }
-        });
-
-        document.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropOverlay.style.display = 'none';
-            
-            const files = Array.from(e.dataTransfer.files);
-            files.forEach(file => this.processFile(file));
-        });
     }
 
     handleFileUpload(e) {
@@ -564,7 +595,6 @@ class EduBoard {
                 const maxHeight = this.canvas.height * 0.8;
                 let { width, height } = img;
                 
-                // Ridimensiona se necessario
                 if (width > maxWidth) {
                     height = (height * maxWidth) / width;
                     width = maxWidth;
@@ -574,7 +604,6 @@ class EduBoard {
                     height = maxHeight;
                 }
                 
-                // Centra l'immagine
                 const x = (this.canvas.width - width) / 2;
                 const y = (this.canvas.height - height) / 2;
                 
@@ -588,7 +617,6 @@ class EduBoard {
     }
 
     loadPDF(file) {
-        // Placeholder per PDF - funzionalità futura
         this.ctx.fillStyle = '#f0f0f0';
         this.ctx.fillRect(50, 50, 300, 400);
         this.ctx.fillStyle = '#333';
@@ -615,7 +643,6 @@ class EduBoard {
         }
         this.history.push(this.canvas.toDataURL());
         
-        // Mantieni solo gli ultimi 50 stati per performance
         if (this.history.length > 50) {
             this.history.shift();
             this.historyStep--;
@@ -648,12 +675,12 @@ class EduBoard {
     }
 
     showSaveModal() {
-        document.getElementById('save-modal').style.display = 'flex';
+        document.getElementById('save-modal').classList.add('show');
         document.getElementById('project-name').focus();
     }
 
     hideSaveModal() {
-        document.getElementById('save-modal').style.display = 'none';
+        document.getElementById('save-modal').classList.remove('show');
     }
 
     saveProject() {
@@ -720,7 +747,6 @@ class EduBoard {
             <div class="folder-header">
                 <span class="folder-icon">📁</span>
                 <span class="folder-name">${folderName}</span>
-                <button class="add-subfolder">+</button>
             </div>
             <div class="folder-content"></div>
         `;
@@ -760,67 +786,6 @@ class EduBoard {
         sidebar.classList.toggle('open');
     }
 
-    toggleToolsPanel() {
-        const panel = document.getElementById('tools-panel');
-        panel.classList.toggle('open');
-    }
-
-    startCalibration() {
-        let currentPoint = 0;
-        const points = [
-            { x: 100, y: 100 },
-            { x: this.canvas.width - 100, y: 100 },
-            { x: 100, y: this.canvas.height - 100 },
-            { x: this.canvas.width - 100, y: this.canvas.height - 100 }
-        ];
-        const calibrationData = [];
-        
-        const handleCalibrationClick = (e) => {
-            if (currentPoint >= points.length) return;
-            
-            const rect = this.canvas.getBoundingClientRect();
-            const scaleX = this.canvas.width / rect.width;
-            const scaleY = this.canvas.height / rect.height;
-            const clickX = (e.clientX - rect.left) * scaleX;
-            const clickY = (e.clientY - rect.top) * scaleY;
-            
-            calibrationData.push({
-                expected: points[currentPoint],
-                actual: { x: clickX, y: clickY }
-            });
-            
-            currentPoint++;
-            
-            if (currentPoint >= points.length) {
-                // Calcola offset medio
-                let offsetX = 0, offsetY = 0;
-                calibrationData.forEach(data => {
-                    offsetX += data.expected.x - data.actual.x;
-                    offsetY += data.expected.y - data.actual.y;
-                });
-                
-                this.calibrationOffset = {
-                    x: offsetX / calibrationData.length,
-                    y: offsetY / calibrationData.length
-                };
-                
-                this.canvas.removeEventListener('click', handleCalibrationClick);
-                this.hideCalibrationModal();
-                this.showNotification('Calibrazione completata!');
-            } else {
-                this.showNotification(`Tocca il punto ${currentPoint + 1} di 4`);
-            }
-        };
-        
-        this.canvas.addEventListener('click', handleCalibrationClick);
-        this.hideCalibrationModal();
-        this.showNotification('Tocca i 4 angoli dello schermo nell\'ordine indicato');
-    }
-
-    hideCalibrationModal() {
-        document.getElementById('calibration-modal').style.display = 'none';
-    }
-
     handleKeyboard(e) {
         if (e.ctrlKey || e.metaKey) {
             switch(e.key) {
@@ -853,7 +818,6 @@ class EduBoard {
     }
 
     setupPWA() {
-        // Registra service worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/sw.js')
@@ -866,29 +830,27 @@ class EduBoard {
             });
         }
 
-        // Gestisci prompt di installazione
         let deferredPrompt;
         
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
             
-            // Mostra bottone di installazione personalizzato
             const installBtn = document.createElement('button');
             installBtn.textContent = '📱 Installa EduBoard';
             installBtn.className = 'install-btn';
             installBtn.style.cssText = `
                 position: fixed;
                 bottom: 20px;
-                right: 20px;
-                background: var(--primary-color);
+                left: 20px;
+                background: linear-gradient(135deg, #667eea, #764ba2);
                 color: white;
                 border: none;
                 padding: 12px 20px;
-                border-radius: var(--border-radius);
+                border-radius: 12px;
                 font-weight: 600;
                 cursor: pointer;
-                box-shadow: var(--shadow-lg);
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
                 z-index: 1000;
                 animation: bounce 2s infinite;
             `;
@@ -907,7 +869,6 @@ class EduBoard {
             
             document.body.appendChild(installBtn);
             
-            // Rimuovi dopo 10 secondi se non cliccato
             setTimeout(() => {
                 if (installBtn.parentNode) {
                     installBtn.remove();
@@ -922,11 +883,11 @@ class EduBoard {
             position: fixed;
             top: 80px;
             right: 20px;
-            background: var(--success-color);
+            background: linear-gradient(135deg, #43e97b, #38f9d7);
             color: white;
             padding: 12px 20px;
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow-lg);
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
             z-index: 1000;
             font-weight: 500;
             animation: slideIn 0.3s ease;
@@ -943,7 +904,7 @@ class EduBoard {
     }
 }
 
-// Inizializza EduBoard quando il DOM è pronto
+// Inizializza EduBoard
 document.addEventListener('DOMContentLoaded', () => {
     new EduBoard();
 });
