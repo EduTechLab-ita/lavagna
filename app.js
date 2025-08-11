@@ -85,9 +85,13 @@ class EduBoard {
             this.canvas.dispatchEvent(mouseEvent);
         });
 
-        // Pannello strumenti
-        document.getElementById('tools-panel-btn').addEventListener('click', () => this.toggleToolsPanel());
-        document.getElementById('close-tools-panel').addEventListener('click', () => this.toggleToolsPanel());
+        // Menu flottante trascinabile
+        this.setupFloatingMenu();
+        
+        // Menu buttons
+        document.getElementById('tools-btn').addEventListener('click', () => this.toggleSubmenu('tools-submenu'));
+        document.getElementById('background-btn').addEventListener('click', () => this.toggleSubmenu('background-submenu'));
+        document.getElementById('geometry-btn').addEventListener('click', () => this.toggleSubmenu('geometry-submenu'));
 
         // Opzioni strumenti nel pannello
         document.querySelectorAll('.tool-option').forEach(option => {
@@ -178,15 +182,98 @@ class EduBoard {
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => this.handleKeyboard(e));
         
-        // Chiudi pannello quando si clicca fuori
+        // Chiudi submenu quando si clicca fuori
         document.addEventListener('click', (e) => {
-            const panel = document.getElementById('tools-panel');
-            const btn = document.getElementById('tools-panel-btn');
-            if (panel.classList.contains('open') && 
-                !panel.contains(e.target) && 
-                !btn.contains(e.target)) {
-                this.toggleToolsPanel();
+            const floatingMenu = document.getElementById('floating-menu');
+            if (!floatingMenu.contains(e.target)) {
+                this.closeAllSubmenus();
             }
+        });
+    }
+    
+    setupFloatingMenu() {
+        const menu = document.getElementById('floating-menu');
+        const handle = document.getElementById('menu-handle');
+        let isDragging = false;
+        let startX, startY, initialX, initialY;
+
+        const handleMouseDown = (e) => {
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            const rect = menu.getBoundingClientRect();
+            initialX = rect.left;
+            initialY = rect.top;
+            menu.style.cursor = 'grabbing';
+            e.preventDefault();
+        };
+
+        const handleMouseMove = (e) => {
+            if (isDragging) {
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+                const newX = Math.max(0, Math.min(window.innerWidth - menu.offsetWidth, initialX + deltaX));
+                const newY = Math.max(0, Math.min(window.innerHeight - menu.offsetHeight, initialY + deltaY));
+                menu.style.left = `${newX}px`;
+                menu.style.top = `${newY}px`;
+                menu.style.right = 'auto';
+                menu.style.bottom = 'auto';
+            }
+        };
+
+        const handleMouseUp = () => {
+            isDragging = false;
+            menu.style.cursor = 'default';
+        };
+
+        handle.addEventListener('mousedown', handleMouseDown);
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+
+        // Touch events
+        handle.addEventListener('touchstart', (e) => {
+            const touch = e.touches[0];
+            handleMouseDown({
+                clientX: touch.clientX,
+                clientY: touch.clientY,
+                preventDefault: () => e.preventDefault()
+            });
+        });
+
+        document.addEventListener('touchmove', (e) => {
+            if (isDragging) {
+                const touch = e.touches[0];
+                handleMouseMove({
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                });
+            }
+        });
+
+        document.addEventListener('touchend', handleMouseUp);
+    }
+    
+    toggleSubmenu(submenuId) {
+        const submenu = document.getElementById(submenuId);
+        const isOpen = submenu.classList.contains('open');
+        
+        // Chiudi tutti i submenu
+        this.closeAllSubmenus();
+        
+        // Apri quello selezionato se non era già aperto
+        if (!isOpen) {
+            submenu.classList.add('open');
+            const arrow = submenu.previousElementSibling.querySelector('.expand-arrow');
+            if (arrow) arrow.textContent = '▲';
+        }
+    }
+    
+    closeAllSubmenus() {
+        document.querySelectorAll('.submenu').forEach(submenu => {
+            submenu.classList.remove('open');
+        });
+        document.querySelectorAll('.expand-arrow').forEach(arrow => {
+            arrow.textContent = '▼';
         });
     }
 
