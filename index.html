@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
 </head>
 <body>
-    <!-- Header con controlli principali -->
+    <!-- Header compatto -->
     <header>
         <div class="header-left">
             <div class="logo">
@@ -27,28 +27,23 @@
         <div class="header-right">
             <button id="fullscreen-btn" class="header-btn secondary" title="Schermo Intero">
                 <span class="btn-icon">⛶</span>
-                <span class="btn-text">Schermo Intero</span>
             </button>
             <button id="save-btn" class="header-btn primary">
                 <span class="btn-icon">💾</span>
-                <span class="btn-text">Salva</span>
             </button>
             <button id="load-btn" class="header-btn secondary">
                 <span class="btn-icon">📂</span>
-                <span class="btn-text">Progetti</span>
             </button>
             <button id="new-btn" class="header-btn secondary">
                 <span class="btn-icon">✨</span>
-                <span class="btn-text">Nuovo</span>
             </button>
         </div>
     </header>
 
-    <!-- Toolbar principale -->
+    <!-- Toolbar compatta -->
     <div class="toolbar">
-        <!-- Strumenti di disegno -->
+        <!-- Strumenti -->
         <div class="tool-group expandable" id="tools-group">
-            <span class="group-label">Strumenti</span>
             <button id="pencil-tool" class="tool-btn active expand-trigger" title="Strumenti" data-tool="pencil">✏️</button>
             <div class="expanded-content">
                 <button id="pen-tool" class="tool-btn" title="Penna" data-tool="pen">🖊️</button>
@@ -59,13 +54,11 @@
             </div>
         </div>
 
-        <!-- Controlli colore e spessore -->
+        <!-- Colori -->
         <div class="tool-group expandable" id="colors-group">
-            <span class="group-label">Personalizza</span>
             <button class="tool-btn expand-trigger" title="Colori e Spessore">🎨</button>
             <div class="expanded-content">
                 <div class="color-section">
-                    <label>Colori:</label>
                     <div class="color-palette" id="color-palette">
                         <div class="color-swatch active" data-color="#000000" style="background: #000000"></div>
                         <div class="color-swatch" data-color="#FF0000" style="background: #FF0000"></div>
@@ -79,12 +72,11 @@
                         <div class="color-swatch" data-color="#FFC0CB" style="background: #FFC0CB"></div>
                         <div class="color-swatch" data-color="#A52A2A" style="background: #A52A2A"></div>
                         <div class="color-swatch" data-color="#808080" style="background: #808080"></div>
-                        <button class="color-picker-btn" id="custom-color-btn" title="Altri colori">🎨</button>
+                        <button class="color-picker-btn" id="custom-color-btn" title="Altri colori">+</button>
                     </div>
                     <input type="color" id="color-picker" value="#000000" style="display: none;">
                 </div>
                 <div class="size-control">
-                    <label for="brush-size">Spessore:</label>
                     <div class="range-wrapper">
                         <input type="range" id="brush-size" min="1" max="50" value="3">
                         <span id="brush-size-display">3px</span>
@@ -95,10 +87,8 @@
 
         <!-- Sfondi -->
         <div class="tool-group expandable" id="backgrounds-group">
-            <span class="group-label">Sfondi</span>
             <button class="tool-btn expand-trigger" title="Sfondi">📄</button>
             <div class="expanded-content">
-                <label>Sfondo:</label>
                 <select id="background-select" class="modern-select">
                     <option value="blank">Bianco</option>
                     <option value="lines">Righe</option>
@@ -109,9 +99,8 @@
             </div>
         </div>
 
-        <!-- Strumenti geometrici -->
+        <!-- Geometria -->
         <div class="tool-group expandable" id="geometry-group">
-            <span class="group-label">Geometria</span>
             <button class="tool-btn expand-trigger" title="Strumenti Geometrici">📏</button>
             <div class="expanded-content">
                 <button id="ruler-tool" class="tool-btn" title="Righello">📏</button>
@@ -119,37 +108,26 @@
             </div>
         </div>
 
-        <!-- File e media -->
-        <div class="tool-group">
-            <span class="group-label">Media</span>
-            <button id="upload-btn" class="tool-btn" title="Carica File">📎</button>
-            <input type="file" id="file-input" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif" style="display: none;">
-        </div>
-
-        <!-- Azioni -->
-        <div class="tool-group">
-            <span class="group-label">Azioni</span>
-            <button id="clear-btn" class="tool-btn danger" title="Pulisci Tutto">🗑️</button>
-            <button id="undo-btn" class="tool-btn" title="Annulla (Ctrl+Z)">↶</button>
-            <button id="redo-btn" class="tool-btn" title="Ripeti (Ctrl+Y)">↷</button>
-        </div>
+        <!-- Azioni rapide -->
+        <button id="upload-btn" class="tool-btn" title="Carica File">📎</button>
+        <input type="file" id="file-input" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif" style="display: none;">
+        <button id="clear-btn" class="tool-btn danger" title="Pulisci Tutto">🗑️</button>
+        <button id="undo-btn" class="tool-btn" title="Annulla">↶</button>
+        <button id="redo-btn" class="tool-btn" title="Ripeti">↷</button>
     </div>
 
-
-
-    <!-- Area principale con canvas -->
+    <!-- Area principale -->
     <main>
         <div class="canvas-container">
             <canvas id="whiteboard" width="1920" height="1080"></canvas>
             
-            <!-- Righello (nascosto di default) -->
+            <!-- Strumenti geometrici -->
             <div id="ruler" class="geometric-tool" style="display: none;">
                 <div class="ruler-body">
                     <div class="ruler-marks"></div>
                 </div>
             </div>
 
-            <!-- Goniometro (nascosto di default) -->
             <div id="protractor" class="geometric-tool" style="display: none;">
                 <div class="protractor-body">
                     <div class="protractor-marks"></div>
@@ -158,7 +136,7 @@
         </div>
     </main>
 
-    <!-- Sidebar per gestione progetti -->
+    <!-- Sidebar -->
     <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
             <div class="sidebar-title">
@@ -198,7 +176,7 @@
         </div>
     </aside>
 
-    <!-- Modal per salvare progetto -->
+    <!-- Modal salvataggio -->
     <div id="save-modal" class="modal" style="display: none;">
         <div class="modal-content">
             <div class="modal-header">
@@ -224,7 +202,7 @@
         </div>
     </div>
 
-    <!-- Overlay per drag & drop -->
+    <!-- Drop overlay -->
     <div id="drop-overlay" class="drop-overlay" style="display: none;">
         <div class="drop-message">
             <div class="drop-icon">📎</div>
@@ -233,7 +211,7 @@
         </div>
     </div>
 
-    <!-- Calibrazione matita -->
+    <!-- Calibrazione -->
     <div id="calibration-modal" class="modal" style="display: none;">
         <div class="modal-content">
             <div class="modal-header">
