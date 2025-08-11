@@ -111,6 +111,10 @@ class EduBoard {
         document.getElementById('ruler-tool').addEventListener('click', () => this.toggleRuler());
         document.getElementById('protractor-tool').addEventListener('click', () => this.toggleProtractor());
 
+        // Pannello strumenti
+        document.getElementById('tools-panel-btn').addEventListener('click', () => this.toggleToolsPanel());
+        document.getElementById('close-tools-panel').addEventListener('click', () => this.toggleToolsPanel());
+
         // File upload
         document.getElementById('upload-btn').addEventListener('click', () => {
             document.getElementById('file-input').click();
@@ -130,6 +134,46 @@ class EduBoard {
         document.getElementById('load-btn').addEventListener('click', () => this.toggleSidebar());
         document.getElementById('new-btn').addEventListener('click', () => this.newProject());
 
+        // Opzioni strumenti nel pannello
+        document.querySelectorAll('.tool-option').forEach(option => {
+            option.addEventListener('click', (e) => {
+                const tool = e.currentTarget.dataset.tool;
+                this.setTool(tool);
+                document.querySelectorAll('.tool-option').forEach(opt => opt.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+            });
+        });
+
+        // Opzioni dimensioni
+        document.querySelectorAll('.size-option').forEach(option => {
+            option.addEventListener('click', (e) => {
+                const size = e.currentTarget.dataset.size;
+                this.currentSize = size;
+                this.ctx.lineWidth = this.currentSize;
+                document.querySelectorAll('.size-option').forEach(opt => opt.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+            });
+        });
+
+        // Palette colori nel pannello
+        document.querySelectorAll('.color-swatch').forEach(swatch => {
+            swatch.addEventListener('click', (e) => {
+                this.setColor(e.target.dataset.color);
+                document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+                e.target.classList.add('active');
+            });
+        });
+
+        // Opzioni sfondi
+        document.querySelectorAll('.bg-option').forEach(option => {
+            option.addEventListener('click', (e) => {
+                const bg = e.currentTarget.dataset.bg;
+                this.setBackground(bg);
+                document.querySelectorAll('.bg-option').forEach(opt => opt.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+            });
+        });
+
         // Modal
         document.getElementById('confirm-save').addEventListener('click', () => this.saveProject());
         document.getElementById('cancel-save').addEventListener('click', () => this.hideSaveModal());
@@ -147,8 +191,16 @@ class EduBoard {
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => this.handleKeyboard(e));
         
-        // Setup expandable menu groups
-        this.setupExpandableMenus();
+        // Chiudi pannello quando si clicca fuori
+        document.addEventListener('click', (e) => {
+            const panel = document.getElementById('tools-panel');
+            const btn = document.getElementById('tools-panel-btn');
+            if (panel.classList.contains('open') && 
+                !panel.contains(e.target) && 
+                !btn.contains(e.target)) {
+                this.toggleToolsPanel();
+            }
+        });
     }
 
     createTouchEvent(touch) {
@@ -654,6 +706,11 @@ class EduBoard {
         sidebar.classList.toggle('open');
     }
 
+    toggleToolsPanel() {
+        const panel = document.getElementById('tools-panel');
+        panel.classList.toggle('open');
+    }
+
     handleKeyboard(e) {
         if (e.ctrlKey || e.metaKey) {
             switch(e.key) {
@@ -757,36 +814,6 @@ class EduBoard {
             notification.style.animation = 'slideOut 0.3s ease';
             setTimeout(() => notification.remove(), 300);
         }, 3000);
-    }
-    
-    setupExpandableMenus() {
-        document.querySelectorAll('.tool-group.expandable').forEach(group => {
-            const trigger = group.querySelector('.expand-trigger');
-            if (trigger) {
-                trigger.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    
-                    // Chiudi tutti gli altri gruppi
-                    document.querySelectorAll('.tool-group.expandable').forEach(otherGroup => {
-                        if (otherGroup !== group) {
-                            otherGroup.classList.remove('expanded');
-                        }
-                    });
-                    
-                    // Toggle del gruppo corrente
-                    group.classList.toggle('expanded');
-                });
-            }
-        });
-        
-        // Chiudi menu quando si clicca fuori
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.tool-group.expandable')) {
-                document.querySelectorAll('.tool-group.expandable').forEach(group => {
-                    group.classList.remove('expanded');
-                });
-            }
-        });
     }
 }
 
