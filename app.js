@@ -57,27 +57,18 @@ class EduBoard {
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             const touch = e.touches[0];
-            const mouseEvent = new MouseEvent('mousedown', {
-                clientX: touch.clientX,
-                clientY: touch.clientY
-            });
-            this.canvas.dispatchEvent(mouseEvent);
+            this.startDrawing(this.createTouchEvent(touch));
         });
 
         this.canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
             const touch = e.touches[0];
-            const mouseEvent = new MouseEvent('mousemove', {
-                clientX: touch.clientX,
-                clientY: touch.clientY
-            });
-            this.canvas.dispatchEvent(mouseEvent);
+            this.draw(this.createTouchEvent(touch));
         });
 
         this.canvas.addEventListener('touchend', (e) => {
             e.preventDefault();
-            const mouseEvent = new MouseEvent('mouseup', {});
-            this.canvas.dispatchEvent(mouseEvent);
+            this.stopDrawing();
         });
 
         // Strumenti
@@ -157,6 +148,25 @@ class EduBoard {
         document.addEventListener('keydown', (e) => this.handleKeyboard(e));
     }
 
+    createTouchEvent(touch) {
+        return {
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+            preventDefault: () => {}
+        };
+    }
+
+    getCanvasCoordinates(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        
+        return {
+            x: (e.clientX - rect.left) * scaleX + this.calibrationOffset.x,
+            y: (e.clientY - rect.top) * scaleY + this.calibrationOffset.y
+        };
+    }
+
     setTool(tool) {
         this.currentTool = tool;
         
@@ -193,9 +203,9 @@ class EduBoard {
 
     startDrawing(e) {
         this.isDrawing = true;
-        const rect = this.canvas.getBoundingClientRect();
-        const x = (e.clientX - rect.left) + this.calibrationOffset.x;
-        const y = (e.clientY - rect.top) + this.calibrationOffset.y;
+        const coords = this.getCanvasCoordinates(e);
+        const x = coords.x;
+        const y = coords.y;
 
         if (this.currentTool === 'eraser') {
             this.ctx.globalCompositeOperation = 'destination-out';
@@ -234,9 +244,9 @@ class EduBoard {
     draw(e) {
         if (!this.isDrawing) return;
 
-        const rect = this.canvas.getBoundingClientRect();
-        const x = (e.clientX - rect.left) + this.calibrationOffset.x;
-        const y = (e.clientY - rect.top) + this.calibrationOffset.y;
+        const coords = this.getCanvasCoordinates(e);
+        const x = coords.x;
+        const y = coords.y;
 
         this.ctx.lineTo(x, y);
         this.ctx.stroke();
@@ -290,10 +300,54 @@ class EduBoard {
     }
 
     startCalibration() {
-        // Implementazione calibrazione semplificata
-        this.calibrationOffset = { x: 0, y: 0 };
+        let currentPoint = 0;
+        const points = [
+            { x: 100, y: 100 },
+            { x: this.canvas.width - 100, y: 100 },
+            { x: 100, y: this.canvas.height - 100 },
+            { x: this.canvas.width - 100, y: this.canvas.height - 100 }
+        ];
+        const calibrationData = [];
+        
+        const calibrationPoints = document.querySelectorAll('.calibration-point');
+        
+        const handleCalibrationClick = (e) => {
+            if (currentPoint >= points.length) return;
+            
+            const rect = this.canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+            
+            calibrationData.push({
+                expected: points[currentPoint],
+                actual: { x: clickX, y: clickY }
+            });
+            
+            calibrationPoints[currentPoint].style.background = '#10B981';
+            currentPoint++;
+            
+            if (currentPoint >= points.length) {
+                // Calcola offset medio
+                let offsetX = 0, offsetY = 0;
+                calibrationData.forEach(data => {
+                    offsetX += data.expected.x - data.actual.x;
+                    offsetY += data.expected.y - data.actual.y;
+                });
+                
+                this.calibrationOffset = {
+                    x: offsetX / calibrationData.length,
+                    y: offsetY / calibrationData.length
+                };
+                
+                this.canvas.removeEventListener('click', handleCalibrationClick);
+                this.hideCalibrationModal();
+                this.showNotification('Calibrazione completata! Offset applicato.');
+            }
+        };
+        
+        this.canvas.addEventListener('click', handleCalibrationClick);
         this.hideCalibrationModal();
-        this.showNotification('Calibrazione completata!');
+        this.showNotification('Tocca i 4 angoli dello schermo nell\'ordine: alto-sx, alto-dx, basso-sx, basso-dx');
     }
 
     toggleRuler() {
