@@ -5,7 +5,7 @@ class EduBoard {
         this.isDrawing = false;
         this.currentTool = 'pencil';
         this.currentColor = '#000000';
-        this.currentSize = 3;
+        this.currentSize = 5;
         this.history = [];
         this.historyStep = -1;
         this.projects = JSON.parse(localStorage.getItem('eduboardProjects')) || {};
@@ -27,19 +27,24 @@ class EduBoard {
         this.ctx.lineCap = 'round';
         this.ctx.lineJoin = 'round';
         this.ctx.imageSmoothingEnabled = true;
+        this.ctx.strokeStyle = this.currentColor;
+        this.ctx.lineWidth = this.currentSize;
     }
 
     resizeCanvas() {
         const container = this.canvas.parentElement;
         const rect = container.getBoundingClientRect();
         
+        // Salva il contenuto esistente
         const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
         
         this.canvas.width = Math.max(1920, rect.width);
         this.canvas.height = Math.max(1080, rect.height);
         
+        // Ripristina il contenuto
         this.ctx.putImageData(imageData, 0, 0);
         
+        // Ripristina le impostazioni del contesto
         this.ctx.lineCap = 'round';
         this.ctx.lineJoin = 'round';
         this.ctx.strokeStyle = this.currentColor;
@@ -47,92 +52,42 @@ class EduBoard {
     }
 
     setupEventListeners() {
-        // Eventi canvas
+        // Eventi canvas per mouse
         this.canvas.addEventListener('mousedown', (e) => this.startDrawing(e));
         this.canvas.addEventListener('mousemove', (e) => this.draw(e));
         this.canvas.addEventListener('mouseup', () => this.stopDrawing());
         this.canvas.addEventListener('mouseout', () => this.stopDrawing());
 
-        // Eventi touch
+        // Eventi touch per dispositivi mobili e digital board
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             const touch = e.touches[0];
-            this.startDrawing(this.createTouchEvent(touch));
+            const mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            this.canvas.dispatchEvent(mouseEvent);
         });
 
         this.canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
             const touch = e.touches[0];
-            this.draw(this.createTouchEvent(touch));
+            const mouseEvent = new MouseEvent('mousemove', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            this.canvas.dispatchEvent(mouseEvent);
         });
 
         this.canvas.addEventListener('touchend', (e) => {
             e.preventDefault();
-            this.stopDrawing();
+            const mouseEvent = new MouseEvent('mouseup', {});
+            this.canvas.dispatchEvent(mouseEvent);
         });
-
-        // Strumenti
-        document.querySelectorAll('[data-tool]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                this.setTool(e.target.closest('[data-tool]').dataset.tool);
-            });
-        });
-
-        // Palette colori
-        document.querySelectorAll('.color-swatch').forEach(swatch => {
-            swatch.addEventListener('click', (e) => {
-                this.setColor(e.target.dataset.color);
-                document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-                e.target.classList.add('active');
-            });
-        });
-
-        document.getElementById('custom-color-btn').addEventListener('click', () => {
-            document.getElementById('color-picker').click();
-        });
-
-        document.getElementById('color-picker').addEventListener('change', (e) => {
-            this.setColor(e.target.value);
-        });
-
-        // Controlli
-        document.getElementById('brush-size').addEventListener('input', (e) => {
-            this.currentSize = e.target.value;
-            this.ctx.lineWidth = this.currentSize;
-            document.getElementById('brush-size-display').textContent = `${this.currentSize}px`;
-        });
-
-        // Sfondi
-        document.getElementById('background-select').addEventListener('change', (e) => {
-            this.setBackground(e.target.value);
-        });
-
-        // Strumenti geometrici
-        document.getElementById('ruler-tool').addEventListener('click', () => this.toggleRuler());
-        document.getElementById('protractor-tool').addEventListener('click', () => this.toggleProtractor());
 
         // Pannello strumenti
         document.getElementById('tools-panel-btn').addEventListener('click', () => this.toggleToolsPanel());
         document.getElementById('close-tools-panel').addEventListener('click', () => this.toggleToolsPanel());
-
-        // File upload
-        document.getElementById('upload-btn').addEventListener('click', () => {
-            document.getElementById('file-input').click();
-        });
-        document.getElementById('file-input').addEventListener('change', (e) => this.handleFileUpload(e));
-
-        // Azioni
-        document.getElementById('clear-btn').addEventListener('click', () => this.clearCanvas());
-        document.getElementById('undo-btn').addEventListener('click', () => this.undo());
-        document.getElementById('redo-btn').addEventListener('click', () => this.redo());
-
-        // Schermo intero
-        document.getElementById('fullscreen-btn').addEventListener('click', () => this.toggleFullscreen());
-
-        // Gestione progetti
-        document.getElementById('save-btn').addEventListener('click', () => this.showSaveModal());
-        document.getElementById('load-btn').addEventListener('click', () => this.toggleSidebar());
-        document.getElementById('new-btn').addEventListener('click', () => this.newProject());
 
         // Opzioni strumenti nel pannello
         document.querySelectorAll('.tool-option').forEach(option => {
@@ -147,7 +102,7 @@ class EduBoard {
         // Opzioni dimensioni
         document.querySelectorAll('.size-option').forEach(option => {
             option.addEventListener('click', (e) => {
-                const size = e.currentTarget.dataset.size;
+                const size = parseInt(e.currentTarget.dataset.size);
                 this.currentSize = size;
                 this.ctx.lineWidth = this.currentSize;
                 document.querySelectorAll('.size-option').forEach(opt => opt.classList.remove('active'));
@@ -164,6 +119,17 @@ class EduBoard {
             });
         });
 
+        // Color picker personalizzato
+        document.getElementById('custom-color-btn').addEventListener('click', () => {
+            document.getElementById('color-picker').click();
+        });
+
+        document.getElementById('color-picker').addEventListener('change', (e) => {
+            this.setColor(e.target.value);
+            // Aggiorna la selezione visiva
+            document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+        });
+
         // Opzioni sfondi
         document.querySelectorAll('.bg-option').forEach(option => {
             option.addEventListener('click', (e) => {
@@ -174,7 +140,28 @@ class EduBoard {
             });
         });
 
-        // Modal
+        // Strumenti geometrici
+        document.getElementById('ruler-tool').addEventListener('click', () => this.toggleRuler());
+        document.getElementById('protractor-tool').addEventListener('click', () => this.toggleProtractor());
+
+        // File upload
+        document.getElementById('upload-btn').addEventListener('click', () => {
+            document.getElementById('file-input').click();
+        });
+        document.getElementById('file-input').addEventListener('change', (e) => this.handleFileUpload(e));
+
+        // Azioni toolbar
+        document.getElementById('clear-btn').addEventListener('click', () => this.clearCanvas());
+        document.getElementById('undo-btn').addEventListener('click', () => this.undo());
+        document.getElementById('redo-btn').addEventListener('click', () => this.redo());
+
+        // Header buttons
+        document.getElementById('fullscreen-btn').addEventListener('click', () => this.toggleFullscreen());
+        document.getElementById('save-btn').addEventListener('click', () => this.showSaveModal());
+        document.getElementById('load-btn').addEventListener('click', () => this.toggleSidebar());
+        document.getElementById('new-btn').addEventListener('click', () => this.newProject());
+
+        // Modal eventi
         document.getElementById('confirm-save').addEventListener('click', () => this.saveProject());
         document.getElementById('cancel-save').addEventListener('click', () => this.hideSaveModal());
 
@@ -203,14 +190,6 @@ class EduBoard {
         });
     }
 
-    createTouchEvent(touch) {
-        return {
-            clientX: touch.clientX,
-            clientY: touch.clientY,
-            preventDefault: () => {}
-        };
-    }
-
     getCanvasCoordinates(e) {
         const rect = this.canvas.getBoundingClientRect();
         const scaleX = this.canvas.width / rect.width;
@@ -225,19 +204,11 @@ class EduBoard {
     setTool(tool) {
         this.currentTool = tool;
         
-        document.querySelectorAll('[data-tool]').forEach(btn => btn.classList.remove('active'));
-        document.querySelector(`[data-tool="${tool}"]`).classList.add('active');
-        
+        // Aggiorna il cursore
         switch(tool) {
             case 'pencil':
-                this.canvas.style.cursor = 'crosshair';
-                break;
             case 'pen':
-                this.canvas.style.cursor = 'crosshair';
-                break;
             case 'marker':
-                this.canvas.style.cursor = 'crosshair';
-                break;
             case 'fountain':
                 this.canvas.style.cursor = 'crosshair';
                 break;
@@ -329,8 +300,10 @@ class EduBoard {
     setBackground(type) {
         const canvas = this.canvas;
         
+        // Rimuovi tutte le classi di sfondo
         canvas.classList.remove('canvas-lines', 'canvas-squares', 'canvas-music', 'canvas-dots');
         
+        // Aggiungi la nuova classe se non è bianco
         if (type !== 'blank') {
             canvas.classList.add(`canvas-${type}`);
         }
@@ -346,68 +319,9 @@ class EduBoard {
         }
     }
 
-    showCalibrationModal() {
-        document.getElementById('calibration-modal').style.display = 'flex';
-    }
-
-    hideCalibrationModal() {
-        document.getElementById('calibration-modal').style.display = 'none';
-    }
-
-    startCalibration() {
-        let currentPoint = 0;
-        const points = [
-            { x: 100, y: 100 },
-            { x: this.canvas.width - 100, y: 100 },
-            { x: 100, y: this.canvas.height - 100 },
-            { x: this.canvas.width - 100, y: this.canvas.height - 100 }
-        ];
-        const calibrationData = [];
-        
-        const calibrationPoints = document.querySelectorAll('.calibration-point');
-        
-        const handleCalibrationClick = (e) => {
-            if (currentPoint >= points.length) return;
-            
-            const rect = this.canvas.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const clickY = e.clientY - rect.top;
-            
-            calibrationData.push({
-                expected: points[currentPoint],
-                actual: { x: clickX, y: clickY }
-            });
-            
-            calibrationPoints[currentPoint].style.background = '#10B981';
-            currentPoint++;
-            
-            if (currentPoint >= points.length) {
-                // Calcola offset medio
-                let offsetX = 0, offsetY = 0;
-                calibrationData.forEach(data => {
-                    offsetX += data.expected.x - data.actual.x;
-                    offsetY += data.expected.y - data.actual.y;
-                });
-                
-                this.calibrationOffset = {
-                    x: offsetX / calibrationData.length,
-                    y: offsetY / calibrationData.length
-                };
-                
-                this.canvas.removeEventListener('click', handleCalibrationClick);
-                this.hideCalibrationModal();
-                this.showNotification('Calibrazione completata! Offset applicato.');
-            }
-        };
-        
-        this.canvas.addEventListener('click', handleCalibrationClick);
-        this.hideCalibrationModal();
-        this.showNotification('Tocca i 4 angoli dello schermo nell\'ordine: alto-sx, alto-dx, basso-sx, basso-dx');
-    }
-
     toggleRuler() {
         const ruler = document.getElementById('ruler');
-        if (ruler.style.display === 'none') {
+        if (ruler.style.display === 'none' || !ruler.style.display) {
             ruler.style.display = 'block';
             ruler.style.left = '100px';
             ruler.style.top = '100px';
@@ -419,7 +333,7 @@ class EduBoard {
 
     toggleProtractor() {
         const protractor = document.getElementById('protractor');
-        if (protractor.style.display === 'none') {
+        if (protractor.style.display === 'none' || !protractor.style.display) {
             protractor.style.display = 'block';
             protractor.style.left = '200px';
             protractor.style.top = '150px';
@@ -430,9 +344,11 @@ class EduBoard {
     }
 
     setupGeometricTools() {
+        // Crea i segni del righello
         const rulerMarks = document.querySelector('.ruler-marks');
         if (rulerMarks) {
-            for (let i = 0; i <= 40; i++) {
+            rulerMarks.innerHTML = '';
+            for (let i = 0; i <= 30; i++) {
                 const mark = document.createElement('div');
                 mark.style.position = 'absolute';
                 mark.style.left = `${i * 10}px`;
@@ -441,6 +357,18 @@ class EduBoard {
                 mark.style.height = i % 5 === 0 ? '15px' : '10px';
                 mark.style.backgroundColor = 'var(--primary-color)';
                 rulerMarks.appendChild(mark);
+                
+                // Aggiungi numeri ogni 5 tacche
+                if (i % 5 === 0 && i > 0) {
+                    const number = document.createElement('div');
+                    number.style.position = 'absolute';
+                    number.style.left = `${i * 10 - 5}px`;
+                    number.style.bottom = '16px';
+                    number.style.fontSize = '8px';
+                    number.style.color = 'var(--primary-color)';
+                    number.textContent = i;
+                    rulerMarks.appendChild(number);
+                }
             }
         }
     }
@@ -449,28 +377,55 @@ class EduBoard {
         let isDragging = false;
         let startX, startY, initialX, initialY;
 
-        element.addEventListener('mousedown', (e) => {
+        const handleMouseDown = (e) => {
             isDragging = true;
             startX = e.clientX;
             startY = e.clientY;
             initialX = parseInt(element.style.left) || 0;
             initialY = parseInt(element.style.top) || 0;
             element.style.cursor = 'grabbing';
-        });
+            e.preventDefault();
+        };
 
-        document.addEventListener('mousemove', (e) => {
+        const handleMouseMove = (e) => {
             if (isDragging) {
                 const deltaX = e.clientX - startX;
                 const deltaY = e.clientY - startY;
                 element.style.left = `${initialX + deltaX}px`;
                 element.style.top = `${initialY + deltaY}px`;
             }
-        });
+        };
 
-        document.addEventListener('mouseup', () => {
+        const handleMouseUp = () => {
             isDragging = false;
             element.style.cursor = 'move';
+        };
+
+        element.addEventListener('mousedown', handleMouseDown);
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+
+        // Touch events per dispositivi mobili
+        element.addEventListener('touchstart', (e) => {
+            const touch = e.touches[0];
+            handleMouseDown({
+                clientX: touch.clientX,
+                clientY: touch.clientY,
+                preventDefault: () => e.preventDefault()
+            });
         });
+
+        document.addEventListener('touchmove', (e) => {
+            if (isDragging) {
+                const touch = e.touches[0];
+                handleMouseMove({
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                });
+            }
+        });
+
+        document.addEventListener('touchend', handleMouseUp);
     }
 
     setupDragAndDrop() {
@@ -509,7 +464,7 @@ class EduBoard {
         } else if (fileType === 'application/pdf') {
             this.loadPDF(file);
         } else {
-            alert('Tipo di file non supportato. Usa immagini o PDF.');
+            this.showNotification('Tipo di file non supportato. Usa immagini o PDF.');
         }
     }
 
@@ -522,6 +477,7 @@ class EduBoard {
                 const maxHeight = this.canvas.height * 0.8;
                 let { width, height } = img;
                 
+                // Ridimensiona se necessario
                 if (width > maxWidth) {
                     height = (height * maxWidth) / width;
                     width = maxWidth;
@@ -531,11 +487,13 @@ class EduBoard {
                     height = maxHeight;
                 }
                 
+                // Centra l'immagine
                 const x = (this.canvas.width - width) / 2;
                 const y = (this.canvas.height - height) / 2;
                 
                 this.ctx.drawImage(img, x, y, width, height);
                 this.saveState();
+                this.showNotification('Immagine caricata con successo!');
             };
             img.src = e.target.result;
         };
@@ -543,6 +501,7 @@ class EduBoard {
     }
 
     loadPDF(file) {
+        // Placeholder per PDF - funzionalità futura
         this.ctx.fillStyle = '#f0f0f0';
         this.ctx.fillRect(50, 50, 300, 400);
         this.ctx.fillStyle = '#333';
@@ -551,12 +510,14 @@ class EduBoard {
         this.ctx.fillText(file.name, 60, 100);
         this.ctx.fillText('(Funzionalità PDF in sviluppo)', 60, 120);
         this.saveState();
+        this.showNotification('PDF caricato (funzionalità in sviluppo)');
     }
 
     clearCanvas() {
         if (confirm('Sei sicuro di voler cancellare tutto?')) {
             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
             this.saveState();
+            this.showNotification('Lavagna pulita!');
         }
     }
 
@@ -567,6 +528,7 @@ class EduBoard {
         }
         this.history.push(this.canvas.toDataURL());
         
+        // Mantieni solo gli ultimi 50 stati per performance
         if (this.history.length > 50) {
             this.history.shift();
             this.historyStep--;
@@ -577,6 +539,7 @@ class EduBoard {
         if (this.historyStep > 0) {
             this.historyStep--;
             this.restoreState();
+            this.showNotification('Annullato');
         }
     }
 
@@ -584,6 +547,7 @@ class EduBoard {
         if (this.historyStep < this.history.length - 1) {
             this.historyStep++;
             this.restoreState();
+            this.showNotification('Ripetuto');
         }
     }
 
@@ -610,7 +574,7 @@ class EduBoard {
         const folder = document.getElementById('project-folder').value;
         
         if (!name) {
-            alert('Inserisci un nome per il progetto');
+            this.showNotification('Inserisci un nome per il progetto');
             return;
         }
 
@@ -691,13 +655,16 @@ class EduBoard {
         this.currentProject = project;
         document.getElementById('current-project').textContent = project.name;
         this.toggleSidebar();
+        this.showNotification(`Progetto "${project.name}" caricato!`);
     }
 
     newProject() {
         if (confirm('Creare un nuovo progetto? Le modifiche non salvate andranno perse.')) {
-            this.clearCanvas();
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.saveState();
             this.currentProject = null;
             document.getElementById('current-project').textContent = 'Nuovo Progetto';
+            this.showNotification('Nuovo progetto creato!');
         }
     }
 
@@ -709,6 +676,62 @@ class EduBoard {
     toggleToolsPanel() {
         const panel = document.getElementById('tools-panel');
         panel.classList.toggle('open');
+    }
+
+    startCalibration() {
+        let currentPoint = 0;
+        const points = [
+            { x: 100, y: 100 },
+            { x: this.canvas.width - 100, y: 100 },
+            { x: 100, y: this.canvas.height - 100 },
+            { x: this.canvas.width - 100, y: this.canvas.height - 100 }
+        ];
+        const calibrationData = [];
+        
+        const handleCalibrationClick = (e) => {
+            if (currentPoint >= points.length) return;
+            
+            const rect = this.canvas.getBoundingClientRect();
+            const scaleX = this.canvas.width / rect.width;
+            const scaleY = this.canvas.height / rect.height;
+            const clickX = (e.clientX - rect.left) * scaleX;
+            const clickY = (e.clientY - rect.top) * scaleY;
+            
+            calibrationData.push({
+                expected: points[currentPoint],
+                actual: { x: clickX, y: clickY }
+            });
+            
+            currentPoint++;
+            
+            if (currentPoint >= points.length) {
+                // Calcola offset medio
+                let offsetX = 0, offsetY = 0;
+                calibrationData.forEach(data => {
+                    offsetX += data.expected.x - data.actual.x;
+                    offsetY += data.expected.y - data.actual.y;
+                });
+                
+                this.calibrationOffset = {
+                    x: offsetX / calibrationData.length,
+                    y: offsetY / calibrationData.length
+                };
+                
+                this.canvas.removeEventListener('click', handleCalibrationClick);
+                this.hideCalibrationModal();
+                this.showNotification('Calibrazione completata!');
+            } else {
+                this.showNotification(`Tocca il punto ${currentPoint + 1} di 4`);
+            }
+        };
+        
+        this.canvas.addEventListener('click', handleCalibrationClick);
+        this.hideCalibrationModal();
+        this.showNotification('Tocca i 4 angoli dello schermo nell\'ordine indicato');
+    }
+
+    hideCalibrationModal() {
+        document.getElementById('calibration-modal').style.display = 'none';
     }
 
     handleKeyboard(e) {
@@ -743,7 +766,20 @@ class EduBoard {
     }
 
     setupPWA() {
-        // Mostra prompt di installazione
+        // Registra service worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('SW registrato:', registration);
+                    })
+                    .catch(error => {
+                        console.log('Errore SW:', error);
+                    });
+            });
+        }
+
+        // Gestisci prompt di installazione
         let deferredPrompt;
         
         window.addEventListener('beforeinstallprompt', (e) => {
@@ -767,6 +803,7 @@ class EduBoard {
                 cursor: pointer;
                 box-shadow: var(--shadow-lg);
                 z-index: 1000;
+                animation: bounce 2s infinite;
             `;
             
             installBtn.addEventListener('click', async () => {
@@ -775,6 +812,7 @@ class EduBoard {
                     const { outcome } = await deferredPrompt.userChoice;
                     if (outcome === 'accepted') {
                         installBtn.remove();
+                        this.showNotification('EduBoard installato con successo!');
                     }
                     deferredPrompt = null;
                 }
@@ -795,7 +833,7 @@ class EduBoard {
         const notification = document.createElement('div');
         notification.style.cssText = `
             position: fixed;
-            top: 20px;
+            top: 80px;
             right: 20px;
             background: var(--success-color);
             color: white;
@@ -805,6 +843,7 @@ class EduBoard {
             z-index: 1000;
             font-weight: 500;
             animation: slideIn 0.3s ease;
+            max-width: 300px;
         `;
         notification.textContent = message;
         
@@ -817,20 +856,7 @@ class EduBoard {
     }
 }
 
-// Inizializza EduBoard
+// Inizializza EduBoard quando il DOM è pronto
 document.addEventListener('DOMContentLoaded', () => {
     new EduBoard();
 });
-
-// Service Worker per PWA
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(registration => {
-                console.log('SW registrato:', registration);
-            })
-            .catch(error => {
-                console.log('Errore SW:', error);
-            });
-    });
-}
