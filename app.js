@@ -241,7 +241,13 @@ class EduBoard {
         });
 
         document.getElementById('shapes-btn').addEventListener('click', () => {
-            this.togglePanel('shapes-panel');
+        document.getElementById('hand-btn').addEventListener('click', () => {
+            this.setTool('hand');
+            this.updateMainToolSelection('hand-btn');
+        });
+        document.getElementById('lasso-btn').addEventListener('click', () => {
+            this.setTool('lasso');
+            this.updateMainToolSelection('lasso-btn');
         });
 
         // Tool buttons
@@ -325,6 +331,16 @@ class EduBoard {
         });
     }
 
+    updateMainToolSelection(selectedBtnId) {
+        // Reset all main toolbar buttons
+        document.querySelectorAll('#floating-toolbar .toolbar-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        // Activate selected button
+        document.getElementById(selectedBtnId).classList.add('active');
+        this.closeAllPanels();
+    }
+
     updateToolSelection(selectedBtn) {
         document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
         selectedBtn.classList.add('active');
@@ -348,6 +364,7 @@ class EduBoard {
 
     setTool(tool) {
         this.currentTool = tool;
+        this.selectedObjects = []; // Clear any selections when changing tools
         
         // Aggiorna il cursore
         switch(tool) {
@@ -913,7 +930,25 @@ class EduBoard {
                     this.toggleFullscreen();
                     break;
             }
+        } else {
+            // Delete selected objects with Delete key
+            if (e.key === 'Delete' && this.selectedObjects.length > 0) {
+                this.deleteSelectedObjects();
+            }
         }
+    }
+
+    deleteSelectedObjects() {
+        if (this.selectedObjects.length === 0) return;
+        
+        // Clear the areas where selected objects are
+        this.selectedObjects.forEach(obj => {
+            this.ctx.clearRect(obj.x, obj.y, obj.width, obj.height);
+        });
+        
+        this.selectedObjects = [];
+        this.saveState();
+        this.showNotification('Oggetti selezionati eliminati!');
     }
 
     setupPWA() {
@@ -978,15 +1013,23 @@ class EduBoard {
     startLassoSelection(e) {
         this.isLassoActive = true;
         this.lassoPath = [];
+        this.lassoStartPoint = this.getCanvasCoordinates(e);
         const coords = this.getCanvasCoordinates(e);
         this.lassoPath.push({x: coords.x, y: coords.y});
         
-        // Salva lo stato del canvas per poter disegnare temporaneamente il lazo
-        this.tempCanvas = document.createElement('canvas');
-        this.tempCanvas.width = this.canvas.width;
-        this.tempCanvas.height = this.canvas.height;
-        this.tempCtx = this.tempCanvas.getContext('2d');
-        this.tempCtx.drawImage(this.canvas, 0, 0);
+        // Create overlay canvas for lasso drawing
+        if (!this.overlayCanvas) {
+            this.overlayCanvas = document.createElement('canvas');
+            this.overlayCanvas.width = this.canvas.width;
+            this.overlayCanvas.height = this.canvas.height;
+            this.overlayCanvas.style.position = 'absolute';
+            this.overlayCanvas.style.top = '0';
+            this.overlayCanvas.style.left = '0';
+            this.overlayCanvas.style.pointerEvents = 'none';
+            this.overlayCanvas.style.zIndex = '10';
+            this.canvas.parentElement.appendChild(this.overlayCanvas);
+            this.overlayCtx = this.overlayCanvas.getContext('2d');
+        }
     }
 
     updateLassoSelection(e) {
@@ -995,21 +1038,20 @@ class EduBoard {
         const coords = this.getCanvasCoordinates(e);
         this.lassoPath.push({x: coords.x, y: coords.y});
         
-        // Ridisegna il canvas originale
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        this.ctx.drawImage(this.tempCanvas, 0, 0);
+        // Clear overlay and redraw lasso path
+        this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
         
-        // Disegna il percorso del lazo
-        this.ctx.strokeStyle = '#2563EB';
-        this.ctx.lineWidth = 2;
-        this.ctx.setLineDash([5, 5]);
-        this.ctx.beginPath();
-        this.ctx.moveTo(this.lassoPath[0].x, this.lassoPath[0].y);
+        // Draw lasso path on overlay
+        this.overlayCtx.strokeStyle = '#2563EB';
+        this.overlayCtx.lineWidth = 2;
+        this.overlayCtx.setLineDash([5, 5]);
+        this.overlayCtx.beginPath();
+        this.overlayCtx.moveTo(this.lassoPath[0].x, this.lassoPath[0].y);
         for (let i = 1; i < this.lassoPath.length; i++) {
-            this.ctx.lineTo(this.lassoPath[i].x, this.lassoPath[i].y);
+            this.overlayCtx.lineTo(this.lassoPath[i].x, this.lassoPath[i].y);
         }
-        this.ctx.stroke();
-        this.ctx.setLineDash([]);
+        this.overlayCtx.stroke();
+        this.overlayCtx.setLineDash([]);
     }
 
     completeLassoSelection() {
@@ -1017,17 +1059,123 @@ class EduBoard {
         
         this.isLassoActive = false;
         
-        // Ripristina il canvas originale
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        this.ctx.drawImage(this.tempCanvas, 0, 0);
+        // Close the lasso path
+        if (this.lassoPath.length > 2) {
+            this.lassoPath.push(this.lassoPath[0]); // Close the path
+        }
         
-        // Qui potresti implementare la logica per selezionare gli elementi dentro il lazo
-        this.showNotification('Selezione lazo completata!');
+        // Find objects within lasso selection
+        this.selectedObjects = this.findObjectsInLasso();
         
-        // Pulisci
+        // Clear overlay
+        this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+        
+        // Draw selection indicators
+        this.drawSelectionIndicators();
+        
+        if (this.selectedObjects.length > 0) {
+            this.showNotification(`${this.selectedObjects.length} oggetti selezionati! Usa Delete per eliminarli.`);
+        } else {
+            this.showNotification('Nessun oggetto selezionato.');
+        }
+        
         this.lassoPath = [];
-        this.tempCanvas = null;
-        this.tempCtx = null;
+    }
+
+    findObjectsInLasso() {
+        const selectedObjects = [];
+        const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+        const data = imageData.data;
+        
+        // Sample points within the lasso to find drawn content
+        const minX = Math.min(...this.lassoPath.map(p => p.x));
+        const maxX = Math.max(...this.lassoPath.map(p => p.x));
+        const minY = Math.min(...this.lassoPath.map(p => p.y));
+        const maxY = Math.max(...this.lassoPath.map(p => p.y));
+        
+        // Check for non-transparent pixels within lasso bounds
+        for (let x = minX; x <= maxX; x += 5) {
+            for (let y = minY; y <= maxY; y += 5) {
+                if (this.isPointInLasso(x, y) && this.hasContentAt(x, y, data)) {
+                    // Found content, create a selection object
+                    const obj = {
+                        x: Math.max(0, x - 20),
+                        y: Math.max(0, y - 20),
+                        width: 40,
+                        height: 40,
+                        originalX: x,
+                        originalY: y
+                    };
+                    
+                    // Check if this area overlaps with existing selections
+                    const overlaps = selectedObjects.some(existing => 
+                        Math.abs(existing.originalX - x) < 30 && Math.abs(existing.originalY - y) < 30
+                    );
+                    
+                    if (!overlaps) {
+                        selectedObjects.push(obj);
+                    }
+                }
+            }
+        }
+        
+        return selectedObjects;
+    }
+
+    isPointInLasso(x, y) {
+        if (this.lassoPath.length < 3) return false;
+        
+        let inside = false;
+        for (let i = 0, j = this.lassoPath.length - 1; i < this.lassoPath.length; j = i++) {
+            const xi = this.lassoPath[i].x;
+            const yi = this.lassoPath[i].y;
+            const xj = this.lassoPath[j].x;
+            const yj = this.lassoPath[j].y;
+            
+            if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+                inside = !inside;
+            }
+        }
+        return inside;
+    }
+
+    hasContentAt(x, y, imageData) {
+        const index = (Math.floor(y) * this.canvas.width + Math.floor(x)) * 4;
+        if (index < 0 || index >= imageData.length) return false;
+        
+        // Check if pixel is not transparent (alpha > 0)
+        return imageData[index + 3] > 0;
+    }
+
+    drawSelectionIndicators() {
+        this.selectedObjects.forEach(obj => {
+            this.overlayCtx.strokeStyle = '#2563EB';
+            this.overlayCtx.lineWidth = 2;
+            this.overlayCtx.setLineDash([3, 3]);
+            this.overlayCtx.strokeRect(obj.x, obj.y, obj.width, obj.height);
+            this.overlayCtx.setLineDash([]);
+            
+            // Draw corner handles
+            this.overlayCtx.fillStyle = '#2563EB';
+            this.overlayCtx.fillRect(obj.x - 3, obj.y - 3, 6, 6);
+            this.overlayCtx.fillRect(obj.x + obj.width - 3, obj.y - 3, 6, 6);
+            this.overlayCtx.fillRect(obj.x - 3, obj.y + obj.height - 3, 6, 6);
+            this.overlayCtx.fillRect(obj.x + obj.width - 3, obj.y + obj.height - 3, 6, 6);
+        });
+    }
+
+    deleteSelectedObjects() {
+        if (this.selectedObjects.length === 0) return;
+        
+        // Clear the areas where selected objects are
+        this.selectedObjects.forEach(obj => {
+            this.ctx.clearRect(obj.x, obj.y, obj.width, obj.height);
+        });
+        
+        this.selectedObjects = [];
+        this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+        this.saveState();
+        this.showNotification('Oggetti selezionati eliminati!');
     }
 
     showNotification(message) {
