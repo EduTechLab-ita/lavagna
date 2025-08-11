@@ -42,78 +42,162 @@
 
     <!-- Toolbar compatta -->
     <div class="toolbar">
-        <!-- Strumenti -->
-        <div class="tool-group expandable" id="tools-group">
-            <button id="pencil-tool" class="tool-btn active expand-trigger" title="Strumenti" data-tool="pencil">✏️</button>
-            <div class="expanded-content">
-                <button id="pen-tool" class="tool-btn" title="Penna" data-tool="pen">🖊️</button>
-                <button id="marker-tool" class="tool-btn" title="Evidenziatore" data-tool="marker">🖍️</button>
-                <button id="fountain-tool" class="tool-btn" title="Stilografica" data-tool="fountain">🖋️</button>
-                <button id="eraser-tool" class="tool-btn" title="Gomma" data-tool="eraser">🧽</button>
-                <button id="text-tool" class="tool-btn" title="Testo" data-tool="text">📝</button>
-            </div>
-        </div>
-
-        <!-- Colori -->
-        <div class="tool-group expandable" id="colors-group">
-            <button class="tool-btn expand-trigger" title="Colori e Spessore">🎨</button>
-            <div class="expanded-content">
-                <div class="color-section">
-                    <div class="color-palette" id="color-palette">
-                        <div class="color-swatch active" data-color="#000000" style="background: #000000"></div>
-                        <div class="color-swatch" data-color="#FF0000" style="background: #FF0000"></div>
-                        <div class="color-swatch" data-color="#00FF00" style="background: #00FF00"></div>
-                        <div class="color-swatch" data-color="#0000FF" style="background: #0000FF"></div>
-                        <div class="color-swatch" data-color="#FFFF00" style="background: #FFFF00"></div>
-                        <div class="color-swatch" data-color="#FF00FF" style="background: #FF00FF"></div>
-                        <div class="color-swatch" data-color="#00FFFF" style="background: #00FFFF"></div>
-                        <div class="color-swatch" data-color="#FFA500" style="background: #FFA500"></div>
-                        <div class="color-swatch" data-color="#800080" style="background: #800080"></div>
-                        <div class="color-swatch" data-color="#FFC0CB" style="background: #FFC0CB"></div>
-                        <div class="color-swatch" data-color="#A52A2A" style="background: #A52A2A"></div>
-                        <div class="color-swatch" data-color="#808080" style="background: #808080"></div>
-                        <button class="color-picker-btn" id="custom-color-btn" title="Altri colori">+</button>
-                    </div>
-                    <input type="color" id="color-picker" value="#000000" style="display: none;">
-                </div>
-                <div class="size-control">
-                    <div class="range-wrapper">
-                        <input type="range" id="brush-size" min="1" max="50" value="3">
-                        <span id="brush-size-display">3px</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Sfondi -->
-        <div class="tool-group expandable" id="backgrounds-group">
-            <button class="tool-btn expand-trigger" title="Sfondi">📄</button>
-            <div class="expanded-content">
-                <select id="background-select" class="modern-select">
-                    <option value="blank">Bianco</option>
-                    <option value="lines">Righe</option>
-                    <option value="squares">Quadretti</option>
-                    <option value="music">Pentagramma</option>
-                    <option value="dots">Puntini</option>
-                </select>
-            </div>
-        </div>
-
-        <!-- Geometria -->
-        <div class="tool-group expandable" id="geometry-group">
-            <button class="tool-btn expand-trigger" title="Strumenti Geometrici">📏</button>
-            <div class="expanded-content">
-                <button id="ruler-tool" class="tool-btn" title="Righello">📏</button>
-                <button id="protractor-tool" class="tool-btn" title="Goniometro">📐</button>
-            </div>
-        </div>
-
-        <!-- Azioni rapide -->
+        <!-- Bottone principale strumenti -->
+        <button id="tools-panel-btn" class="tool-btn primary" title="Strumenti">✏️</button>
+        
+        <!-- Azioni rapide sempre visibili -->
         <button id="upload-btn" class="tool-btn" title="Carica File">📎</button>
         <input type="file" id="file-input" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif" style="display: none;">
         <button id="clear-btn" class="tool-btn danger" title="Pulisci Tutto">🗑️</button>
         <button id="undo-btn" class="tool-btn" title="Annulla">↶</button>
         <button id="redo-btn" class="tool-btn" title="Ripeti">↷</button>
+    </div>
+
+    <!-- Pannello Strumenti Laterale -->
+    <div id="tools-panel" class="tools-panel">
+        <div class="panel-header">
+            <h3>Strumenti</h3>
+            <button id="close-tools-panel" class="close-btn">✕</button>
+        </div>
+        
+        <div class="panel-content">
+            <!-- Sezione Strumenti -->
+            <div class="panel-section">
+                <h4>Strumento</h4>
+                <div class="tool-options">
+                    <div class="tool-option active" data-tool="pencil">
+                        <div class="tool-icon">✏️</div>
+                        <div class="tool-info">
+                            <span class="tool-name">Matita</span>
+                            <div class="tool-example">
+                                <svg width="80" height="20" viewBox="0 0 80 20">
+                                    <path d="M5,10 Q20,8 35,12 T65,10" stroke="#666" stroke-width="2" fill="none" opacity="0.8"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="tool-option" data-tool="pen">
+                        <div class="tool-icon">🖊️</div>
+                        <div class="tool-info">
+                            <span class="tool-name">Penna</span>
+                            <div class="tool-example">
+                                <svg width="80" height="20" viewBox="0 0 80 20">
+                                    <path d="M5,10 Q20,8 35,12 T65,10" stroke="#000" stroke-width="2.5" fill="none"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="tool-option" data-tool="marker">
+                        <div class="tool-icon">🖍️</div>
+                        <div class="tool-info">
+                            <span class="tool-name">Evidenziatore</span>
+                            <div class="tool-example">
+                                <svg width="80" height="20" viewBox="0 0 80 20">
+                                    <path d="M5,10 Q20,8 35,12 T65,10" stroke="#ffeb3b" stroke-width="8" fill="none" opacity="0.4"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="tool-option" data-tool="fountain">
+                        <div class="tool-icon">🖋️</div>
+                        <div class="tool-info">
+                            <span class="tool-name">Stilografica</span>
+                            <div class="tool-example">
+                                <svg width="80" height="20" viewBox="0 0 80 20">
+                                    <path d="M5,10 Q20,6 35,14 T65,10" stroke="#1a237e" stroke-width="3" fill="none"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="tool-option" data-tool="eraser">
+                        <div class="tool-icon">🧽</div>
+                        <div class="tool-info">
+                            <span class="tool-name">Gomma</span>
+                            <div class="tool-example">
+                                <div style="width: 80px; height: 20px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #999;">cancella</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Sezione Dimensioni -->
+            <div class="panel-section">
+                <h4>Dimensioni</h4>
+                <div class="size-options">
+                    <div class="size-option" data-size="1"><div class="size-dot" style="width: 2px; height: 2px;"></div></div>
+                    <div class="size-option" data-size="3"><div class="size-dot" style="width: 6px; height: 6px;"></div></div>
+                    <div class="size-option active" data-size="5"><div class="size-dot" style="width: 10px; height: 10px;"></div></div>
+                    <div class="size-option" data-size="8"><div class="size-dot" style="width: 16px; height: 16px;"></div></div>
+                    <div class="size-option" data-size="12"><div class="size-dot" style="width: 24px; height: 24px;"></div></div>
+                </div>
+            </div>
+            
+            <!-- Sezione Colori -->
+            <div class="panel-section">
+                <h4>Colore</h4>
+                <div class="color-grid">
+                    <div class="color-swatch active" data-color="#000000" style="background: #000000"></div>
+                    <div class="color-swatch" data-color="#2563EB" style="background: #2563EB"></div>
+                    <div class="color-swatch" data-color="#DC2626" style="background: #DC2626"></div>
+                    <div class="color-swatch" data-color="#16A34A" style="background: #16A34A"></div>
+                    <div class="color-swatch" data-color="#CA8A04" style="background: #CA8A04"></div>
+                    <div class="color-swatch" data-color="#9333EA" style="background: #9333EA"></div>
+                    <div class="color-swatch" data-color="#C2410C" style="background: #C2410C"></div>
+                    <div class="color-swatch" data-color="#0891B2" style="background: #0891B2"></div>
+                    <div class="color-swatch" data-color="#BE185D" style="background: #BE185D"></div>
+                    <div class="color-swatch" data-color="#65A30D" style="background: #65A30D"></div>
+                    <button class="color-picker-btn" id="custom-color-btn" title="Altri colori">+</button>
+                </div>
+                <input type="color" id="color-picker" value="#000000" style="display: none;">
+            </div>
+            
+            <!-- Sezione Sfondi -->
+            <div class="panel-section">
+                <h4>Sfondo</h4>
+                <div class="background-options">
+                    <div class="bg-option active" data-bg="blank">
+                        <div class="bg-preview bg-blank"></div>
+                        <span>Bianco</span>
+                    </div>
+                    <div class="bg-option" data-bg="lines">
+                        <div class="bg-preview bg-lines"></div>
+                        <span>Righe</span>
+                    </div>
+                    <div class="bg-option" data-bg="squares">
+                        <div class="bg-preview bg-squares"></div>
+                        <span>Quadretti</span>
+                    </div>
+                    <div class="bg-option" data-bg="music">
+                        <div class="bg-preview bg-music"></div>
+                        <span>Pentagramma</span>
+                    </div>
+                    <div class="bg-option" data-bg="dots">
+                        <div class="bg-preview bg-dots"></div>
+                        <span>Puntini</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Sezione Strumenti Geometrici -->
+            <div class="panel-section">
+                <h4>Geometria</h4>
+                <div class="geometry-tools">
+                    <button id="ruler-tool" class="geometry-btn">
+                        <span class="tool-icon">📏</span>
+                        <span>Righello</span>
+                    </button>
+                    <button id="protractor-tool" class="geometry-btn">
+                        <span class="tool-icon">📐</span>
+                        <span>Goniometro</span>
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Area principale -->
