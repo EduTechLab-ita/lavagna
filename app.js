@@ -129,7 +129,7 @@ class EduBoard {
 
     setupFloatingToolbar() {
         const toolbar = document.getElementById('floating-toolbar');
-        const handle = document.getElementById('toolbar-handle');
+        const handle = toolbar;
         let isDragging = false;
         let startX, startY, initialX, initialY;
 
