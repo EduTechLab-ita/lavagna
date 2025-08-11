@@ -47,63 +47,76 @@
     <!-- Toolbar principale -->
     <div class="toolbar">
         <!-- Strumenti di disegno -->
-        <div class="tool-group">
+        <div class="tool-group expandable" id="tools-group">
             <span class="group-label">Strumenti</span>
-            <button id="pencil-tool" class="tool-btn active" title="Matita" data-tool="pencil">✏️</button>
-            <button id="pen-tool" class="tool-btn" title="Penna" data-tool="pen">🖊️</button>
-            <button id="marker-tool" class="tool-btn" title="Evidenziatore" data-tool="marker">🖍️</button>
-            <button id="fountain-tool" class="tool-btn" title="Stilografica" data-tool="fountain">🖋️</button>
-            <button id="eraser-tool" class="tool-btn" title="Gomma" data-tool="eraser">🧽</button>
-            <button id="text-tool" class="tool-btn" title="Testo" data-tool="text">📝</button>
+            <button id="pencil-tool" class="tool-btn active expand-trigger" title="Strumenti" data-tool="pencil">✏️</button>
+            <div class="expanded-content">
+                <button id="pen-tool" class="tool-btn" title="Penna" data-tool="pen">🖊️</button>
+                <button id="marker-tool" class="tool-btn" title="Evidenziatore" data-tool="marker">🖍️</button>
+                <button id="fountain-tool" class="tool-btn" title="Stilografica" data-tool="fountain">🖋️</button>
+                <button id="eraser-tool" class="tool-btn" title="Gomma" data-tool="eraser">🧽</button>
+                <button id="text-tool" class="tool-btn" title="Testo" data-tool="text">📝</button>
+            </div>
         </div>
 
         <!-- Controlli colore e spessore -->
-        <div class="tool-group">
+        <div class="tool-group expandable" id="colors-group">
             <span class="group-label">Personalizza</span>
-            <div class="color-section">
-                <div class="color-palette" id="color-palette">
-                    <div class="color-swatch active" data-color="#000000" style="background: #000000"></div>
-                    <div class="color-swatch" data-color="#FF0000" style="background: #FF0000"></div>
-                    <div class="color-swatch" data-color="#00FF00" style="background: #00FF00"></div>
-                    <div class="color-swatch" data-color="#0000FF" style="background: #0000FF"></div>
-                    <div class="color-swatch" data-color="#FFFF00" style="background: #FFFF00"></div>
-                    <div class="color-swatch" data-color="#FF00FF" style="background: #FF00FF"></div>
-                    <div class="color-swatch" data-color="#00FFFF" style="background: #00FFFF"></div>
-                    <div class="color-swatch" data-color="#FFA500" style="background: #FFA500"></div>
-                    <div class="color-swatch" data-color="#800080" style="background: #800080"></div>
-                    <div class="color-swatch" data-color="#FFC0CB" style="background: #FFC0CB"></div>
-                    <div class="color-swatch" data-color="#A52A2A" style="background: #A52A2A"></div>
-                    <div class="color-swatch" data-color="#808080" style="background: #808080"></div>
-                    <button class="color-picker-btn" id="custom-color-btn" title="Altri colori">🎨</button>
+            <button class="tool-btn expand-trigger" title="Colori e Spessore">🎨</button>
+            <div class="expanded-content">
+                <div class="color-section">
+                    <label>Colori:</label>
+                    <div class="color-palette" id="color-palette">
+                        <div class="color-swatch active" data-color="#000000" style="background: #000000"></div>
+                        <div class="color-swatch" data-color="#FF0000" style="background: #FF0000"></div>
+                        <div class="color-swatch" data-color="#00FF00" style="background: #00FF00"></div>
+                        <div class="color-swatch" data-color="#0000FF" style="background: #0000FF"></div>
+                        <div class="color-swatch" data-color="#FFFF00" style="background: #FFFF00"></div>
+                        <div class="color-swatch" data-color="#FF00FF" style="background: #FF00FF"></div>
+                        <div class="color-swatch" data-color="#00FFFF" style="background: #00FFFF"></div>
+                        <div class="color-swatch" data-color="#FFA500" style="background: #FFA500"></div>
+                        <div class="color-swatch" data-color="#800080" style="background: #800080"></div>
+                        <div class="color-swatch" data-color="#FFC0CB" style="background: #FFC0CB"></div>
+                        <div class="color-swatch" data-color="#A52A2A" style="background: #A52A2A"></div>
+                        <div class="color-swatch" data-color="#808080" style="background: #808080"></div>
+                        <button class="color-picker-btn" id="custom-color-btn" title="Altri colori">🎨</button>
+                    </div>
+                    <input type="color" id="color-picker" value="#000000" style="display: none;">
                 </div>
-                <input type="color" id="color-picker" value="#000000" style="display: none;">
-            </div>
-            <div class="size-control">
-                <label for="brush-size">Spessore:</label>
-                <div class="range-wrapper">
-                    <input type="range" id="brush-size" min="1" max="50" value="3">
-                    <span id="brush-size-display">3px</span>
+                <div class="size-control">
+                    <label for="brush-size">Spessore:</label>
+                    <div class="range-wrapper">
+                        <input type="range" id="brush-size" min="1" max="50" value="3">
+                        <span id="brush-size-display">3px</span>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Sfondi -->
-        <div class="tool-group">
+        <div class="tool-group expandable" id="backgrounds-group">
             <span class="group-label">Sfondi</span>
-            <select id="background-select" class="modern-select">
-                <option value="blank">Bianco</option>
-                <option value="lines">Righe</option>
-                <option value="squares">Quadretti</option>
-                <option value="music">Pentagramma</option>
-                <option value="dots">Puntini</option>
-            </select>
+            <button class="tool-btn expand-trigger" title="Sfondi">📄</button>
+            <div class="expanded-content">
+                <label>Sfondo:</label>
+                <select id="background-select" class="modern-select">
+                    <option value="blank">Bianco</option>
+                    <option value="lines">Righe</option>
+                    <option value="squares">Quadretti</option>
+                    <option value="music">Pentagramma</option>
+                    <option value="dots">Puntini</option>
+                </select>
+            </div>
         </div>
 
         <!-- Strumenti geometrici -->
-        <div class="tool-group">
+        <div class="tool-group expandable" id="geometry-group">
             <span class="group-label">Geometria</span>
-            <button id="ruler-tool" class="tool-btn" title="Righello">📏</button>
-            <button id="protractor-tool" class="tool-btn" title="Goniometro">📐</button>
+            <button class="tool-btn expand-trigger" title="Strumenti Geometrici">📏</button>
+            <div class="expanded-content">
+                <button id="ruler-tool" class="tool-btn" title="Righello">📏</button>
+                <button id="protractor-tool" class="tool-btn" title="Goniometro">📐</button>
+            </div>
         </div>
 
         <!-- File e media -->
@@ -121,6 +134,8 @@
             <button id="redo-btn" class="tool-btn" title="Ripeti (Ctrl+Y)">↷</button>
         </div>
     </div>
+
+
 
     <!-- Area principale con canvas -->
     <main>

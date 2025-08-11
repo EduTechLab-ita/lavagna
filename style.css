@@ -159,56 +159,60 @@ header {
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--border-color);
-    padding: 16px 24px;
+    padding: 8px 16px;
     display: flex;
     align-items: center;
-    gap: 32px;
+    gap: 16px;
     flex-wrap: nowrap;
     overflow-x: auto;
     box-shadow: var(--shadow-sm);
     z-index: 90;
     position: relative;
+    min-height: 60px;
+    max-height: 60px;
 }
 
 .tool-group {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 0 16px;
+    gap: 8px;
+    padding: 0 8px;
     position: relative;
     flex-shrink: 0;
+    transition: var(--transition);
 }
 
 .tool-group:not(:last-child)::after {
     content: '';
     position: absolute;
-    right: -16px;
+    right: -8px;
     top: 50%;
     transform: translateY(-50%);
     width: 1px;
-    height: 32px;
+    height: 24px;
     background: var(--border-color);
 }
 
 .group-label {
-    font-size: 0.75rem;
+    font-size: 0.65rem;
     font-weight: 600;
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    margin-right: 8px;
+    margin-right: 4px;
+    display: none;
 }
 
 .tool-btn {
     background: var(--bg-primary);
     border: 2px solid var(--border-color);
-    padding: 12px;
+    padding: 8px;
     border-radius: var(--border-radius);
-    font-size: 1.25rem;
+    font-size: 1rem;
     cursor: pointer;
     transition: var(--transition);
-    min-width: 48px;
-    height: 48px;
+    min-width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -334,12 +338,66 @@ header {
 
 
 /* Controlli moderni */
+.tool-group.expandable {
+    position: relative;
+}
+
+.tool-group.expandable .expanded-content {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 12px;
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    display: none;
+    min-width: 200px;
+}
+
+.tool-group.expandable.expanded .expanded-content {
+    display: block;
+    animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.expand-trigger {
+    position: relative;
+}
+
+.expand-trigger::after {
+    content: '▼';
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    font-size: 8px;
+    color: var(--text-secondary);
+}
+
+.tool-group.expanded .expand-trigger::after {
+    content: '▲';
+}
+
 .toolbar label {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-weight: 600;
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    margin-bottom: 4px;
+    display: block;
 }
 
 .color-picker-wrapper {
@@ -364,15 +422,15 @@ header {
 .range-wrapper {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
 }
 
 .toolbar input[type="range"] {
-    width: 120px;
+    width: 80px;
     cursor: pointer;
     -webkit-appearance: none;
     appearance: none;
-    height: 6px;
+    height: 4px;
     border-radius: 3px;
     background: var(--bg-tertiary);
     outline: none;
@@ -381,8 +439,8 @@ header {
 .toolbar input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
     cursor: pointer;
@@ -433,13 +491,13 @@ header {
 }
 
 .color-picker-btn {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
     border: 2px dashed var(--border-color);
     background: var(--bg-primary);
     border-radius: 4px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -454,15 +512,15 @@ header {
 .size-control {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
 }
 
 .modern-select, .modern-input {
-    padding: 8px 16px;
+    padding: 6px 12px;
     border: 2px solid var(--border-color);
     border-radius: var(--border-radius-sm);
     background: var(--bg-primary);
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     font-weight: 500;
     cursor: pointer;
     transition: var(--transition);
@@ -480,12 +538,12 @@ header {
 }
 
 #brush-size-display {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-weight: 600;
     color: var(--text-muted);
-    min-width: 35px;
+    min-width: 30px;
     text-align: center;
-    padding: 4px 8px;
+    padding: 2px 6px;
     background: var(--bg-tertiary);
     border-radius: var(--border-radius-sm);
 }

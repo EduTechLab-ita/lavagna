@@ -146,6 +146,9 @@ class EduBoard {
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => this.handleKeyboard(e));
+        
+        // Setup expandable menu groups
+        this.setupExpandableMenus();
     }
 
     createTouchEvent(touch) {
@@ -754,6 +757,36 @@ class EduBoard {
             notification.style.animation = 'slideOut 0.3s ease';
             setTimeout(() => notification.remove(), 300);
         }, 3000);
+    }
+    
+    setupExpandableMenus() {
+        document.querySelectorAll('.tool-group.expandable').forEach(group => {
+            const trigger = group.querySelector('.expand-trigger');
+            if (trigger) {
+                trigger.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    
+                    // Chiudi tutti gli altri gruppi
+                    document.querySelectorAll('.tool-group.expandable').forEach(otherGroup => {
+                        if (otherGroup !== group) {
+                            otherGroup.classList.remove('expanded');
+                        }
+                    });
+                    
+                    // Toggle del gruppo corrente
+                    group.classList.toggle('expanded');
+                });
+            }
+        });
+        
+        // Chiudi menu quando si clicca fuori
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.tool-group.expandable')) {
+                document.querySelectorAll('.tool-group.expandable').forEach(group => {
+                    group.classList.remove('expanded');
+                });
+            }
+        });
     }
 }
 
