@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lavagna Digitale - Scuola</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <meta name="theme-color" content="#4F46E5">
+</head>
+<body>
+    <!-- Header con controlli principali -->
+    <header>
+        <div class="header-left">
+            <h1>📚 Lavagna Digitale</h1>
+            <div class="project-info">
+                <span id="current-project">Nuovo Progetto</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <button id="save-btn" class="header-btn">💾 Salva</button>
+            <button id="load-btn" class="header-btn">📂 Carica</button>
+            <button id="new-btn" class="header-btn">📄 Nuovo</button>
+        </div>
+    </header>
+
+    <!-- Toolbar principale -->
+    <div class="toolbar">
+        <!-- Strumenti di disegno -->
+        <div class="tool-group">
+            <button id="pen-tool" class="tool-btn active" title="Penna">✏️</button>
+            <button id="eraser-tool" class="tool-btn" title="Gomma">🧽</button>
+            <button id="text-tool" class="tool-btn" title="Testo">📝</button>
+            <button id="shape-tool" class="tool-btn" title="Forme">⭕</button>
+        </div>
+
+        <!-- Controlli colore e spessore -->
+        <div class="tool-group">
+            <label for="color-picker">Colore:</label>
+            <input type="color" id="color-picker" value="#000000">
+            <label for="brush-size">Spessore:</label>
+            <input type="range" id="brush-size" min="1" max="20" value="3">
+            <span id="brush-size-display">3px</span>
+        </div>
+
+        <!-- Sfondi -->
+        <div class="tool-group">
+            <label for="background-select">Sfondo:</label>
+            <select id="background-select">
+                <option value="blank">Bianco</option>
+                <option value="lines">Righe</option>
+                <option value="squares">Quadretti</option>
+                <option value="music">Pentagramma</option>
+                <option value="dots">Puntini</option>
+            </select>
+        </div>
+
+        <!-- Strumenti geometrici -->
+        <div class="tool-group">
+            <button id="ruler-tool" class="tool-btn" title="Righello">📏</button>
+            <button id="protractor-tool" class="tool-btn" title="Goniometro">📐</button>
+        </div>
+
+        <!-- File e media -->
+        <div class="tool-group">
+            <button id="upload-btn" class="tool-btn" title="Carica File">📎</button>
+            <input type="file" id="file-input" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif" style="display: none;">
+        </div>
+
+        <!-- Azioni -->
+        <div class="tool-group">
+            <button id="clear-btn" class="tool-btn danger" title="Pulisci Tutto">🗑️</button>
+            <button id="undo-btn" class="tool-btn" title="Annulla">↶</button>
+            <button id="redo-btn" class="tool-btn" title="Ripeti">↷</button>
+        </div>
+    </div>
+
+    <!-- Area principale con canvas -->
+    <main>
+        <div class="canvas-container">
+            <canvas id="whiteboard" width="1920" height="1080"></canvas>
+            
+            <!-- Righello (nascosto di default) -->
+            <div id="ruler" class="geometric-tool" style="display: none;">
+                <div class="ruler-body">
+                    <div class="ruler-marks"></div>
+                </div>
+            </div>
+
+            <!-- Goniometro (nascosto di default) -->
+            <div id="protractor" class="geometric-tool" style="display: none;">
+                <div class="protractor-body">
+                    <div class="protractor-marks"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Sidebar per gestione progetti -->
+    <aside id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <h3>📁 I Miei Progetti</h3>
+            <button id="close-sidebar" class="close-btn">✕</button>
+        </div>
+        <div class="sidebar-content">
+            <div class="folder-structure">
+                <div class="folder" data-folder="matematica">
+                    <div class="folder-header">
+                        <span class="folder-icon">📁</span>
+                        <span class="folder-name">Matematica</span>
+                        <button class="add-subfolder">+</button>
+                    </div>
+                    <div class="folder-content"></div>
+                </div>
+                <div class="folder" data-folder="italiano">
+                    <div class="folder-header">
+                        <span class="folder-icon">📁</span>
+                        <span class="folder-name">Italiano</span>
+                        <button class="add-subfolder">+</button>
+                    </div>
+                    <div class="folder-content"></div>
+                </div>
+                <div class="folder" data-folder="scienze">
+                    <div class="folder-header">
+                        <span class="folder-icon">📁</span>
+                        <span class="folder-name">Scienze</span>
+                        <button class="add-subfolder">+</button>
+                    </div>
+                    <div class="folder-content"></div>
+                </div>
+            </div>
+            <button id="add-folder" class="add-folder-btn">+ Nuova Cartella</button>
+        </div>
+    </aside>
+
+    <!-- Modal per salvare progetto -->
+    <div id="save-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>💾 Salva Progetto</h3>
+            <div class="form-group">
+                <label for="project-name">Nome del progetto:</label>
+                <input type="text" id="project-name" placeholder="Es: Lezione di matematica">
+            </div>
+            <div class="form-group">
+                <label for="project-folder">Cartella:</label>
+                <select id="project-folder">
+                    <option value="matematica">Matematica</option>
+                    <option value="italiano">Italiano</option>
+                    <option value="scienze">Scienze</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button id="confirm-save" class="btn-primary">Salva</button>
+                <button id="cancel-save" class="btn-secondary">Annulla</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay per drag & drop -->
+    <div id="drop-overlay" class="drop-overlay" style="display: none;">
+        <div class="drop-message">
+            <div class="drop-icon">📎</div>
+            <p>Rilascia qui i tuoi file</p>
+            <small>PDF, Word, Immagini supportati</small>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
