@@ -357,6 +357,12 @@ class EduBoard {
             case 'fountain':
                 this.canvas.style.cursor = 'crosshair';
                 break;
+            case 'hand':
+                this.canvas.style.cursor = 'grab';
+                break;
+            case 'lasso':
+                this.canvas.style.cursor = 'crosshair';
+                break;
             case 'eraser':
                 this.canvas.style.cursor = 'grab';
                 break;
@@ -380,10 +386,47 @@ class EduBoard {
             this.canvas.classList.add(`canvas-${type}`);
         }
         
+        // Forza il refresh del canvas per applicare lo sfondo
+        this.canvas.style.backgroundImage = '';
+        
+        // Applica lo sfondo CSS corretto
+        switch(type) {
+            case 'lines':
+                this.canvas.style.backgroundImage = 'repeating-linear-gradient(transparent, transparent 24px, #e2e8f0 24px, #e2e8f0 25px)';
+                break;
+            case 'squares':
+                this.canvas.style.backgroundImage = 'repeating-linear-gradient(0deg, #e2e8f0, #e2e8f0 1px, transparent 1px, transparent 20px), repeating-linear-gradient(90deg, #e2e8f0, #e2e8f0 1px, transparent 1px, transparent 20px)';
+                break;
+            case 'music':
+                this.canvas.style.backgroundImage = 'repeating-linear-gradient(transparent, transparent 15px, #e2e8f0 15px, #e2e8f0 16px, transparent 16px, transparent 31px, #e2e8f0 31px, #e2e8f0 32px, transparent 32px, transparent 47px, #e2e8f0 47px, #e2e8f0 48px, transparent 48px, transparent 63px, #e2e8f0 63px, #e2e8f0 64px, transparent 64px, transparent 79px, #e2e8f0 79px, #e2e8f0 80px)';
+                break;
+            case 'dots':
+                this.canvas.style.backgroundImage = 'radial-gradient(circle, #e2e8f0 1px, transparent 1px)';
+                this.canvas.style.backgroundSize = '20px 20px';
+                break;
+            case 'blank':
+            default:
+                this.canvas.style.backgroundImage = 'none';
+                this.canvas.style.backgroundSize = 'auto';
+                break;
+        }
+        
         this.showNotification(`Sfondo "${type}" applicato!`);
     }
 
     startDrawing(e) {
+        if (this.currentTool === 'hand') {
+            // Strumento mano - non disegna, solo per trascinare
+            this.canvas.style.cursor = 'grabbing';
+            return;
+        }
+        
+        if (this.currentTool === 'lasso') {
+            // Strumento lazo - inizia selezione
+            this.startLassoSelection(e);
+            return;
+        }
+        
         this.isDrawing = true;
         const coords = this.getCanvasCoordinates(e);
         const x = coords.x;
@@ -454,6 +497,11 @@ class EduBoard {
     }
 
     draw(e) {
+        if (this.currentTool === 'lasso' && this.isLassoActive) {
+            this.updateLassoSelection(e);
+            return;
+        }
+        
         if (!this.isDrawing) return;
 
         const coords = this.getCanvasCoordinates(e);
@@ -465,6 +513,16 @@ class EduBoard {
     }
 
     stopDrawing() {
+        if (this.currentTool === 'hand') {
+            this.canvas.style.cursor = 'grab';
+            return;
+        }
+        
+        if (this.currentTool === 'lasso') {
+            this.completeLassoSelection();
+            return;
+        }
+        
         if (this.isDrawing) {
             this.isDrawing = false;
             this.ctx.globalAlpha = 1.0;
@@ -908,6 +966,60 @@ class EduBoard {
                 }
             }, 10000);
         });
+    }
+    startLassoSelection(e) {
+        this.isLassoActive = true;
+        this.lassoPath = [];
+        const coords = this.getCanvasCoordinates(e);
+        this.lassoPath.push({x: coords.x, y: coords.y});
+        
+        // Salva lo stato del canvas per poter disegnare temporaneamente il lazo
+        this.tempCanvas = document.createElement('canvas');
+        this.tempCanvas.width = this.canvas.width;
+        this.tempCanvas.height = this.canvas.height;
+        this.tempCtx = this.tempCanvas.getContext('2d');
+        this.tempCtx.drawImage(this.canvas, 0, 0);
+    }
+
+    updateLassoSelection(e) {
+        if (!this.isLassoActive) return;
+        
+        const coords = this.getCanvasCoordinates(e);
+        this.lassoPath.push({x: coords.x, y: coords.y});
+        
+        // Ridisegna il canvas originale
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.drawImage(this.tempCanvas, 0, 0);
+        
+        // Disegna il percorso del lazo
+        this.ctx.strokeStyle = '#2563EB';
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([5, 5]);
+        this.ctx.beginPath();
+        this.ctx.moveTo(this.lassoPath[0].x, this.lassoPath[0].y);
+        for (let i = 1; i < this.lassoPath.length; i++) {
+            this.ctx.lineTo(this.lassoPath[i].x, this.lassoPath[i].y);
+        }
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+    }
+
+    completeLassoSelection() {
+        if (!this.isLassoActive) return;
+        
+        this.isLassoActive = false;
+        
+        // Ripristina il canvas originale
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.drawImage(this.tempCanvas, 0, 0);
+        
+        // Qui potresti implementare la logica per selezionare gli elementi dentro il lazo
+        this.showNotification('Selezione lazo completata!');
+        
+        // Pulisci
+        this.lassoPath = [];
+        this.tempCanvas = null;
+        this.tempCtx = null;
     }
 
     showNotification(message) {
