@@ -190,19 +190,21 @@ class EduBoard {
     }
 
     setupToolbarEvents() {
-        // Tools toggle
-        document.getElementById('tools-toggle').addEventListener('click', () => {
+        // Toolbar buttons
+        document.getElementById('tools-btn').addEventListener('click', () => {
             this.togglePanel('tools-panel');
         });
 
-        // Backgrounds toggle
-        document.getElementById('backgrounds-toggle').addEventListener('click', () => {
+        document.getElementById('backgrounds-btn').addEventListener('click', () => {
             this.togglePanel('backgrounds-panel');
         });
 
-        // Geometry toggle
-        document.getElementById('geometry-toggle').addEventListener('click', () => {
+        document.getElementById('geometry-btn').addEventListener('click', () => {
             this.togglePanel('geometry-panel');
+        });
+
+        document.getElementById('shapes-btn').addEventListener('click', () => {
+            this.togglePanel('shapes-panel');
         });
 
         // Tool buttons
@@ -211,7 +213,7 @@ class EduBoard {
                 const tool = e.currentTarget.dataset.tool;
                 this.setTool(tool);
                 this.updateToolSelection(e.currentTarget);
-                this.updateMainToolButton(tool);
+                this.updateActiveToolButton();
             });
         });
 
@@ -264,12 +266,25 @@ class EduBoard {
     togglePanel(panelId) {
         this.closeAllPanels();
         const panel = document.getElementById(panelId);
+        const btn = document.querySelector(`[data-panel="${panelId.replace('-panel', '')}"]`);
+        
         panel.classList.add('active');
+        
+        // Update button states
+        document.querySelectorAll('.toolbar-btn').forEach(b => b.classList.remove('active'));
+        if (btn) btn.classList.add('active');
     }
 
     closeAllPanels() {
-        document.querySelectorAll('.tool-panel').forEach(panel => {
+        document.querySelectorAll('.expand-panel').forEach(panel => {
             panel.classList.remove('active');
+        });
+        
+        // Reset button states except for active tool
+        document.querySelectorAll('.toolbar-btn').forEach(btn => {
+            if (!btn.id.includes('tools-btn')) {
+                btn.classList.remove('active');
+            }
         });
     }
 
@@ -278,28 +293,9 @@ class EduBoard {
         selectedBtn.classList.add('active');
     }
 
-    updateMainToolButton(tool) {
-        const mainBtn = document.getElementById('tools-toggle');
-        const toolNames = {
-            'pencil': 'Matita',
-            'pen': 'Biro',
-            'marker': 'Evidenziatore',
-            'fountain': 'Stilografica',
-            'eraser': 'Gomma',
-            'text': 'Testo'
-        };
-        
-        const toolIcons = {
-            'pencil': '✏️',
-            'pen': '🖊️',
-            'marker': '🖍️',
-            'fountain': '🖋️',
-            'eraser': '🧽',
-            'text': '📝'
-        };
-
-        mainBtn.querySelector('.tool-icon').textContent = toolIcons[tool];
-        mainBtn.querySelector('.tool-label').textContent = toolNames[tool];
+    updateActiveToolButton() {
+        const toolsBtn = document.getElementById('tools-btn');
+        toolsBtn.classList.add('active');
     }
 
     getCanvasCoordinates(e) {
