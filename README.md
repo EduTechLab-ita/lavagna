@@ -1,6 +1,6 @@
-# 📚 Lavagna Digitale - Scuola
+# 📋 EduBoard - Lavagna Digitale Interattiva
 
-Una lavagna digitale interattiva progettata specificamente per l'ambiente scolastico, perfetta per l'uso su digital board e dispositivi touch.
+**EduBoard** è una lavagna digitale interattiva di nuova generazione, progettata specificamente per l'ambiente scolastico moderno. Perfetta per l'uso su digital board, tablet e dispositivi touch, offre un'esperienza di insegnamento e apprendimento completamente digitale.
 
 ## ✨ Caratteristiche Principali
 
@@ -42,17 +42,17 @@ Una lavagna digitale interattiva progettata specificamente per l'ambiente scolas
 
 ## 🚀 Installazione e Uso
 
-### Installazione come PWA
+### 📱 Installazione come PWA
 1. Apri l'applicazione nel browser
-2. Clicca su "Installa" quando appare il prompt
+2. Clicca su "Installa EduBoard" quando appare il prompt
 3. L'app sarà disponibile come applicazione nativa
 
-### Uso su Digital Board
+### 🖥️ Uso su Digital Board
 1. Apri l'applicazione in modalità schermo intero
 2. Condividi lo schermo del PC sulla digital board
 3. Usa gli strumenti touch per interagire direttamente
 
-### Scorciatoie da Tastiera
+### ⌨️ Scorciatoie da Tastiera
 - `Ctrl+S` - Salva progetto
 - `Ctrl+N` - Nuovo progetto
 - `Ctrl+Z` - Annulla
@@ -96,11 +96,12 @@ Una lavagna digitale interattiva progettata specificamente per l'ambiente scolas
 
 ## 🎨 Design e UX
 
-L'interfaccia è stata progettata seguendo i principi di:
+EduBoard presenta un design moderno e professionale basato su:
 - **Semplicità d'uso** per studenti di tutte le età
 - **Accessibilità** con contrasti elevati e icone chiare
-- **Efficienza** con strumenti sempre a portata di mano
-- **Professionalità** adatta all'ambiente educativo
+- **Design System coerente** con animazioni fluide
+- **Interfaccia intuitiva** ottimizzata per touch
+- **Estetica moderna** che ispira creatività
 
 ## 🔄 Aggiornamenti Futuri
 
@@ -113,8 +114,8 @@ L'interfaccia è stata progettata seguendo i principi di:
 
 ## 📞 Supporto
 
-Per domande, suggerimenti o segnalazioni di bug, l'applicazione è progettata per essere intuitiva e auto-esplicativa. Ogni strumento include tooltip informativi per guidare l'utente.
+EduBoard è progettato per essere intuitivo e auto-esplicativo. Ogni strumento include tooltip informativi e l'interfaccia guida naturalmente l'utente attraverso le funzionalità.
 
 ---
 
-**Sviluppato con ❤️ per l'educazione italiana**
+**EduBoard - Sviluppato con ❤️ per l'educazione del futuro**

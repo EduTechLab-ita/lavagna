@@ -1,11 +1,11 @@
 {
-  "name": "Lavagna Digitale - Scuola",
-  "short_name": "Lavagna Digitale",
-  "description": "Lavagna digitale interattiva per l'uso scolastico con strumenti di disegno, sfondi personalizzati e gestione progetti",
+  "name": "EduBoard - Lavagna Digitale Interattiva",
+  "short_name": "EduBoard",
+  "description": "EduBoard: la lavagna digitale professionale per la scuola con strumenti avanzati, sfondi educativi e gestione progetti intelligente",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F8FAFC",
-  "theme_color": "#4F46E5",
+  "background_color": "#EFF6FF",
+  "theme_color": "#2563EB",
   "orientation": "landscape-primary",
   "categories": ["education", "productivity"],
   "icons": [
@@ -63,16 +63,16 @@
   ],
   "shortcuts": [
     {
-      "name": "Nuovo Progetto",
+      "name": "Nuova Lavagna",
       "short_name": "Nuovo",
-      "description": "Crea un nuovo progetto sulla lavagna",
+      "description": "Crea una nuova lavagna digitale",
       "url": "/?action=new",
       "icons": [{ "src": "icon-96x96.png", "sizes": "96x96" }]
     },
     {
-      "name": "I Miei Progetti",
+      "name": "Le Mie Lavagne",
       "short_name": "Progetti",
-      "description": "Visualizza i progetti salvati",
+      "description": "Visualizza le lavagne salvate",
       "url": "/?action=projects",
       "icons": [{ "src": "icon-96x96.png", "sizes": "96x96" }]
     }
