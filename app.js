@@ -378,38 +378,46 @@ class EduBoard {
     }
 
     setBackground(type) {
-        // Rimuovi tutte le classi di sfondo
-        this.canvas.classList.remove('canvas-lines', 'canvas-squares', 'canvas-music', 'canvas-dots');
+        // Reset all background styles
+        this.canvas.style.backgroundImage = 'none';
+        this.canvas.style.backgroundSize = 'auto';
+        this.canvas.style.backgroundRepeat = 'repeat';
         
-        // Aggiungi la nuova classe se non è bianco
-        if (type !== 'blank') {
-            this.canvas.classList.add(`canvas-${type}`);
-        }
-        
-        // Forza il refresh del canvas per applicare lo sfondo
-        this.canvas.style.backgroundImage = '';
-        
-        // Applica lo sfondo CSS corretto
+        // Apply the selected background
         switch(type) {
             case 'lines':
-                this.canvas.style.backgroundImage = 'repeating-linear-gradient(transparent, transparent 24px, #e2e8f0 24px, #e2e8f0 25px)';
+                this.canvas.style.backgroundImage = 'repeating-linear-gradient(transparent 0px, transparent 24px, #e2e8f0 24px, #e2e8f0 25px)';
                 break;
             case 'squares':
-                this.canvas.style.backgroundImage = 'repeating-linear-gradient(0deg, #e2e8f0, #e2e8f0 1px, transparent 1px, transparent 20px), repeating-linear-gradient(90deg, #e2e8f0, #e2e8f0 1px, transparent 1px, transparent 20px)';
+                this.canvas.style.backgroundImage = `
+                    repeating-linear-gradient(0deg, #e2e8f0 0px, #e2e8f0 1px, transparent 1px, transparent 20px),
+                    repeating-linear-gradient(90deg, #e2e8f0 0px, #e2e8f0 1px, transparent 1px, transparent 20px)
+                `;
                 break;
             case 'music':
-                this.canvas.style.backgroundImage = 'repeating-linear-gradient(transparent, transparent 15px, #e2e8f0 15px, #e2e8f0 16px, transparent 16px, transparent 31px, #e2e8f0 31px, #e2e8f0 32px, transparent 32px, transparent 47px, #e2e8f0 47px, #e2e8f0 48px, transparent 48px, transparent 63px, #e2e8f0 63px, #e2e8f0 64px, transparent 64px, transparent 79px, #e2e8f0 79px, #e2e8f0 80px)';
+                this.canvas.style.backgroundImage = `
+                    repeating-linear-gradient(
+                        transparent 0px, transparent 15px, #e2e8f0 15px, #e2e8f0 16px,
+                        transparent 16px, transparent 31px, #e2e8f0 31px, #e2e8f0 32px,
+                        transparent 32px, transparent 47px, #e2e8f0 47px, #e2e8f0 48px,
+                        transparent 48px, transparent 63px, #e2e8f0 63px, #e2e8f0 64px,
+                        transparent 64px, transparent 79px, #e2e8f0 79px, #e2e8f0 80px
+                    )
+                `;
                 break;
             case 'dots':
                 this.canvas.style.backgroundImage = 'radial-gradient(circle, #e2e8f0 1px, transparent 1px)';
                 this.canvas.style.backgroundSize = '20px 20px';
                 break;
-            case 'blank':
-            default:
-                this.canvas.style.backgroundImage = 'none';
-                this.canvas.style.backgroundSize = 'auto';
+            default: // blank
+                // Already reset above
                 break;
         }
+        
+        // Force canvas refresh
+        this.canvas.style.display = 'none';
+        this.canvas.offsetHeight; // Trigger reflow
+        this.canvas.style.display = 'block';
         
         this.showNotification(`Sfondo "${type}" applicato!`);
     }
