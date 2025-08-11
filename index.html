@@ -6,18 +6,18 @@
     <title>EduBoard - Lavagna Digitale Interattiva</title>
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="32x32" href="icon-96x96.png">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <meta name="theme-color" content="#2563EB">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
 </head>
 <body>
     <!-- Header con controlli principali -->
     <header>
         <div class="header-left">
             <div class="logo">
-                <div class="logo-icon">📋</div>
-                <h1>EduBoard</h1>
-            </div>
-                <div class="logo-icon">📋</div>
+                <img src="icon-96x96.png" alt="EduBoard" class="logo-icon">
                 <h1>EduBoard</h1>
             </div>
             <div class="project-info">
@@ -25,18 +25,13 @@
             </div>
         </div>
         <div class="header-right">
+            <button id="fullscreen-btn" class="header-btn secondary" title="Schermo Intero">
+                <span class="btn-icon">⛶</span>
+                <span class="btn-text">Schermo Intero</span>
+            </button>
             <button id="save-btn" class="header-btn primary">
                 <span class="btn-icon">💾</span>
                 <span class="btn-text">Salva</span>
-            </button>
-            <button id="load-btn" class="header-btn secondary">
-                <span class="btn-icon">📂</span>
-                <span class="btn-text">Progetti</span>
-            </button>
-            <button id="new-btn" class="header-btn secondary">
-                <span class="btn-icon">✨</span>
-                <span class="btn-text">Nuovo</span>
-            </button>
             </button>
             <button id="load-btn" class="header-btn secondary">
                 <span class="btn-icon">📂</span>
@@ -52,42 +47,49 @@
     <!-- Toolbar principale -->
     <div class="toolbar">
         <!-- Strumenti di disegno -->
-        <!-- Strumenti di disegno -->
         <div class="tool-group">
             <span class="group-label">Strumenti</span>
-            <button id="pen-tool" class="tool-btn active" title="Penna">✏️</button>
-            <button id="eraser-tool" class="tool-btn" title="Gomma">🧽</button>
-            <span class="group-label">Strumenti</span>
-            <button id="pen-tool" class="tool-btn active" title="Penna">✏️</button>
-            <button id="eraser-tool" class="tool-btn" title="Gomma">🧽</button>
-            <button id="text-tool" class="tool-btn" title="Testo">📝</button>
-            <button id="shape-tool" class="tool-btn" title="Forme">⭕</button>
+            <button id="pencil-tool" class="tool-btn active" title="Matita" data-tool="pencil">✏️</button>
+            <button id="pen-tool" class="tool-btn" title="Penna" data-tool="pen">🖊️</button>
+            <button id="marker-tool" class="tool-btn" title="Evidenziatore" data-tool="marker">🖍️</button>
+            <button id="fountain-tool" class="tool-btn" title="Stilografica" data-tool="fountain">🖋️</button>
+            <button id="eraser-tool" class="tool-btn" title="Gomma" data-tool="eraser">🧽</button>
+            <button id="text-tool" class="tool-btn" title="Testo" data-tool="text">📝</button>
+        </div>
+
         <!-- Controlli colore e spessore -->
         <div class="tool-group">
-        <!-- Controlli colore e spessore -->
             <span class="group-label">Personalizza</span>
-            <span class="group-label">Personalizza</span>
-            <label for="color-picker">Colore:</label>
-            <div class="color-picker-wrapper">
-                <input type="color" id="color-picker" value="#1F2937">
-            <div class="color-picker-wrapper">
-                <input type="color" id="color-picker" value="#1F2937">
+            <div class="color-section">
+                <div class="color-palette" id="color-palette">
+                    <div class="color-swatch active" data-color="#000000" style="background: #000000"></div>
+                    <div class="color-swatch" data-color="#FF0000" style="background: #FF0000"></div>
+                    <div class="color-swatch" data-color="#00FF00" style="background: #00FF00"></div>
+                    <div class="color-swatch" data-color="#0000FF" style="background: #0000FF"></div>
+                    <div class="color-swatch" data-color="#FFFF00" style="background: #FFFF00"></div>
+                    <div class="color-swatch" data-color="#FF00FF" style="background: #FF00FF"></div>
+                    <div class="color-swatch" data-color="#00FFFF" style="background: #00FFFF"></div>
+                    <div class="color-swatch" data-color="#FFA500" style="background: #FFA500"></div>
+                    <div class="color-swatch" data-color="#800080" style="background: #800080"></div>
+                    <div class="color-swatch" data-color="#FFC0CB" style="background: #FFC0CB"></div>
+                    <div class="color-swatch" data-color="#A52A2A" style="background: #A52A2A"></div>
+                    <div class="color-swatch" data-color="#808080" style="background: #808080"></div>
+                    <button class="color-picker-btn" id="custom-color-btn" title="Altri colori">🎨</button>
+                </div>
+                <input type="color" id="color-picker" value="#000000" style="display: none;">
             </div>
-            <label for="brush-size">Spessore:</label>
-            <div class="range-wrapper">
-                <input type="range" id="brush-size" min="1" max="20" value="3">
-                <span id="brush-size-display">3px</span>
+            <div class="size-control">
+                <label for="brush-size">Spessore:</label>
+                <div class="range-wrapper">
+                    <input type="range" id="brush-size" min="1" max="50" value="3">
+                    <span id="brush-size-display">3px</span>
+                </div>
             </div>
-            <div class="range-wrapper">
-                <input type="range" id="brush-size" min="1" max="20" value="3">
-                <span id="brush-size-display">3px</span>
-            </div>
+        </div>
+
         <!-- Sfondi -->
         <div class="tool-group">
-        <!-- Sfondi -->
             <span class="group-label">Sfondi</span>
-            <span class="group-label">Sfondi</span>
-            <label for="background-select">Sfondo:</label>
             <select id="background-select" class="modern-select">
                 <option value="blank">Bianco</option>
                 <option value="lines">Righe</option>
@@ -98,31 +100,25 @@
         </div>
 
         <!-- Strumenti geometrici -->
-        <!-- Strumenti geometrici -->
         <div class="tool-group">
             <span class="group-label">Geometria</span>
             <button id="ruler-tool" class="tool-btn" title="Righello">📏</button>
             <button id="protractor-tool" class="tool-btn" title="Goniometro">📐</button>
-            <span class="group-label">Geometria</span>
-            <button id="ruler-tool" class="tool-btn" title="Righello">📏</button>
-            <button id="protractor-tool" class="tool-btn" title="Goniometro">📐</button>
+        </div>
+
         <!-- File e media -->
         <div class="tool-group">
-        <!-- File e media -->
-            <span class="group-label">Media</span>
             <span class="group-label">Media</span>
             <button id="upload-btn" class="tool-btn" title="Carica File">📎</button>
             <input type="file" id="file-input" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif" style="display: none;">
         </div>
 
         <!-- Azioni -->
-        <!-- Azioni -->
         <div class="tool-group">
             <span class="group-label">Azioni</span>
             <button id="clear-btn" class="tool-btn danger" title="Pulisci Tutto">🗑️</button>
-            <button id="undo-btn" class="tool-btn" title="Annulla">↶</button>
-            <button id="redo-btn" class="tool-btn" title="Ripeti">↷</button>
-            <button id="redo-btn" class="tool-btn" title="Ripeti">↷</button>
+            <button id="undo-btn" class="tool-btn" title="Annulla (Ctrl+Z)">↶</button>
+            <button id="redo-btn" class="tool-btn" title="Ripeti (Ctrl+Y)">↷</button>
         </div>
     </div>
 
@@ -151,9 +147,6 @@
     <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
             <div class="sidebar-title">
-                <span class="sidebar-icon">📁</span>
-                <h3>I Miei Progetti</h3>
-            </div>
                 <span class="sidebar-icon">📁</span>
                 <h3>I Miei Progetti</h3>
             </div>
@@ -197,9 +190,6 @@
                 <span class="modal-icon">💾</span>
                 <h3>Salva Progetto</h3>
             </div>
-                <span class="modal-icon">💾</span>
-                <h3>Salva Progetto</h3>
-            </div>
             <div class="form-group">
                 <label for="project-name">Nome del progetto:</label>
                 <input type="text" id="project-name" placeholder="Es: Lezione di matematica" class="modern-input">
@@ -225,6 +215,29 @@
             <div class="drop-icon">📎</div>
             <p>Rilascia qui i tuoi file</p>
             <small>PDF, Word, Immagini supportati</small>
+        </div>
+    </div>
+
+    <!-- Calibrazione matita -->
+    <div id="calibration-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="modal-icon">🎯</span>
+                <h3>Calibrazione Matita</h3>
+            </div>
+            <div class="calibration-area">
+                <p>Tocca i punti rossi nell'ordine indicato per calibrare la matita:</p>
+                <div class="calibration-points">
+                    <div class="calibration-point" data-point="1"></div>
+                    <div class="calibration-point" data-point="2"></div>
+                    <div class="calibration-point" data-point="3"></div>
+                    <div class="calibration-point" data-point="4"></div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="skip-calibration" class="btn-secondary">Salta</button>
+                <button id="start-calibration" class="btn-primary">Inizia Calibrazione</button>
+            </div>
         </div>
     </div>
 

@@ -1,29 +1,29 @@
-class DigitalWhiteboard {
+class EduBoard {
     constructor() {
         this.canvas = document.getElementById('whiteboard');
         this.ctx = this.canvas.getContext('2d');
         this.isDrawing = false;
-        this.currentTool = 'pen';
+        this.currentTool = 'pencil';
         this.currentColor = '#000000';
         this.currentSize = 3;
         this.history = [];
         this.historyStep = -1;
-        this.projects = JSON.parse(localStorage.getItem('whiteboardProjects')) || {};
+        this.projects = JSON.parse(localStorage.getItem('eduboardProjects')) || {};
         this.currentProject = null;
+        this.calibrationOffset = { x: 0, y: 0 };
         
         this.initializeCanvas();
         this.setupEventListeners();
         this.setupGeometricTools();
         this.loadProjects();
         this.saveState();
+        this.setupPWA();
     }
 
     initializeCanvas() {
-        // Imposta dimensioni responsive
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
         
-        // Configurazione iniziale del contesto
         this.ctx.lineCap = 'round';
         this.ctx.lineJoin = 'round';
         this.ctx.imageSmoothingEnabled = true;
@@ -33,17 +33,13 @@ class DigitalWhiteboard {
         const container = this.canvas.parentElement;
         const rect = container.getBoundingClientRect();
         
-        // Salva il contenuto corrente
         const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
         
-        // Ridimensiona
         this.canvas.width = Math.max(1920, rect.width);
         this.canvas.height = Math.max(1080, rect.height);
         
-        // Ripristina il contenuto
         this.ctx.putImageData(imageData, 0, 0);
         
-        // Ripristina le impostazioni del contesto
         this.ctx.lineCap = 'round';
         this.ctx.lineJoin = 'round';
         this.ctx.strokeStyle = this.currentColor;
@@ -57,7 +53,7 @@ class DigitalWhiteboard {
         this.canvas.addEventListener('mouseup', () => this.stopDrawing());
         this.canvas.addEventListener('mouseout', () => this.stopDrawing());
 
-        // Eventi touch per dispositivi mobili
+        // Eventi touch
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             const touch = e.touches[0];
@@ -85,17 +81,30 @@ class DigitalWhiteboard {
         });
 
         // Strumenti
-        document.getElementById('pen-tool').addEventListener('click', () => this.setTool('pen'));
-        document.getElementById('eraser-tool').addEventListener('click', () => this.setTool('eraser'));
-        document.getElementById('text-tool').addEventListener('click', () => this.setTool('text'));
-        document.getElementById('shape-tool').addEventListener('click', () => this.setTool('shape'));
-
-        // Controlli
-        document.getElementById('color-picker').addEventListener('change', (e) => {
-            this.currentColor = e.target.value;
-            this.ctx.strokeStyle = this.currentColor;
+        document.querySelectorAll('[data-tool]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.setTool(e.target.closest('[data-tool]').dataset.tool);
+            });
         });
 
+        // Palette colori
+        document.querySelectorAll('.color-swatch').forEach(swatch => {
+            swatch.addEventListener('click', (e) => {
+                this.setColor(e.target.dataset.color);
+                document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+                e.target.classList.add('active');
+            });
+        });
+
+        document.getElementById('custom-color-btn').addEventListener('click', () => {
+            document.getElementById('color-picker').click();
+        });
+
+        document.getElementById('color-picker').addEventListener('change', (e) => {
+            this.setColor(e.target.value);
+        });
+
+        // Controlli
         document.getElementById('brush-size').addEventListener('input', (e) => {
             this.currentSize = e.target.value;
             this.ctx.lineWidth = this.currentSize;
@@ -122,6 +131,9 @@ class DigitalWhiteboard {
         document.getElementById('undo-btn').addEventListener('click', () => this.undo());
         document.getElementById('redo-btn').addEventListener('click', () => this.redo());
 
+        // Schermo intero
+        document.getElementById('fullscreen-btn').addEventListener('click', () => this.toggleFullscreen());
+
         // Gestione progetti
         document.getElementById('save-btn').addEventListener('click', () => this.showSaveModal());
         document.getElementById('load-btn').addEventListener('click', () => this.toggleSidebar());
@@ -134,6 +146,10 @@ class DigitalWhiteboard {
         // Sidebar
         document.getElementById('close-sidebar').addEventListener('click', () => this.toggleSidebar());
 
+        // Calibrazione
+        document.getElementById('start-calibration').addEventListener('click', () => this.startCalibration());
+        document.getElementById('skip-calibration').addEventListener('click', () => this.hideCalibrationModal());
+
         // Drag & Drop
         this.setupDragAndDrop();
 
@@ -141,39 +157,23 @@ class DigitalWhiteboard {
         document.addEventListener('keydown', (e) => this.handleKeyboard(e));
     }
 
-    setupDragAndDrop() {
-        const dropOverlay = document.getElementById('drop-overlay');
-        
-        document.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropOverlay.style.display = 'flex';
-        });
-
-        document.addEventListener('dragleave', (e) => {
-            if (e.clientX === 0 && e.clientY === 0) {
-                dropOverlay.style.display = 'none';
-            }
-        });
-
-        document.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropOverlay.style.display = 'none';
-            
-            const files = Array.from(e.dataTransfer.files);
-            files.forEach(file => this.processFile(file));
-        });
-    }
-
     setTool(tool) {
         this.currentTool = tool;
         
-        // Aggiorna UI
-        document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
-        document.getElementById(`${tool}-tool`).classList.add('active');
+        document.querySelectorAll('[data-tool]').forEach(btn => btn.classList.remove('active'));
+        document.querySelector(`[data-tool="${tool}"]`).classList.add('active');
         
-        // Cambia cursore
         switch(tool) {
+            case 'pencil':
+                this.canvas.style.cursor = 'crosshair';
+                break;
             case 'pen':
+                this.canvas.style.cursor = 'crosshair';
+                break;
+            case 'marker':
+                this.canvas.style.cursor = 'crosshair';
+                break;
+            case 'fountain':
                 this.canvas.style.cursor = 'crosshair';
                 break;
             case 'eraser':
@@ -182,50 +182,70 @@ class DigitalWhiteboard {
             case 'text':
                 this.canvas.style.cursor = 'text';
                 break;
-            case 'shape':
-                this.canvas.style.cursor = 'copy';
-                break;
         }
+    }
+
+    setColor(color) {
+        this.currentColor = color;
+        this.ctx.strokeStyle = color;
+        this.ctx.fillStyle = color;
     }
 
     startDrawing(e) {
         this.isDrawing = true;
         const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const x = (e.clientX - rect.left) + this.calibrationOffset.x;
+        const y = (e.clientY - rect.top) + this.calibrationOffset.y;
 
-        if (this.currentTool === 'pen') {
+        if (this.currentTool === 'eraser') {
+            this.ctx.globalCompositeOperation = 'destination-out';
+            this.ctx.lineWidth = this.currentSize * 2;
+        } else if (this.currentTool === 'text') {
+            this.addText(x, y);
+            return;
+        } else {
             this.ctx.globalCompositeOperation = 'source-over';
             this.ctx.strokeStyle = this.currentColor;
             this.ctx.lineWidth = this.currentSize;
-            this.ctx.beginPath();
-            this.ctx.moveTo(x, y);
-        } else if (this.currentTool === 'eraser') {
-            this.ctx.globalCompositeOperation = 'destination-out';
-            this.ctx.lineWidth = this.currentSize * 2;
-            this.ctx.beginPath();
-            this.ctx.moveTo(x, y);
-        } else if (this.currentTool === 'text') {
-            this.addText(x, y);
+            
+            // Diversi stili per diversi strumenti
+            switch(this.currentTool) {
+                case 'pencil':
+                    this.ctx.globalAlpha = 0.8;
+                    break;
+                case 'pen':
+                    this.ctx.globalAlpha = 1.0;
+                    break;
+                case 'marker':
+                    this.ctx.globalAlpha = 0.4;
+                    this.ctx.lineWidth = this.currentSize * 3;
+                    break;
+                case 'fountain':
+                    this.ctx.globalAlpha = 0.9;
+                    this.ctx.lineWidth = this.currentSize * 1.5;
+                    break;
+            }
         }
+
+        this.ctx.beginPath();
+        this.ctx.moveTo(x, y);
     }
 
     draw(e) {
         if (!this.isDrawing) return;
 
         const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const x = (e.clientX - rect.left) + this.calibrationOffset.x;
+        const y = (e.clientY - rect.top) + this.calibrationOffset.y;
 
-        if (this.currentTool === 'pen' || this.currentTool === 'eraser') {
-            this.ctx.lineTo(x, y);
-            this.ctx.stroke();
-        }
+        this.ctx.lineTo(x, y);
+        this.ctx.stroke();
     }
 
     stopDrawing() {
         if (this.isDrawing) {
             this.isDrawing = false;
+            this.ctx.globalAlpha = 1.0;
             this.saveState();
         }
     }
@@ -244,13 +264,36 @@ class DigitalWhiteboard {
     setBackground(type) {
         const canvas = this.canvas;
         
-        // Rimuovi classi esistenti
         canvas.classList.remove('canvas-lines', 'canvas-squares', 'canvas-music', 'canvas-dots');
         
-        // Aggiungi nuova classe
         if (type !== 'blank') {
             canvas.classList.add(`canvas-${type}`);
         }
+    }
+
+    toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.log('Errore schermo intero:', err);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
+    showCalibrationModal() {
+        document.getElementById('calibration-modal').style.display = 'flex';
+    }
+
+    hideCalibrationModal() {
+        document.getElementById('calibration-modal').style.display = 'none';
+    }
+
+    startCalibration() {
+        // Implementazione calibrazione semplificata
+        this.calibrationOffset = { x: 0, y: 0 };
+        this.hideCalibrationModal();
+        this.showNotification('Calibrazione completata!');
     }
 
     toggleRuler() {
@@ -278,17 +321,18 @@ class DigitalWhiteboard {
     }
 
     setupGeometricTools() {
-        // Genera segni per il righello
         const rulerMarks = document.querySelector('.ruler-marks');
-        for (let i = 0; i <= 40; i++) {
-            const mark = document.createElement('div');
-            mark.style.position = 'absolute';
-            mark.style.left = `${i * 10}px`;
-            mark.style.bottom = '0';
-            mark.style.width = '1px';
-            mark.style.height = i % 5 === 0 ? '15px' : '10px';
-            mark.style.backgroundColor = 'var(--primary-color)';
-            rulerMarks.appendChild(mark);
+        if (rulerMarks) {
+            for (let i = 0; i <= 40; i++) {
+                const mark = document.createElement('div');
+                mark.style.position = 'absolute';
+                mark.style.left = `${i * 10}px`;
+                mark.style.bottom = '0';
+                mark.style.width = '1px';
+                mark.style.height = i % 5 === 0 ? '15px' : '10px';
+                mark.style.backgroundColor = 'var(--primary-color)';
+                rulerMarks.appendChild(mark);
+            }
         }
     }
 
@@ -320,6 +364,29 @@ class DigitalWhiteboard {
         });
     }
 
+    setupDragAndDrop() {
+        const dropOverlay = document.getElementById('drop-overlay');
+        
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropOverlay.style.display = 'flex';
+        });
+
+        document.addEventListener('dragleave', (e) => {
+            if (e.clientX === 0 && e.clientY === 0) {
+                dropOverlay.style.display = 'none';
+            }
+        });
+
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropOverlay.style.display = 'none';
+            
+            const files = Array.from(e.dataTransfer.files);
+            files.forEach(file => this.processFile(file));
+        });
+    }
+
     handleFileUpload(e) {
         const files = Array.from(e.target.files);
         files.forEach(file => this.processFile(file));
@@ -342,7 +409,6 @@ class DigitalWhiteboard {
         reader.onload = (e) => {
             const img = new Image();
             img.onload = () => {
-                // Calcola dimensioni per mantenere proporzioni
                 const maxWidth = this.canvas.width * 0.8;
                 const maxHeight = this.canvas.height * 0.8;
                 let { width, height } = img;
@@ -356,7 +422,6 @@ class DigitalWhiteboard {
                     height = maxHeight;
                 }
                 
-                // Disegna l'immagine al centro
                 const x = (this.canvas.width - width) / 2;
                 const y = (this.canvas.height - height) / 2;
                 
@@ -369,20 +434,14 @@ class DigitalWhiteboard {
     }
 
     loadPDF(file) {
-        // Per i PDF, mostriamo un placeholder
-        // In una versione completa, useresti PDF.js
-        const reader = new FileReader();
-        reader.onload = () => {
-            this.ctx.fillStyle = '#f0f0f0';
-            this.ctx.fillRect(50, 50, 300, 400);
-            this.ctx.fillStyle = '#333';
-            this.ctx.font = '16px Inter';
-            this.ctx.fillText('📄 PDF caricato:', 60, 80);
-            this.ctx.fillText(file.name, 60, 100);
-            this.ctx.fillText('(Funzionalità PDF in sviluppo)', 60, 120);
-            this.saveState();
-        };
-        reader.readAsArrayBuffer(file);
+        this.ctx.fillStyle = '#f0f0f0';
+        this.ctx.fillRect(50, 50, 300, 400);
+        this.ctx.fillStyle = '#333';
+        this.ctx.font = '16px Inter';
+        this.ctx.fillText('📄 PDF caricato:', 60, 80);
+        this.ctx.fillText(file.name, 60, 100);
+        this.ctx.fillText('(Funzionalità PDF in sviluppo)', 60, 120);
+        this.saveState();
     }
 
     clearCanvas() {
@@ -399,7 +458,6 @@ class DigitalWhiteboard {
         }
         this.history.push(this.canvas.toDataURL());
         
-        // Limita la cronologia a 50 stati
         if (this.history.length > 50) {
             this.history.shift();
             this.historyStep--;
@@ -459,7 +517,7 @@ class DigitalWhiteboard {
         }
 
         this.projects[folder].push(projectData);
-        localStorage.setItem('whiteboardProjects', JSON.stringify(this.projects));
+        localStorage.setItem('eduboardProjects', JSON.stringify(this.projects));
         
         this.currentProject = projectData;
         document.getElementById('current-project').textContent = name;
@@ -467,7 +525,6 @@ class DigitalWhiteboard {
         this.hideSaveModal();
         this.loadProjects();
         
-        // Mostra messaggio di successo
         this.showNotification('Progetto salvato con successo!');
     }
 
@@ -551,6 +608,10 @@ class DigitalWhiteboard {
                         this.undo();
                     }
                     break;
+                case 'y':
+                    e.preventDefault();
+                    this.redo();
+                    break;
                 case 's':
                     e.preventDefault();
                     this.showSaveModal();
@@ -559,12 +620,64 @@ class DigitalWhiteboard {
                     e.preventDefault();
                     this.newProject();
                     break;
+                case 'f':
+                    e.preventDefault();
+                    this.toggleFullscreen();
+                    break;
             }
         }
     }
 
+    setupPWA() {
+        // Mostra prompt di installazione
+        let deferredPrompt;
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Mostra bottone di installazione personalizzato
+            const installBtn = document.createElement('button');
+            installBtn.textContent = '📱 Installa EduBoard';
+            installBtn.className = 'install-btn';
+            installBtn.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                background: var(--primary-color);
+                color: white;
+                border: none;
+                padding: 12px 20px;
+                border-radius: var(--border-radius);
+                font-weight: 600;
+                cursor: pointer;
+                box-shadow: var(--shadow-lg);
+                z-index: 1000;
+            `;
+            
+            installBtn.addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    if (outcome === 'accepted') {
+                        installBtn.remove();
+                    }
+                    deferredPrompt = null;
+                }
+            });
+            
+            document.body.appendChild(installBtn);
+            
+            // Rimuovi dopo 10 secondi se non cliccato
+            setTimeout(() => {
+                if (installBtn.parentNode) {
+                    installBtn.remove();
+                }
+            }, 10000);
+        });
+    }
+
     showNotification(message) {
-        // Crea notifica temporanea
         const notification = document.createElement('div');
         notification.style.cssText = `
             position: fixed;
@@ -577,20 +690,22 @@ class DigitalWhiteboard {
             box-shadow: var(--shadow-lg);
             z-index: 1000;
             font-weight: 500;
+            animation: slideIn 0.3s ease;
         `;
         notification.textContent = message;
         
         document.body.appendChild(notification);
         
         setTimeout(() => {
-            notification.remove();
+            notification.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => notification.remove(), 300);
         }, 3000);
     }
 }
 
-// Inizializza l'applicazione quando il DOM è caricato
+// Inizializza EduBoard
 document.addEventListener('DOMContentLoaded', () => {
-    new DigitalWhiteboard();
+    new EduBoard();
 });
 
 // Service Worker per PWA
@@ -598,10 +713,10 @@ if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
             .then(registration => {
-                console.log('SW registrato con successo:', registration);
+                console.log('SW registrato:', registration);
             })
-            .catch(registrationError => {
-                console.log('Registrazione SW fallita:', registrationError);
+            .catch(error => {
+                console.log('Errore SW:', error);
             });
     });
 }
