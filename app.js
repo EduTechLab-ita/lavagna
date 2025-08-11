@@ -241,6 +241,9 @@ class EduBoard {
         });
 
         document.getElementById('shapes-btn').addEventListener('click', () => {
+            this.togglePanel('shapes-panel');
+        });
+        
         document.getElementById('hand-btn').addEventListener('click', () => {
             this.setTool('hand');
             this.updateMainToolSelection('hand-btn');
