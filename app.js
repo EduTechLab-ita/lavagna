@@ -126,15 +126,10 @@ class EduBoard {
             }
         });
     }
-        const saveBtn = document.getElementById('save-btn');
-        const saveModal = document.getElementById('save-modal');
-        if (saveModal) {
-            saveModal.addEventListener('click', (e) => {
-            saveBtn.addEventListener('click', () => {
+
     setupFloatingToolbar() {
         const toolbar = document.getElementById('floating-toolbar');
-            });
-        }
+        let isDragging = false;
         let startX, startY, initialX, initialY;
         let dragThreshold = 5; // Soglia minima per iniziare il drag
         let hasMoved = false;
@@ -266,59 +261,84 @@ class EduBoard {
                 this.updateToolSelection(e.currentTarget);
                 this.updateActiveToolButton();
             });
-        }
         });
+
         const projectsBtn = document.getElementById('projects-btn');
         if (projectsBtn) {
             projectsBtn.addEventListener('click', () => {
-        // Size buttons
+                this.toggleSidebar();
             });
         }
+
+        // Size buttons
+        document.querySelectorAll('.size-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const size = parseInt(e.currentTarget.dataset.size);
+                this.currentSize = size;
+                this.updateCanvasStyle();
+                document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+            });
+        });
+
         const undoBtn = document.getElementById('undo-btn');
         if (undoBtn) {
             undoBtn.addEventListener('click', () => {
-                this.updateCanvasStyle();
+                this.undo();
             });
         }
-                e.currentTarget.classList.add('active');
+
         const redoBtn = document.getElementById('redo-btn');
         if (redoBtn) {
             redoBtn.addEventListener('click', () => {
-        });
+                this.redo();
             });
         }
-        // Color buttons
-        document.querySelectorAll('.color-btn').forEach(btn => {
+
         const rulerBtn = document.getElementById('ruler-btn');
         if (rulerBtn) {
             rulerBtn.addEventListener('click', () => {
-                if (e.currentTarget.id === 'custom-color') {
+                this.toggleRuler();
             });
         }
-                } else {
+
         const protractorBtn = document.getElementById('protractor-btn');
         if (protractorBtn) {
             protractorBtn.addEventListener('click', () => {
-                    this.setColor(color);
+                this.toggleProtractor();
             });
         }
-                    e.currentTarget.classList.add('active');
-                }
+
         const customColorBtn = document.getElementById('custom-color');
         if (customColorBtn) {
             customColorBtn.addEventListener('click', () => {
-        });
+                document.getElementById('color-picker').click();
             });
         }
+
+        // Color buttons
+        document.querySelectorAll('.color-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                if (e.currentTarget.id === 'custom-color') {
+                    document.getElementById('color-picker').click();
+                } else {
+                    const color = e.currentTarget.dataset.color;
+                    this.setColor(color);
+                    document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+                    e.currentTarget.classList.add('active');
+                }
+            });
+        });
+
         // Custom color picker
         const colorPicker = document.getElementById('color-picker');
         if (colorPicker) {
             colorPicker.addEventListener('change', (e) => {
-            this.setColor(e.target.value);
-            document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
-        });
+                this.setColor(e.target.value);
+                document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+                document.getElementById('custom-color').classList.add('active');
+            });
+        }
 
         // Background buttons
         document.querySelectorAll('.bg-btn').forEach(btn => {
@@ -1257,40 +1277,25 @@ class EduBoard {
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
-            });
-        }
+            
             const installBtn = document.createElement('button');
             installBtn.textContent = '📱 Installa EduBoard';
-        const fileInput = document.getElementById('file-input');
-        if (fileInput) {
-            fileInput.addEventListener('change', (e) => {
             installBtn.style.cssText = `
-            });
-        }
+                position: fixed;
                 bottom: 20px;
                 left: 20px;
-        const sidebarClose = document.getElementById('sidebar-close');
-        if (sidebarClose) {
-            sidebarClose.addEventListener('click', () => {
+                background: linear-gradient(135deg, #667eea, #764ba2);
                 color: white;
-            });
-        }
+                border: none;
                 padding: 12px 20px;
                 border-radius: 12px;
-        const cancelSave = document.getElementById('cancel-save');
-        if (cancelSave) {
-            cancelSave.addEventListener('click', () => {
+                font-weight: 600;
                 cursor: pointer;
-            });
-        }
                 z-index: 1000;
-        const saveForm = document.getElementById('save-form');
-        if (saveForm) {
-            saveForm.addEventListener('submit', (e) => {
+                box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
             `;
             
-            });
-        }
+            installBtn.addEventListener('click', async () => {
                 if (deferredPrompt) {
                     deferredPrompt.prompt();
                     const { outcome } = await deferredPrompt.userChoice;
@@ -1310,6 +1315,45 @@ class EduBoard {
                 }
             }, 10000);
         });
+
+        const saveBtn = document.getElementById('save-btn');
+        const saveModal = document.getElementById('save-modal');
+        if (saveModal) {
+            saveModal.addEventListener('click', (e) => {
+                if (e.target === saveModal) {
+                    this.hideSaveModal();
+                }
+            });
+        }
+
+        const fileInput = document.getElementById('file-input');
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                this.handleFileUpload(e);
+            });
+        }
+
+        const sidebarClose = document.getElementById('sidebar-close');
+        if (sidebarClose) {
+            sidebarClose.addEventListener('click', () => {
+                this.toggleSidebar();
+            });
+        }
+
+        const cancelSave = document.getElementById('cancel-save');
+        if (cancelSave) {
+            cancelSave.addEventListener('click', () => {
+                this.hideSaveModal();
+            });
+        }
+
+        const saveForm = document.getElementById('save-form');
+        if (saveForm) {
+            saveForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.saveProject();
+            });
+        }
     }
 
     startLassoSelection(e) {
