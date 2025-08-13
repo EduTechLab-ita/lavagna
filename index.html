@@ -633,43 +633,6 @@ class EduBoard {
             this.showNotification('Goniometro attivato!');
         } else {
             protractor.classList.add('exiting');
-            setTimeout(() => {
-                protractor.style.display = 'none';
-                protractor.classList.remove('exiting');
-            }, 300);
-        }
-    }
-
-    // Funzione per rilevare prossimità al righello e attivare snap
-    isNearRuler(x, y) {
-        const ruler = document.getElementById('ruler');
-        if (ruler.style.display === 'none') return null;
-        
-        const rect = ruler.getBoundingClientRect();
-        const rulerEdge = rect.bottom - 3; // Posizione del bordo del righello
-        const snapDistance = 20; // Distanza di aggancio in pixel
-        
-        // Controlla se il punto è vicino al bordo del righello
-        if (Math.abs(y - rulerEdge) <= snapDistance && 
-            x >= rect.left && x <= rect.right) {
-            
-            // Calcola il punto di aggancio considerando la rotazione
-            const angle = parseFloat(ruler.dataset.angle || '0') * Math.PI / 180;
-            const centerX = rect.left + rect.width / 2;
-            const centerY = rect.top + rect.height / 2;
-            
-            // Proietta il punto sulla linea del righello
-            const relativeX = x - centerX;
-            const relativeY = y - centerY;
-            
-            const projectedX = relativeX * Math.cos(-angle) - relativeY * Math.sin(-angle);
-            const projectedY = relativeX * Math.sin(-angle) + relativeY * Math.cos(-angle);
-            
-            // Riporta alle coordinate assolute
-            const snapX = centerX + projectedX * Math.cos(angle) - (rect.height / 2) * Math.sin(angle);
-            const snapY = centerY + projectedX * Math.sin(angle) + (rect.height / 2) * Math.cos(angle);
-            
-            return { x: snapX, y: snapY };
         }
         
         return null;
