@@ -980,6 +980,12 @@ class EduBoard {
                             registration.update();
                         }, 30000);
                         
+                        // Controllo proattivo per Service Worker in attesa
+                        if (registration.waiting) {
+                            console.log('[PWA] Service Worker in attesa rilevato immediatamente');
+                            this.showUpdateBanner('Una nuova versione di EduBoard è disponibile!');
+                        }
+                        
                         // Ascolta per nuovi Service Worker in attesa
                         registration.addEventListener('updatefound', () => {
                             console.log('[PWA] Nuovo Service Worker trovato');
