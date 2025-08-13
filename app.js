@@ -371,6 +371,43 @@ class EduBoard {
         };
     }
 
+    // Funzione per calcolare la distanza tra due punti
+    distance(x1, y1, x2, y2) {
+        return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+    }
+
+    // Funzione per verificare se un punto è vicino al righello
+    isNearRuler(x, y) {
+        const ruler = document.getElementById('ruler');
+        if (!ruler || ruler.style.display === 'none') return false;
+        
+        const rect = ruler.getBoundingClientRect();
+        const snapDistance = 20; // Distanza in pixel per l'aggancio
+        
+        // Calcola il bordo del righello (parte inferiore)
+        const rulerEdge = rect.bottom - 3; // 3px è l'altezza del bordo
+        
+        // Controlla se il punto è vicino al bordo del righello
+        if (Math.abs(y - rulerEdge) <= snapDistance &&
+            x >= rect.left && x <= rect.right) {
+            return {
+                snapX: x,
+                snapY: rulerEdge
+            };
+        }
+        
+        return false;
+    }
+
+    // Modifica la funzione di disegno per includere lo snap al righello
+    snapToRuler(x, y) {
+        const snapPoint = this.isNearRuler(x, y);
+        if (snapPoint && (this.currentTool === 'pencil' || this.currentTool === 'pen' || this.currentTool === 'marker')) {
+            return snapPoint;
+        }
+        return { snapX: x, snapY: y };
+    }
+
     setTool(tool) {
         this.currentTool = tool;
         this.selectedObjects = []; // Clear any selections when changing tools
@@ -463,8 +500,9 @@ class EduBoard {
         
         this.isDrawing = true;
         const coords = this.getCanvasCoordinates(e);
-        const x = coords.x;
-        const y = coords.y;
+        const snapped = this.snapToRuler(coords.x, coords.y);
+        const x = snapped.snapX;
+        const y = snapped.snapY;
 
         if (this.currentTool === 'text') {
             this.addText(x, y);
@@ -539,8 +577,9 @@ class EduBoard {
         if (!this.isDrawing) return;
 
         const coords = this.getCanvasCoordinates(e);
-        const x = coords.x;
-        const y = coords.y;
+        const snapped = this.snapToRuler(coords.x, coords.y);
+        const x = snapped.snapX;
+        const y = snapped.snapY;
 
         this.ctx.lineTo(x, y);
         this.ctx.stroke();
@@ -592,8 +631,8 @@ class EduBoard {
             ruler.style.display = 'block';
             ruler.style.left = '0';
             ruler.style.top = '0';
-            ruler.style.width = '100vw';
-            ruler.style.height = '100vh';
+            ruler.style.width = '100%';
+            ruler.style.height = '100%';
             ruler.classList.add('entering');
             
             // Rimuovi la classe di animazione dopo l'animazione
