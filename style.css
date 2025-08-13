@@ -618,43 +618,54 @@ header {
 }
 
 .advanced-ruler {
-    width: 100%;
-    height: 80px;
-    top: 50%;
+    width: 100vw;
+    height: 100vh;
+    top: 0;
     left: 0;
-    transform: translateY(-50%);
+    transform: none;
     transform-origin: center;
+    pointer-events: none;
 }
 
 .ruler-body {
-    width: 100%;
-    height: 100%;
-    background: var(--bg-glass);
-    backdrop-filter: blur(20px);
+    width: 80%;
+    height: 60px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
     border: 2px solid var(--primary);
     border-radius: var(--radius-sm);
     position: relative;
     box-shadow: var(--shadow-lg);
     overflow: hidden;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: all;
+    cursor: move;
+}
+
+.ruler-controls {
+    position: absolute;
+    top: 8px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 16px;
+    z-index: 10;
 }
 
 .ruler-angle-display {
-    position: absolute;
-    top: 8px;
-    left: 20px;
     background: var(--primary);
     color: white;
     padding: 4px 12px;
     border-radius: var(--radius-sm);
     font-size: 0.75rem;
     font-weight: 600;
-    z-index: 10;
 }
 
 .ruler-scale-controls {
-    position: absolute;
-    top: 8px;
-    right: 20px;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -662,7 +673,27 @@ header {
     padding: 4px 8px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border);
-    z-index: 10;
+}
+
+.ruler-close-btn {
+    background: var(--danger);
+    color: white;
+    border: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.ruler-close-btn:hover {
+    background: #DC2626;
+    transform: scale(1.1);
 }
 
 .scale-btn {
@@ -695,10 +726,10 @@ header {
 
 .ruler-marks {
     position: absolute;
-    bottom: 8px;
+    bottom: 4px;
     left: 0;
     right: 0;
-    height: 20px;
+    height: 16px;
 }
 
 .ruler-edge {
@@ -710,6 +741,105 @@ header {
     background: var(--primary);
     box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
 }
+
+.ruler-center-handle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 12px;
+    height: 12px;
+    background: var(--primary);
+    border: 2px solid white;
+    border-radius: 50%;
+    cursor: move;
+    z-index: 15;
+    box-shadow: var(--shadow);
+}
+
+.ruler-center-handle:hover {
+    transform: translate(-50%, -50%) scale(1.2);
+    box-shadow: var(--shadow-lg);
+}
+
+/* Stili per le icone quando attive */
+.tool-btn.active .pencil-body {
+    background: linear-gradient(to bottom, #FFF 0%, #F0F0F0 30%, #FFF 100%);
+}
+
+.tool-btn.active .pencil-tip {
+    border-bottom-color: #FFF;
+}
+
+.tool-btn.active .pen-body {
+    background: linear-gradient(to bottom, #FFF 0%, #F0F0F0 100%);
+}
+
+.tool-btn.active .pen-tip {
+    border-bottom-color: #FFF;
+}
+
+.tool-btn.active .marker-body {
+    background: linear-gradient(to bottom, #FFF 0%, #F0F0F0 100%);
+}
+
+.tool-btn.active .marker-tip {
+    background: #FFF;
+}
+
+.tool-btn.active .fountain-body {
+    background: linear-gradient(to bottom, #FFF 0%, #F0F0F0 100%);
+}
+
+.tool-btn.active .fountain-nib {
+    border-bottom-color: #FFF;
+}
+
+.tool-btn.active .eraser-body {
+    background: linear-gradient(to bottom, #FFF 0%, #F0F0F0 100%);
+    border-color: #FFF;
+}
+
+.tool-btn.active .eraser-band {
+    background: #FFF;
+}
+
+.tool-btn.active .text-line {
+    background: #FFF;
+}
+
+.tool-btn.active .hand-palm {
+    background: #FFF;
+    border-color: #FFF;
+}
+
+.tool-btn.active .finger {
+    background: #FFF;
+    border-color: #FFF;
+}
+
+.tool-btn.active .hand-thumb {
+    background: #FFF;
+    border-color: #FFF;
+}
+
+.tool-btn.active .lasso-rope {
+    border-color: #FFF;
+}
+
+.tool-btn.active .lasso-handle {
+    background: #FFF;
+}
+
+.tool-btn.active .upload-folder {
+    background: #FFF;
+    border-color: #FFF;
+}
+
+.tool-btn.active .upload-arrow {
+    color: var(--primary);
+}
+
 
 #protractor {
     width: 200px;
@@ -1168,6 +1298,322 @@ header {
 }
 
 /* Stili per righello avanzato */
+
+/* Nuove icone CSS per gli strumenti */
+.tool-icon {
+    width: 20px;
+    height: 20px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Icona Matita */
+.pencil-icon {
+    transform: rotate(45deg);
+}
+
+.pencil-body {
+    width: 3px;
+    height: 16px;
+    background: linear-gradient(to bottom, #8B4513 0%, #D2691E  30%, #FFD700 100%);
+    border-radius: 1px;
+    position: relative;
+}
+
+.pencil-tip {
+    width: 0;
+    height: 0;
+    border-left: 1.5px solid transparent;
+    border-right: 1.5px solid transparent;
+    border-bottom: 4px solid #2C2C2C;
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.pencil-band {
+    width: 4px;
+    height: 2px;
+    background: #C0C0C0;
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 1px;
+}
+
+/* Icona Biro */
+.pen-icon {
+    transform: rotate(45deg);
+}
+
+.pen-body {
+    width: 3px;
+    height: 16px;
+    background: linear-gradient(to bottom, #1E40AF 0%, #3B82F6 100%);
+    border-radius: 1px;
+    position: relative;
+}
+
+.pen-tip {
+    width: 0;
+    height: 0;
+    border-left: 1.5px solid transparent;
+    border-right: 1.5px solid transparent;
+    border-bottom: 3px solid #1E40AF;
+    position: absolute;
+    top: -3px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.pen-clip {
+    width: 1px;
+    height: 6px;
+    background: #C0C0C0;
+    position: absolute;
+    top: 2px;
+    right: -1px;
+    border-radius: 0.5px;
+}
+
+/* Icona Evidenziatore */
+.marker-icon {
+    transform: rotate(45deg);
+}
+
+.marker-body {
+    width: 4px;
+    height: 14px;
+    background: linear-gradient(to bottom, #C084FC 0%, #A855F7 100%);
+    border-radius: 2px;
+    position: relative;
+}
+
+.marker-tip {
+    width: 6px;
+    height: 3px;
+    background: #A855F7;
+    position: absolute;
+    top: -3px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 1px;
+}
+
+.marker-cap {
+    width: 5px;
+    height: 4px;
+    background: #7C3AED;
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 1px;
+}
+
+/* Icona Stilografica */
+.fountain-icon {
+    transform: rotate(45deg);
+}
+
+.fountain-body {
+    width: 3px;
+    height: 16px;
+    background: linear-gradient(to bottom, #1F2937 0%, #374151 100%);
+    border-radius: 1px;
+    position: relative;
+}
+
+.fountain-nib {
+    width: 0;
+    height: 0;
+    border-left: 2px solid transparent;
+    border-right: 2px solid transparent;
+    border-bottom: 4px solid #1F2937;
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.fountain-cap {
+    width: 4px;
+    height: 3px;
+    background: #9CA3AF;
+    position: absolute;
+    bottom: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 1px;
+}
+
+/* Icona Gomma */
+.eraser-body {
+    width: 8px;
+    height: 12px;
+    background: linear-gradient(to bottom, #FEF3C7 0%, #FDE68A 100%);
+    border-radius: 2px;
+    position: relative;
+    border: 1px solid #D97706;
+}
+
+.eraser-band {
+    width: 10px;
+    height: 3px;
+    background: #DC2626;
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 1px;
+}
+
+/* Icona Testo */
+.text-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.text-line {
+    width: 12px;
+    height: 2px;
+    background: var(--text-primary);
+    border-radius: 1px;
+}
+
+.text-line:nth-child(2) {
+    width: 8px;
+}
+
+.text-line:nth-child(3) {
+    width: 10px;
+}
+
+/* Icona Mano */
+.hand-icon {
+    position: relative;
+}
+
+.hand-palm {
+    width: 8px;
+    height: 10px;
+    background: #F3E8FF;
+    border: 1px solid #8B5CF6;
+    border-radius: 4px;
+    position: relative;
+}
+
+.hand-fingers {
+    position: absolute;
+    top: -3px;
+    left: 1px;
+    display: flex;
+    gap: 1px;
+}
+
+.finger {
+    width: 1.5px;
+    height: 6px;
+    background: #F3E8FF;
+    border: 1px solid #8B5CF6;
+    border-radius: 1px;
+}
+
+.hand-thumb {
+    width: 1.5px;
+    height: 4px;
+    background: #F3E8FF;
+    border: 1px solid #8B5CF6;
+    border-radius: 1px;
+    position: absolute;
+    left: -2px;
+    top: 2px;
+    transform: rotate(-30deg);
+}
+
+/* Icona Lazo */
+.lasso-rope {
+    width: 14px;
+    height: 14px;
+    border: 2px dashed #8B5CF6;
+    border-radius: 50%;
+    position: relative;
+}
+
+.lasso-handle {
+    width: 3px;
+    height: 6px;
+    background: #8B5CF6;
+    border-radius: 1px;
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* Icona Upload */
+.upload-folder {
+    width: 12px;
+    height: 10px;
+    background: #FEF3C7;
+    border: 1px solid #D97706;
+    border-radius: 2px;
+    position: relative;
+}
+
+.upload-folder::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: 2px;
+    width: 4px;
+    height: 2px;
+    background: #D97706;
+    border-radius: 1px 1px 0 0;
+}
+
+.upload-arrow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 8px;
+    font-weight: bold;
+    color: #D97706;
+}
+
+/* Icona Clear */
+.clear-circle {
+    width: 16px;
+    height: 16px;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.clear-circle span {
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+/* Icone Undo/Redo */
+.undo-arrow,
+.redo-arrow {
+    font-size: 16px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+/* Aggiornamenti per il righello a schermo intero */
 .ruler-snap-indicator {
     position: absolute;
     width: 8px;
@@ -1197,21 +1643,21 @@ header {
 @keyframes toolEnter {
     from {
         opacity: 0;
-        transform: translateY(-50%) scale(0.8);
+        transform: scale(0.8);
     }
     to {
         opacity: 1;
-        transform: translateY(-50%) scale(1);
+        transform: scale(1);
     }
 }
 
 @keyframes toolExit {
     from {
         opacity: 1;
-        transform: translateY(-50%) scale(1);
+        transform: scale(1);
     }
     to {
         opacity: 0;
-        transform: translateY(-50%) scale(0.8);
+        transform: scale(0.8);
     }
 }
