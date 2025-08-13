@@ -310,15 +310,21 @@ class EduBoard {
     }
 
     togglePanel(panelId) {
-        this.closeAllPanels();
         const panel = document.getElementById(panelId);
-        const btn = document.querySelector(`[data-panel="${panelId.replace('-panel', '')}"]`);
+        const wasActive = panel.classList.contains('active');
         
-        panel.classList.add('active');
+        this.closeAllPanels();
         
-        // Update button states
-        document.querySelectorAll('.toolbar-btn').forEach(b => b.classList.remove('active'));
-        if (btn) btn.classList.add('active');
+        // Solo se il pannello non era attivo, riaprilo
+        if (!wasActive) {
+            const btn = document.querySelector(`[data-panel="${panelId.replace('-panel', '')}"]`);
+            
+            panel.classList.add('active');
+            
+            // Update button states
+            document.querySelectorAll('.toolbar-btn').forEach(b => b.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+        }
     }
 
     closeAllPanels() {
