@@ -590,11 +590,68 @@ class EduBoard {
         const ruler = document.getElementById('ruler');
         if (ruler.style.display === 'none' || !ruler.style.display) {
             ruler.style.display = 'block';
-            ruler.style.left = '100px';
-            ruler.style.top = '100px';
+            ruler.style.left = '0';
+            ruler.style.top = '0';
+            ruler.style.width = '100vw';
+            ruler.style.height = '100vh';
+            ruler.classList.add('entering');
+            
+            // Rimuovi la classe di animazione dopo l'animazione
+            setTimeout(() => {
+                ruler.classList.remove('entering');
+            }, 400);
+            
             this.makeGeometricToolDraggable(ruler);
+            this.setupRulerControls(ruler);
         } else {
-            ruler.style.display = 'none';
+            ruler.classList.add('exiting');
+            setTimeout(() => {
+                ruler.style.display = 'none';
+                ruler.classList.remove('exiting');
+            }, 300);
+        }
+    }
+
+    setupRulerControls(ruler) {
+        const closeBtn = ruler.querySelector('.ruler-close-btn');
+        const scaleControls = ruler.querySelectorAll('.scale-btn');
+        const angleDisplay = ruler.querySelector('.ruler-angle-display');
+        
+        // Gestione chiusura righello
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleRuler();
+        });
+        
+        // Gestione controlli scala
+        scaleControls.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const action = btn.dataset.action;
+                const rulerBody = ruler.querySelector('.ruler-body');
+                const scaleDisplay = ruler.querySelector('.scale-display');
+                
+                let currentScale = parseFloat(scaleDisplay.textContent) || 100;
+                
+                if (action === 'zoom-in' && currentScale < 200) {
+                    currentScale += 25;
+                } else if (action === 'zoom-out' && currentScale > 50) {
+                    currentScale -= 25;
+                }
+                
+                scaleDisplay.textContent = `${currentScale}%`;
+                rulerBody.style.width = `${currentScale}%`;
+            });
+        });
+        
+        // Aggiorna l'angolo quando il righello viene trascinato
+        this.updateRulerAngle(ruler, 0);
+    }
+
+    updateRulerAngle(ruler, angle) {
+        const angleDisplay = ruler.querySelector('.ruler-angle-display');
+        if (angleDisplay) {
+            angleDisplay.textContent = `${Math.round(angle)}°`;
         }
     }
 
@@ -615,24 +672,27 @@ class EduBoard {
         const rulerMarks = document.querySelector('.ruler-marks');
         if (rulerMarks) {
             rulerMarks.innerHTML = '';
-            for (let i = 0; i <= 30; i++) {
+            // Crea più segni per un righello più lungo
+            for (let i = 0; i <= 100; i++) {
                 const mark = document.createElement('div');
                 mark.style.position = 'absolute';
-                mark.style.left = `${i * 10}px`;
+                mark.style.left = `${i * 1}%`;
                 mark.style.bottom = '0';
                 mark.style.width = '1px';
-                mark.style.height = i % 5 === 0 ? '15px' : '10px';
+                mark.style.height = i % 10 === 0 ? '12px' : i % 5 === 0 ? '8px' : '4px';
                 mark.style.backgroundColor = '#667eea';
                 rulerMarks.appendChild(mark);
                 
-                if (i % 5 === 0 && i > 0) {
+                if (i % 10 === 0 && i > 0) {
                     const number = document.createElement('div');
                     number.style.position = 'absolute';
-                    number.style.left = `${i * 10 - 5}px`;
-                    number.style.bottom = '16px';
-                    number.style.fontSize = '8px';
+                    number.style.left = `${i * 1}%`;
+                    number.style.bottom = '14px';
+                    number.style.fontSize = '10px';
                     number.style.color = '#667eea';
-                    number.textContent = i;
+                    number.style.transform = 'translateX(-50%)';
+                    number.style.fontWeight = '600';
+                    number.textContent = i / 10;
                     rulerMarks.appendChild(number);
                 }
             }
@@ -641,48 +701,111 @@ class EduBoard {
 
     makeGeometricToolDraggable(element) {
         let isDragging = false;
+        let isRotating = false;
         let startX, startY, initialX, initialY;
+        let startAngle = 0;
+        let currentAngle = 0;
+
+        const rulerBody = element.querySelector('.ruler-body');
+        const centerHandle = element.querySelector('.ruler-center-handle');
+        
+        if (!rulerBody) return;
 
         const handleMouseDown = (e) => {
+            // Solo se si clicca sul corpo del righello o sul centro
+            if (!e.target.closest('.ruler-body') && !e.target.closest('.ruler-center-handle')) {
+                return;
+            }
+            
+            // Previeni il drag se si clicca sui controlli
+            if (e.target.closest('.ruler-controls')) {
+                return;
+            }
+            
             isDragging = true;
             startX = e.clientX;
             startY = e.clientY;
-            initialX = parseInt(element.style.left) || 0;
-            initialY = parseInt(element.style.top) || 0;
+            
+            const rect = rulerBody.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            // Calcola l'angolo iniziale se si sta ruotando dal centro
+            if (e.target.closest('.ruler-center-handle')) {
+                isRotating = true;
+                startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * 180 / Math.PI;
+            } else {
+                // Ottieni la posizione corrente
+                const transform = rulerBody.style.transform || 'translate(-50%, -50%)';
+                const matches = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
+                if (matches) {
+                    initialX = parseFloat(matches[1]) || -50;
+                    initialY = parseFloat(matches[2]) || -50;
+                } else {
+                    initialX = -50;
+                    initialY = -50;
+                }
+            }
+            
             element.style.cursor = 'grabbing';
             e.preventDefault();
         };
 
         const handleMouseMove = (e) => {
-            if (isDragging) {
+            if (!isDragging) return;
+            
+            if (isRotating) {
+                const rect = rulerBody.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                const currentAngleRad = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+                currentAngle = (currentAngleRad * 180 / Math.PI - startAngle) % 360;
+                
+                rulerBody.style.transform = `translate(-50%, -50%) rotate(${currentAngle}deg)`;
+                this.updateRulerAngle(element, currentAngle);
+            } else {
                 const deltaX = e.clientX - startX;
                 const deltaY = e.clientY - startY;
-                element.style.left = `${initialX + deltaX}px`;
-                element.style.top = `${initialY + deltaY}px`;
+                
+                // Calcola la nuova posizione in percentuale
+                const newX = initialX + (deltaX / window.innerWidth) * 100;
+                const newY = initialY + (deltaY / window.innerHeight) * 100;
+                
+                rulerBody.style.transform = `translate(${newX}%, ${newY}%) rotate(${currentAngle}deg)`;
             }
         };
 
         const handleMouseUp = () => {
             isDragging = false;
+            isRotating = false;
             element.style.cursor = 'move';
         };
 
-        element.addEventListener('mousedown', handleMouseDown);
+        rulerBody.addEventListener('mousedown', handleMouseDown);
+        if (centerHandle) {
+            centerHandle.addEventListener('mousedown', handleMouseDown);
+        }
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
 
         // Touch events
-        element.addEventListener('touchstart', (e) => {
+        const handleTouchStart = (e) => {
             const touch = e.touches[0];
             handleMouseDown({
                 clientX: touch.clientX,
                 clientY: touch.clientY,
                 preventDefault: () => e.preventDefault()
             });
-        });
+        };
+        
+        rulerBody.addEventListener('touchstart', handleTouchStart);
+        if (centerHandle) {
+            centerHandle.addEventListener('touchstart', handleTouchStart);
+        }
 
         document.addEventListener('touchmove', (e) => {
-            if (isDragging) {
+            if (isDragging && e.touches[0]) {
                 const touch = e.touches[0];
                 handleMouseMove({
                     clientX: touch.clientX,
