@@ -955,18 +955,103 @@ class EduBoard {
     }
 
     setupPWA() {
+        // Registra il Service Worker e gestisce gli aggiornamenti
+        this.registerServiceWorker();
+        
+        // Gestisce il prompt di installazione PWA
+        this.handleInstallPrompt();
+    }
+
+    registerServiceWorker() {
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/sw.js')
                     .then(registration => {
-                        console.log('SW registrato:', registration);
+                        console.log('[PWA] Service Worker registrato:', registration);
+                        
+                        // Controlla aggiornamenti ogni 30 secondi
+                        setInterval(() => {
+                            registration.update();
+                        }, 30000);
+                        
+                        // Ascolta per nuovi Service Worker in attesa
+                        registration.addEventListener('updatefound', () => {
+                            console.log('[PWA] Nuovo Service Worker trovato');
+                            const newWorker = registration.installing;
+                            
+                            if (newWorker) {
+                                newWorker.addEventListener('statechange', () => {
+                                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                        console.log('[PWA] Nuovo Service Worker installato');
+                                        // Il nuovo SW è installato ma non ancora attivo
+                                        // Verrà attivato quando tutti i tab saranno chiusi
+                                    }
+                                });
+                            }
+                        });
                     })
                     .catch(error => {
-                        console.log('Errore SW:', error);
+                        console.log('[PWA] Errore Service Worker:', error);
                     });
             });
         }
 
+        // Ascolta i messaggi dal Service Worker
+        navigator.serviceWorker.addEventListener('message', (event) => {
+            console.log('[PWA] Messaggio ricevuto dal SW:', event.data);
+            
+            if (event.data && event.data.type === 'UPDATE_AVAILABLE') {
+                this.showUpdateBanner(event.data.message);
+            }
+        });
+    }
+
+    showUpdateBanner(message) {
+        const banner = document.getElementById('update-banner');
+        const updateBtn = document.getElementById('update-btn');
+        const dismissBtn = document.getElementById('dismiss-btn');
+        
+        // Mostra il banner
+        banner.classList.add('show');
+        
+        // Gestisce il click sul pulsante "Aggiorna ora"
+        updateBtn.onclick = () => {
+            console.log('[PWA] Utente ha richiesto aggiornamento');
+            
+            // Invia messaggio al SW per saltare l'attesa
+            if (navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({
+                    type: 'SKIP_WAITING'
+                });
+            }
+            
+            // Ricarica la pagina dopo un breve delay
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+        };
+        
+        // Gestisce il click sul pulsante di chiusura
+        dismissBtn.onclick = () => {
+            banner.classList.remove('show');
+            
+            // Nasconde il banner per questa sessione
+            setTimeout(() => {
+                banner.style.display = 'none';
+            }, 400);
+        };
+        
+        // Auto-nascondi dopo 10 secondi se non interagisce
+        setTimeout(() => {
+            if (banner.classList.contains('show')) {
+                dismissBtn.click();
+            }
+        }, 10000);
+        
+        this.showNotification('🎉 Nuova versione disponibile! Clicca il banner verde per aggiornare.');
+    }
+
+    handleInstallPrompt() {
         let deferredPrompt;
         
         window.addEventListener('beforeinstallprompt', (e) => {
@@ -998,7 +1083,7 @@ class EduBoard {
                     const { outcome } = await deferredPrompt.userChoice;
                     if (outcome === 'accepted') {
                         installBtn.remove();
-                        this.showNotification('EduBoard installato con successo!');
+                        this.showNotification('🎉 EduBoard installato con successo!');
                     }
                     deferredPrompt = null;
                 }
@@ -1013,6 +1098,7 @@ class EduBoard {
             }, 10000);
         });
     }
+
     startLassoSelection(e) {
         this.isLassoActive = true;
         this.lassoPath = [];
