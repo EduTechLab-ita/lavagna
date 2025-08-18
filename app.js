@@ -418,24 +418,18 @@ class ProjectManager {
         });
 
         // Gestione cartelle
-        const folderHeaders = document.querySelectorAll('.folder-header');
-        if (folderHeaders) {
-            folderHeaders.forEach(header => {
-                header.addEventListener('click', () => {
-                    this.toggleFolder(header);
-                });
+        document.querySelectorAll('.folder-header').forEach(header => {
+            header.addEventListener('click', () => {
+                this.toggleFolder(header);
             });
-        }
+        });
 
         // Gestione progetti
-        const projectItems = document.querySelectorAll('.project-item');
-        if (projectItems) {
-            projectItems.forEach(item => {
-                item.addEventListener('click', () => {
-                    this.loadProject(item.dataset.project);
-                });
+        document.querySelectorAll('.project-item').forEach(item => {
+            item.addEventListener('click', () => {
+                this.loadProject(item.dataset.project);
             });
-        }
+        });
 
         // Form di salvataggio
         document.getElementById('save-form').addEventListener('submit', (e) => {
@@ -844,7 +838,6 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('❌ Errore inizializzazione EduBoard:', error);
     }
 });
-    
 
 // Gestione errori globali
 window.addEventListener('error', (e) => {
