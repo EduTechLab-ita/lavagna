@@ -646,6 +646,12 @@ class PWAManager {
     }
 
     isServiceWorkerSupported() {
+        // Check for WebContainer environment (StackBlitz)
+        if (typeof window !== 'undefined' && window.WEB_CONTAINER_NAME) {
+            console.log('[PWA] Service Worker saltato in ambiente WebContainer');
+            return false;
+        }
+
         // Skip in development environments
         if (window.location.hostname === 'localhost' || 
             window.location.hostname === '127.0.0.1' ||
