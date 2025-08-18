@@ -614,154 +614,17 @@ header {
     z-index: 50;
     cursor: move;
     user-select: none;
-    transition: all 0.3s ease;
+    display: none !important;
 }
 
-.advanced-ruler {
-    width: 100vw;
-    height: 100vh;
-    top: 0;
-    left: 0;
-    transform: none;
-    transform-origin: center;
-    pointer-events: none;
-}
-
-.ruler-body {
-    width: 80%;
-    height: 60px;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
+#ruler {
+    width: 300px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.9);
     border: 2px solid var(--primary);
     border-radius: var(--radius-sm);
-    position: relative;
-    box-shadow: var(--shadow-lg);
-    overflow: hidden;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    pointer-events: all;
-    cursor: move;
-}
-
-.ruler-controls {
-    position: absolute;
-    top: 8px;
-    left: 0;
-    right: 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0 16px;
-    z-index: 10;
-}
-
-.ruler-angle-display {
-    background: var(--primary);
-    color: white;
-    padding: 4px 12px;
-    border-radius: var(--radius-sm);
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.ruler-scale-controls {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--bg-primary);
-    padding: 4px 8px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-}
-
-.ruler-close-btn {
-    background: var(--danger);
-    color: white;
-    border: none;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-}
-
-.ruler-close-btn:hover {
-    background: #DC2626;
-    transform: scale(1.1);
-}
-
-.scale-btn {
-    background: none;
-    border: none;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    color: var(--primary);
-    transition: all 0.2s ease;
-}
-
-.scale-btn:hover {
-    background: var(--bg-tertiary);
-    transform: scale(1.1);
-}
-
-.scale-display {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    min-width: 40px;
-    text-align: center;
-}
-
-.ruler-marks {
-    position: absolute;
-    bottom: 4px;
-    left: 0;
-    right: 0;
-    height: 16px;
-}
-
-.ruler-edge {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: var(--primary);
-    box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
-}
-
-.ruler-center-handle {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 12px;
-    height: 12px;
-    background: var(--primary);
-    border: 2px solid white;
-    border-radius: 50%;
-    cursor: move;
-    z-index: 15;
-    box-shadow: var(--shadow);
-}
-
-.ruler-center-handle:hover {
-    transform: translate(-50%, -50%) scale(1.2);
     box-shadow: var(--shadow-lg);
 }
-
 /* Stili per le icone quando attive */
 .tool-btn.active .pencil-body {
     background: linear-gradient(to bottom, #FFF 0%, #F0F0F0 30%, #FFF 100%);
@@ -844,6 +707,10 @@ header {
 #protractor {
     width: 200px;
     height: 100px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 2px solid var(--primary);
+    border-radius: 100px 100px 0 0;
+    box-shadow: var(--shadow-lg);
 }
 
 .protractor-body {
@@ -1297,8 +1164,6 @@ header {
     }
 }
 
-/* Stili per righello avanzato */
-
 /* Nuove icone CSS per gli strumenti */
 .tool-icon {
     width: 20px;
@@ -1613,51 +1478,25 @@ header {
     line-height: 1;
 }
 
-/* Aggiornamenti per il righello a schermo intero */
-.ruler-snap-indicator {
-    position: absolute;
-    width: 8px;
-    height: 8px;
-    background: var(--accent);
-    border-radius: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 60;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    box-shadow: 0 0 10px var(--accent);
-}
-
-.ruler-snap-indicator.active {
-    opacity: 1;
-}
-
-/* Animazioni per strumenti geometrici */
-.geometric-tool.entering {
-    animation: toolEnter 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.geometric-tool.exiting {
-    animation: toolExit 0.3s ease-in;
-}
-
-@keyframes toolEnter {
+/* Notifiche */
+@keyframes slideIn {
     from {
+        transform: translateX(100%);
         opacity: 0;
-        transform: scale(0.8);
     }
     to {
+        transform: translateX(0);
         opacity: 1;
-        transform: scale(1);
     }
 }
 
-@keyframes toolExit {
+@keyframes slideOut {
     from {
+        transform: translateX(0);
         opacity: 1;
-        transform: scale(1);
     }
     to {
+        transform: translateX(100%);
         opacity: 0;
-        transform: scale(0.8);
     }
 }
