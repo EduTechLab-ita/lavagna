@@ -10,53 +10,53 @@
   "categories": ["education", "productivity"],
   "icons": [
     {
-      "src": "https://images.pexels.com/photos/207691/pexels-photo-207691.jpeg?auto=compress&cs=tinysrgb&w=72&h=72&fit=crop",
+      "src": "/icon-72x72.png",
       "sizes": "72x72",
       "type": "image/png"
     },
     {
-      "src": "https://images.pexels.com/photos/207691/pexels-photo-207691.jpeg?auto=compress&cs=tinysrgb&w=96&h=96&fit=crop",
+      "src": "/icon-96x96.png",
       "sizes": "96x96",
       "type": "image/png"
     },
     {
-      "src": "https://images.pexels.com/photos/207691/pexels-photo-207691.jpeg?auto=compress&cs=tinysrgb&w=128&h=128&fit=crop",
+      "src": "/icon-128x128.png",
       "sizes": "128x128",
       "type": "image/png"
     },
     {
-      "src": "https://images.pexels.com/photos/207691/pexels-photo-207691.jpeg?auto=compress&cs=tinysrgb&w=144&h=144&fit=crop",
+      "src": "/icon-144x144.png",
       "sizes": "144x144",
       "type": "image/png"
     },
     {
-      "src": "https://images.pexels.com/photos/207691/pexels-photo-207691.jpeg?auto=compress&cs=tinysrgb&w=152&h=152&fit=crop",
+      "src": "/icon-152x152.png",
       "sizes": "152x152",
       "type": "image/png"
     },
     {
-      "src": "https://images.pexels.com/photos/207691/pexels-photo-207691.jpeg?auto=compress&cs=tinysrgb&w=192&h=192&fit=crop",
+      "src": "/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "https://images.pexels.com/photos/207691/pexels-photo-207691.jpeg?auto=compress&cs=tinysrgb&w=256&h=256&fit=crop",
+      "src": "/icon-256x256.png",
       "sizes": "256x256",
       "type": "image/png"
     },
     {
-      "src": "https://images.pexels.com/photos/207691/pexels-photo-207691.jpeg?auto=compress&cs=tinysrgb&w=384&h=384&fit=crop",
+      "src": "/icon-384x384.png",
       "sizes": "384x384",
       "type": "image/png"
     },
     {
-      "src": "https://images.pexels.com/photos/207691/pexels-photo-207691.jpeg?auto=compress&cs=tinysrgb&w=512&h=512&fit=crop",
+      "src": "/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png"
     },
     {
-      "src": "https://images.pexels.com/photos/207691/pexels-photo-207691.jpeg?auto=compress&cs=tinysrgb&w=180&h=180&fit=crop",
+      "src": "/icon-180x180.png",
       "sizes": "180x180",
       "type": "image/png"
     }
@@ -67,14 +67,14 @@
       "short_name": "Nuovo",
       "description": "Crea una nuova lavagna digitale",
       "url": "/?action=new",
-      "icons": [{ "src": "https://images.pexels.com/photos/207691/pexels-photo-207691.jpeg?auto=compress&cs=tinysrgb&w=96&h=96&fit=crop", "sizes": "96x96" }]
+      "icons": [{ "src": "/icon-96x96.png", "sizes": "96x96" }]
     },
     {
       "name": "Le Mie Lavagne",
       "short_name": "Progetti",
       "description": "Visualizza le lavagne salvate",
       "url": "/?action=projects",
-      "icons": [{ "src": "https://images.pexels.com/photos/207691/pexels-photo-207691.jpeg?auto=compress&cs=tinysrgb&w=96&h=96&fit=crop", "sizes": "96x96" }]
+      "icons": [{ "src": "/icon-96x96.png", "sizes": "96x96" }]
     }
   ]
 }
