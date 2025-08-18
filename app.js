@@ -644,9 +644,12 @@ class PWAManager {
 
     async setupServiceWorker() {
         // Skip Service Worker registration in StackBlitz/WebContainer environments
-        if (window.location.hostname.includes('stackblitz.io') || 
-            window.location.hostname.includes('webcontainer.io') ||
-            window.location.hostname.includes('localhost')) {
+        if (window.location.href.includes('stackblitz.io') || 
+            window.location.href.includes('webcontainer.io') ||
+            window.location.hostname === 'localhost' ||
+            window.location.hostname === '127.0.0.1' ||
+            window.location.port === '3000' ||
+            !window.location.protocol.startsWith('https')) {
             console.log('[PWA] Service Worker non supportato in questo ambiente');
             return;
         }
