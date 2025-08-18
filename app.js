@@ -643,6 +643,14 @@ class PWAManager {
     }
 
     async setupServiceWorker() {
+        // Skip Service Worker registration in StackBlitz/WebContainer environments
+        if (window.location.hostname.includes('stackblitz.io') || 
+            window.location.hostname.includes('webcontainer.io') ||
+            window.location.hostname.includes('localhost')) {
+            console.log('[PWA] Service Worker non supportato in questo ambiente');
+            return;
+        }
+
         if ('serviceWorker' in navigator) {
             try {
                 const registration = await navigator.serviceWorker.register('/sw.js');
