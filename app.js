@@ -418,18 +418,24 @@ class ProjectManager {
         });
 
         // Gestione cartelle
-        document.querySelectorAll('.folder-header').forEach(header => {
-            header.addEventListener('click', () => {
-                this.toggleFolder(header);
+        const folderHeaders = document.querySelectorAll('.folder-header');
+        if (folderHeaders) {
+            folderHeaders.forEach(header => {
+                header.addEventListener('click', () => {
+                    this.toggleFolder(header);
+                });
             });
-        });
+        }
 
         // Gestione progetti
-        document.querySelectorAll('.project-item').forEach(item => {
-            item.addEventListener('click', () => {
-                this.loadProject(item.dataset.project);
+        const projectItems = document.querySelectorAll('.project-item');
+        if (projectItems) {
+            projectItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    this.loadProject(item.dataset.project);
+                });
             });
-        });
+        }
 
         // Form di salvataggio
         document.getElementById('save-form').addEventListener('submit', (e) => {
@@ -638,52 +644,66 @@ class FileManager {
 // Gestione PWA
 class PWAManager {
     constructor() {
-        this.setupServiceWorker();
+        // Skip Service Worker in development/unsupported environments
+        if (this.isServiceWorkerSupported()) {
+            this.setupServiceWorker();
+        }
         this.setupInstallPrompt();
     }
 
-    async setupServiceWorker() {
-        // Skip Service Worker registration in StackBlitz/WebContainer environments
-        if (typeof window !== 'undefined' && (
-            window.location.href.includes('stackblitz.io') || 
-            window.location.href.includes('webcontainer.io') ||
-            window.location.href.includes('bolt.new') ||
-            window.location.hostname === 'localhost' ||
+    isServiceWorkerSupported() {
+        // Skip in development environments
+        if (window.location.hostname === 'localhost' || 
             window.location.hostname === '127.0.0.1' ||
             window.location.port === '3000' ||
             window.location.port === '5173' ||
-            !('serviceWorker' in navigator) ||
-            (!window.location.protocol.startsWith('https') && window.location.hostname !== 'localhost')
-        )) {
-            console.log('[PWA] Service Worker non supportato in questo ambiente');
-            return;
+            window.location.href.includes('stackblitz.io') ||
+            window.location.href.includes('webcontainer.io') ||
+            window.location.href.includes('bolt.new')) {
+            console.log('[PWA] Service Worker saltato in ambiente di sviluppo');
+            return false;
         }
 
-        if ('serviceWorker' in navigator) {
-            try {
-                const registration = await navigator.serviceWorker.register('/sw.js');
-                console.log('[PWA] Service Worker registrato:', registration);
+        // Check if Service Workers are supported
+        if (!('serviceWorker' in navigator)) {
+            console.log('[PWA] Service Worker non supportato');
+            return false;
+        }
 
-                // Gestione aggiornamenti
-                registration.addEventListener('updatefound', () => {
-                    const newWorker = registration.installing;
-                    newWorker.addEventListener('statechange', () => {
-                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            this.showUpdateBanner();
-                        }
-                    });
-                });
+        // Require HTTPS (except localhost)
+        if (!window.location.protocol.startsWith('https') && 
+            window.location.hostname !== 'localhost') {
+            console.log('[PWA] Service Worker richiede HTTPS');
+            return false;
+        }
 
-                // Ascolta messaggi dal Service Worker
-                navigator.serviceWorker.addEventListener('message', (event) => {
-                    if (event.data.type === 'UPDATE_AVAILABLE') {
+        return true;
+    }
+
+    async setupServiceWorker() {
+        try {
+            const registration = await navigator.serviceWorker.register('/sw.js');
+            console.log('[PWA] Service Worker registrato:', registration);
+
+            // Gestione aggiornamenti
+            registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                         this.showUpdateBanner();
                     }
                 });
+            });
 
-            } catch (error) {
-                console.error('[PWA] Errore registrazione Service Worker:', error);
-            }
+            // Ascolta messaggi dal Service Worker
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data.type === 'UPDATE_AVAILABLE') {
+                    this.showUpdateBanner();
+                }
+            });
+
+        } catch (error) {
+            console.error('[PWA] Errore registrazione Service Worker:', error);
         }
     }
 
@@ -802,24 +822,29 @@ let canvasManager, toolbarManager, projectManager, fileManager, pwaManager, keyb
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🎨 EduBoard - Inizializzazione...');
 
-    // Inizializza componenti
-    canvasManager = new CanvasManager();
-    toolbarManager = new ToolbarManager(canvasManager);
-    projectManager = new ProjectManager();
-    fileManager = new FileManager(canvasManager);
-    pwaManager = new PWAManager();
-    keyboardManager = new KeyboardManager(canvasManager, projectManager);
+    try {
+        // Inizializza componenti
+        canvasManager = new CanvasManager();
+        toolbarManager = new ToolbarManager(canvasManager);
+        projectManager = new ProjectManager();
+        fileManager = new FileManager(canvasManager);
+        pwaManager = new PWAManager();
+        keyboardManager = new KeyboardManager(canvasManager, projectManager);
 
-    // Stato iniziale
-    toolbarManager.selectTool('pencil');
-    
-    console.log('✅ EduBoard - Pronto!');
-    
-    // Mostra messaggio di benvenuto
-    setTimeout(() => {
-        projectManager.showNotification('Benvenuto in EduBoard! 🎨');
-    }, 1000);
+        // Stato iniziale
+        toolbarManager.selectTool('pencil');
+        
+        console.log('✅ EduBoard - Pronto!');
+        
+        // Mostra messaggio di benvenuto
+        setTimeout(() => {
+            projectManager.showNotification('Benvenuto in EduBoard! 🎨');
+        }, 1000);
+    } catch (error) {
+        console.error('❌ Errore inizializzazione EduBoard:', error);
+    }
 });
+    
 
 // Gestione errori globali
 window.addEventListener('error', (e) => {
