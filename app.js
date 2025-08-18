@@ -647,7 +647,11 @@ class PWAManager {
 
     isServiceWorkerSupported() {
         // Check for WebContainer environment (StackBlitz)
-        if (typeof window !== 'undefined' && window.WEB_CONTAINER_NAME) {
+        if (typeof window !== 'undefined' && 
+            (window.WEB_CONTAINER_NAME || 
+             window.location.href.includes('stackblitz.io') ||
+             window.location.href.includes('webcontainer.io') ||
+             window.location.href.includes('bolt.new'))) {
             console.log('[PWA] Service Worker saltato in ambiente WebContainer');
             return false;
         }
@@ -657,9 +661,7 @@ class PWAManager {
             window.location.hostname === '127.0.0.1' ||
             window.location.port === '3000' ||
             window.location.port === '5173' ||
-            window.location.href.includes('stackblitz.io') ||
-            window.location.href.includes('webcontainer.io') ||
-            window.location.href.includes('bolt.new')) {
+            window.location.protocol === 'http:') {
             console.log('[PWA] Service Worker saltato in ambiente di sviluppo');
             return false;
         }
