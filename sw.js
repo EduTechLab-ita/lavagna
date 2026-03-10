@@ -1,12 +1,12 @@
-const CACHE_NAME = 'eduboard-v2'; // Incrementato per forzare aggiornamento
+const CACHE_NAME = 'eduboard-v3'; // Incrementato per forzare aggiornamento
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/style.css',
-  '/app.js',
-  '/manifest.json',
-  '/icon-192x192.png',
-  '/icon-512x512.png',
+  './',
+  './index.html',
+  './style.css',
+  './app.js',
+  './manifest.json',
+  './icon-192x192.png',
+  './icon-512x512.png',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'
 ];
 
