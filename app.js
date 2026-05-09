@@ -18,6 +18,7 @@ const CONFIG = {
     shapeFill: false,
     currentBg: 'white',
     isDrawing: false,
+    isDirty: false,
     lastX: 0,
     lastY: 0,
     shapeStartX: 0,
@@ -919,6 +920,7 @@ class CanvasManager {
     }
 
     _saveUndo() {
+        CONFIG.isDirty = true;
         this.undoStack.push(this.canvas.toDataURL());
         if (this.undoStack.length > CONFIG.maxUndo) this.undoStack.shift();
         this.redoStack = [];
@@ -1557,20 +1559,81 @@ class ProjectManager {
         const projects = JSON.parse(localStorage.getItem('eduboard-v2') || '{}');
         projects[name + '_' + Date.now()] = data;
         localStorage.setItem('eduboard-v2', JSON.stringify(projects));
+        CONFIG.isDirty = false;
         toast('Progetto salvato!', 'success');
     }
 
-    newBoard() {
-        if (confirm('Nuova lavagna? Il disegno non salvato andr\u00e0 perso.')) {
-            canvasMgr.clear();
-            bgMgr.setBackground('white');
-            CONFIG.projectName = 'Nuova Lavagna';
-            document.getElementById('project-name').textContent = CONFIG.projectName;
-            document.querySelectorAll('.bg-opt').forEach(b => b.classList.remove('active'));
-            const whiteBtn = document.querySelector('.bg-opt[data-bg="white"]');
-            if (whiteBtn) whiteBtn.classList.add('active');
-        }
+    saveQuiet() {
+        const data = {
+            name: CONFIG.projectName,
+            drawing: canvasMgr.getDataURL(),
+            bg: CONFIG.currentBg,
+            ts: Date.now()
+        };
+        const projects = JSON.parse(localStorage.getItem('eduboard-v2') || '{}');
+        projects[CONFIG.projectName + '_' + Date.now()] = data;
+        localStorage.setItem('eduboard-v2', JSON.stringify(projects));
+        CONFIG.isDirty = false;
+        toast('Progetto salvato!', 'success');
     }
+
+    async newBoard() {
+        if (CONFIG.isDirty) {
+            const ok = await confirmIfDirty();
+            if (!ok) return;
+        }
+        canvasMgr.clear();
+        bgMgr.setBackground('white');
+        CONFIG.projectName = 'Nuova Lavagna';
+        CONFIG.isDirty = false;
+        document.getElementById('project-name').textContent = CONFIG.projectName;
+        document.querySelectorAll('.bg-opt').forEach(b => b.classList.remove('active'));
+        const whiteBtn = document.querySelector('.bg-opt[data-bg="white"]');
+        if (whiteBtn) whiteBtn.classList.add('active');
+    }
+}
+
+// =============================================================================
+// SEZIONE 8b — Dialog "salva prima di continuare"
+// =============================================================================
+
+function confirmIfDirty() {
+    return new Promise((resolve) => {
+        if (!CONFIG.isDirty) { resolve(true); return; }
+
+        const modal = document.getElementById('dirty-modal');
+        if (!modal) { resolve(true); return; }
+        modal.style.display = 'flex';
+
+        const btnSave   = document.getElementById('dirty-btn-save');
+        const btnSkip   = document.getElementById('dirty-btn-skip');
+        const btnCancel = document.getElementById('dirty-btn-cancel');
+
+        function cleanup() {
+            modal.style.display = 'none';
+            btnSave.removeEventListener('click', onSave);
+            btnSkip.removeEventListener('click', onSkip);
+            btnCancel.removeEventListener('click', onCancel);
+        }
+
+        function onSave() {
+            cleanup();
+            projectMgr.saveQuiet();
+            resolve(true);
+        }
+        function onSkip() {
+            cleanup();
+            resolve(true);
+        }
+        function onCancel() {
+            cleanup();
+            resolve(false);
+        }
+
+        btnSave.addEventListener('click', onSave);
+        btnSkip.addEventListener('click', onSkip);
+        btnCancel.addEventListener('click', onCancel);
+    });
 }
 
 // =============================================================================

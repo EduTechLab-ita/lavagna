@@ -394,6 +394,18 @@
         </svg>
     </button>
 
+    <!-- Modal: salva prima di continuare -->
+    <div id="dirty-modal" style="display:none">
+      <div class="dirty-modal-box">
+        <p class="dirty-modal-msg">Hai modifiche non salvate.<br>Cosa vuoi fare?</p>
+        <div class="dirty-modal-btns">
+          <button id="dirty-btn-save" class="dirty-btn dirty-btn--primary">💾 Salva</button>
+          <button id="dirty-btn-skip" class="dirty-btn">Continua senza salvare</button>
+          <button id="dirty-btn-cancel" class="dirty-btn dirty-btn--cancel">Annulla</button>
+        </div>
+      </div>
+    </div>
+
     <script src="app.js"></script>
 
     <!-- Google Identity Services — necessario per OAuth2 Drive -->

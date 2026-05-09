@@ -754,6 +754,11 @@ class LibraryManager {
         if (!this.drive.isConnected()) {
             toast('Connetti Drive prima.', 'error'); return;
         }
+        // Controlla modifiche non salvate
+        if (typeof confirmIfDirty === 'function') {
+            const canContinue = await confirmIfDirty();
+            if (!canContinue) return;
+        }
         try {
             toast('Caricamento lezione...', 'info');
             const lesson = await this.drive.loadLesson(fileId);
