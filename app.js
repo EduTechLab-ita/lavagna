@@ -789,12 +789,16 @@ class CanvasManager {
         // Auto-hide toolbar quando si inizia a disegnare
         toolbarMgr.hide();
 
+        if (CONFIG.currentTool === 'select') {
+            selectMgr?.onPointerDown(x, y);
+            return;
+        }
         if (CONFIG.currentTool === 'laser') {
             this.laser.addPoint(x, y);
             return;
         }
         if (CONFIG.currentTool === 'text') {
-            textMgr.placeInput(x, y);
+            // Il TextManager gestisce i click sul canvas autonomamente via pointerdown
             CONFIG.isDrawing = false;
             return;
         }
@@ -822,6 +826,10 @@ class CanvasManager {
         if (!CONFIG.isDrawing) return;
         const { x, y } = this.getCoords(e);
 
+        if (CONFIG.currentTool === 'select') {
+            selectMgr?.onPointerMove(x, y);
+            return;
+        }
         if (CONFIG.currentTool === 'laser') {
             this.laser.addPoint(x, y);
             return;
@@ -855,6 +863,11 @@ class CanvasManager {
         if (!CONFIG.isDrawing) return;
         CONFIG.isDrawing = false;
 
+        if (CONFIG.currentTool === 'select') {
+            const { x, y } = this.getCoords(e);
+            selectMgr?.onPointerUp(x, y);
+            return;
+        }
         if (CONFIG.currentTool === 'laser') {
             this.laser.stop();
             return;
@@ -1004,10 +1017,12 @@ class ToolbarManager {
         this._closeAllPopups();
 
         if (tool === 'background') {
+            selectMgr?.deactivate();
             this._togglePopup('bg-popup', btn);
             return;
         }
         if (tool === 'shape') {
+            selectMgr?.deactivate();
             this._togglePopup('shape-popup', btn);
             CONFIG.currentTool = 'shape';
             this._updateActiveBtn(btn);
@@ -1015,19 +1030,40 @@ class ToolbarManager {
             return;
         }
         if (tool === 'geo') {
+            selectMgr?.deactivate();
             this._togglePopup('geo-popup', btn);
             this._updateActiveBtn(btn);
             return;
         }
         if (tool === 'upload-bg') {
+            selectMgr?.deactivate();
             document.getElementById('file-bg-input').click();
             return;
+        }
+        if (tool === 'select') {
+            CONFIG.currentTool = 'select';
+            this._updateActiveBtn(btn);
+            this._updateOptionsRow();
+            this._updateCursor();
+            selectMgr?.activate();
+            return;
+        }
+
+        // Tutti gli altri strumenti: disattiva select e text
+        selectMgr?.deactivate();
+        if (tool !== 'text' && typeof textMgr !== 'undefined') {
+            textMgr.deactivate();
         }
 
         CONFIG.currentTool = tool;
         this._updateActiveBtn(btn);
         this._updateOptionsRow();
         this._updateCursor();
+
+        // Attiva textMgr se strumento testo
+        if (tool === 'text' && typeof textMgr !== 'undefined') {
+            textMgr.activate();
+        }
 
         // Feature 1: aggiorna palette colori in base allo strumento
         this._updateColorSwatches(tool);
@@ -1043,6 +1079,7 @@ class ToolbarManager {
     _updateOptionsRow() {
         const tool = CONFIG.currentTool;
         const showOptions = ['pen', 'pencil', 'pastel', 'marker', 'eraser', 'shape', 'text'].includes(tool);
+        // 'select', 'laser', 'geo', 'background', 'upload-bg' non mostrano la riga opzioni
         this.optionsRow.style.display = showOptions ? 'flex' : 'none';
 
         // Nascondi colori per strumenti che non ne hanno bisogno
@@ -1063,6 +1100,7 @@ class ToolbarManager {
             text:   'text',
             laser:  'none',
             shape:  'crosshair',
+            select: 'default',
         };
         canvas.style.cursor = cursorMap[CONFIG.currentTool] || 'default';
     }
@@ -1236,77 +1274,241 @@ class ToolbarManager {
 
 class TextManager {
     constructor() {
-        this.el     = document.getElementById('text-cursor');
-        this.active = false;
-        this._setup();
+        this.active     = false;
+        this.editing    = false;
+        this.fontFamily = 'Inter, sans-serif';
+        this.fontSize   = 28;
+        this.fontStyle  = '';        // '' | 'bold' | 'italic' | 'bold italic'
+        this.underline  = false;
+        this.color      = '#000000';
+
+        this._buildToolbar();
+        this._buildInput();
+        this._setupCanvasListener();
     }
 
-    _setup() {
-        this.el.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+    // ── Toolbar contestuale testo ─────────────────────────────────────
+    _buildToolbar() {
+        // Crea un popup contestuale FISSO in cima alla toolbar (visibile quando text è attivo)
+        const bar = document.createElement('div');
+        bar.id        = 'text-toolbar';
+        bar.className = 'text-toolbar';
+        bar.innerHTML = `
+            <select id="txt-font" title="Font">
+                <option value="Inter, sans-serif">Inter</option>
+                <option value="'Georgia', serif">Georgia</option>
+                <option value="'Times New Roman', serif">Times New Roman</option>
+                <option value="'Arial', sans-serif">Arial</option>
+                <option value="'Courier New', monospace">Courier New</option>
+                <option value="'Comic Sans MS', cursive">Comic Sans</option>
+                <option value="'Verdana', sans-serif">Verdana</option>
+                <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
+            </select>
+            <select id="txt-size" title="Dimensione">
+                ${[12,16,20,24,28,32,40,48,56,72].map(s =>
+                    `<option value="${s}" ${s===28?'selected':''}>${s}px</option>`
+                ).join('')}
+            </select>
+            <button id="txt-bold"      class="txt-btn" title="Grassetto (Ctrl+B)"><b>B</b></button>
+            <button id="txt-italic"    class="txt-btn" title="Corsivo (Ctrl+I)"><i>I</i></button>
+            <button id="txt-underline" class="txt-btn" title="Sottolineato (Ctrl+U)"><u>U</u></button>
+            <div class="txt-sep"></div>
+            <button id="txt-confirm" class="txt-btn txt-btn--primary" title="Conferma (Enter)">✓ OK</button>
+            <button id="txt-cancel"  class="txt-btn" title="Annulla (Esc)">✕</button>
+        `;
+        bar.style.display = 'none';
+        document.body.appendChild(bar);
+
+        // Listeners
+        document.getElementById('txt-font').addEventListener('change', e => {
+            this.fontFamily = e.target.value;
+            this._syncInputStyle();
+        });
+        document.getElementById('txt-size').addEventListener('change', e => {
+            this.fontSize = parseInt(e.target.value);
+            this._syncInputStyle();
+        });
+        document.getElementById('txt-bold').addEventListener('click', () => {
+            this._toggleBold();
+        });
+        document.getElementById('txt-italic').addEventListener('click', () => {
+            this._toggleItalic();
+        });
+        document.getElementById('txt-underline').addEventListener('click', () => {
+            this.underline = !this.underline;
+            document.getElementById('txt-underline').classList.toggle('txt-btn--active', this.underline);
+            this._syncInputStyle();
+        });
+        document.getElementById('txt-confirm').addEventListener('click', () => this._commit());
+        document.getElementById('txt-cancel').addEventListener('click',  () => this._cancel());
+    }
+
+    _toggleBold() {
+        const hasBold = this.fontStyle.includes('bold');
+        this.fontStyle = hasBold
+            ? this.fontStyle.replace('bold', '').trim()
+            : (this.fontStyle + ' bold').trim();
+        document.getElementById('txt-bold').classList.toggle('txt-btn--active', !hasBold);
+        this._syncInputStyle();
+    }
+
+    _toggleItalic() {
+        const hasItalic = this.fontStyle.includes('italic');
+        this.fontStyle = hasItalic
+            ? this.fontStyle.replace('italic', '').trim()
+            : (this.fontStyle + ' italic').trim();
+        document.getElementById('txt-italic').classList.toggle('txt-btn--active', !hasItalic);
+        this._syncInputStyle();
+    }
+
+    // ── Input box ─────────────────────────────────────────────────────
+    _buildInput() {
+        // Usa il div #text-cursor esistente
+        this.inputEl = document.getElementById('text-cursor');
+        if (!this.inputEl) {
+            this.inputEl = document.createElement('div');
+            this.inputEl.id = 'text-cursor';
+            document.getElementById('canvas-area').appendChild(this.inputEl);
+        }
+        this.inputEl.contentEditable = 'false';
+        this.inputEl.style.display   = 'none';
+
+        // Tasti speciali nell'input
+        this.inputEl.addEventListener('keydown', e => {
+            if (e.key === 'Escape') { e.preventDefault(); this._cancel(); }
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._commit(); }
+            if (e.ctrlKey && e.key === 'b') { e.preventDefault(); this._toggleBold(); }
+            if (e.ctrlKey && e.key === 'i') { e.preventDefault(); this._toggleItalic(); }
+            if (e.ctrlKey && e.key === 'u') {
                 e.preventDefault();
-                this._commit();
+                this.underline = !this.underline;
+                document.getElementById('txt-underline').classList.toggle('txt-btn--active', this.underline);
+                this._syncInputStyle();
             }
-            if (e.key === 'Escape') {
-                this._cancel();
-            }
-        });
-
-        // Click sul canvas mentre si sta scrivendo: conferma il testo
-        document.getElementById('draw-canvas').addEventListener('mousedown', () => {
-            if (this.active) this._commit();
         });
     }
 
-    placeInput(x, y) {
-        this.active = true;
-        const el = this.el;
-        el.style.display   = 'block';
-        el.style.left      = x + 'px';
-        el.style.top       = (y + 56 - 24) + 'px'; // 56=header, 24=line-height offset
-        el.style.fontSize  = Math.max(16, CONFIG.currentSize * 3) + 'px';
-        el.style.color     = CONFIG.currentColor;
-        el.innerText       = '';
-        el.focus();
-        // Posiziona il cursore alla fine del contenuto
+    _syncInputStyle() {
+        if (!this.inputEl) return;
+        const style = `${this.fontStyle} ${this.fontSize}px ${this.fontFamily}`.trim();
+        this.inputEl.style.font           = style;
+        this.inputEl.style.textDecoration = this.underline ? 'underline' : '';
+        this.inputEl.style.color          = this.color;
+    }
+
+    // ── Listener sul canvas ───────────────────────────────────────────
+    _setupCanvasListener() {
+        const drawCanvas = document.getElementById('draw-canvas');
+        drawCanvas.addEventListener('pointerdown', e => {
+            if (CONFIG.currentTool !== 'text') return;
+            if (this.editing) {
+                // Se clicco fuori dall'input → commit
+                const rect = this.inputEl.getBoundingClientRect();
+                const inside = e.clientX >= rect.left && e.clientX <= rect.right &&
+                               e.clientY >= rect.top  && e.clientY <= rect.bottom;
+                if (!inside) this._commit();
+                return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+            this._startEditing(e.clientX, e.clientY);
+        });
+    }
+
+    _startEditing(clientX, clientY) {
+        this.editing = true;
+        this.color   = CONFIG.currentColor || '#000000';
+
+        // Posiziona l'input nel canvas
+        const canvasArea = document.getElementById('canvas-area');
+        const areaRect   = canvasArea.getBoundingClientRect();
+        const x = clientX - areaRect.left;
+        const y = clientY - areaRect.top;
+
+        this.inputEl.style.display  = 'block';
+        this.inputEl.style.left     = x + 'px';
+        this.inputEl.style.top      = y + 'px';
+        this.inputEl.style.minWidth = '4px';
+        this.inputEl.style.minHeight = (this.fontSize + 8) + 'px';
+        this.inputEl.textContent    = '';
+        this.inputEl.contentEditable = 'true';
+        this._syncInputStyle();
+
+        // Mostra toolbar testo
+        document.getElementById('text-toolbar').style.display = 'flex';
+
+        // Focus e cursore
+        this.inputEl.focus();
         const range = document.createRange();
-        const sel   = window.getSelection();
-        range.selectNodeContents(el);
+        range.selectNodeContents(this.inputEl);
         range.collapse(false);
+        const sel = window.getSelection();
         sel.removeAllRanges();
         sel.addRange(range);
     }
 
     _commit() {
-        if (!this.active) return;
-        const text = this.el.innerText.trim();
-        const x    = parseInt(this.el.style.left);
-        const y    = parseInt(this.el.style.top) - 56 + 24;
-
+        if (!this.editing) return;
+        const text = this.inputEl.textContent.trim();
         if (text) {
-            const ctx = canvasMgr.ctx;
-            canvasMgr._saveUndo();
-            ctx.save();
-            ctx.font      = `${Math.max(16, CONFIG.currentSize * 3)}px Inter, sans-serif`;
-            ctx.fillStyle = CONFIG.currentColor;
-            ctx.globalAlpha = 1;
-            // Supporto testo multilinea (Shift+Enter)
-            const lines = text.split('\n');
-            const lineH = Math.max(16, CONFIG.currentSize * 3) * 1.3;
-            lines.forEach((line, i) => {
-                ctx.fillText(line, x, y + i * lineH);
-            });
-            ctx.restore();
+            this._renderTextToCanvas(text);
         }
-
-        this._cancel();
+        this._endEditing();
     }
 
     _cancel() {
-        this.active      = false;
-        this.el.style.display = 'none';
-        this.el.innerText    = '';
+        this._endEditing();
     }
+
+    _endEditing() {
+        this.editing = false;
+        this.inputEl.contentEditable = 'false';
+        this.inputEl.style.display   = 'none';
+        this.inputEl.textContent     = '';
+        document.getElementById('text-toolbar').style.display = 'none';
+    }
+
+    _renderTextToCanvas(text) {
+        const drawCanvas = document.getElementById('draw-canvas');
+        const ctx        = drawCanvas.getContext('2d');
+
+        // Recupera posizione input relativa al canvas
+        const canvasRect  = drawCanvas.getBoundingClientRect();
+        const inputRect   = this.inputEl.getBoundingClientRect();
+        const scaleX = drawCanvas.width  / canvasRect.width;
+        const scaleY = drawCanvas.height / canvasRect.height;
+        const x = (inputRect.left - canvasRect.left) * scaleX;
+        const y = (inputRect.top  - canvasRect.top)  * scaleY + this.fontSize * scaleY;
+
+        // Salva undo
+        if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+
+        ctx.save();
+        const fontString = `${this.fontStyle} ${this.fontSize * scaleY}px ${this.fontFamily}`.trim();
+        ctx.font          = fontString;
+        ctx.fillStyle     = this.color;
+        ctx.textBaseline  = 'alphabetic';
+
+        // Testo multilinea
+        const lines = text.split('\n');
+        const lineH = this.fontSize * scaleY * 1.3;
+        lines.forEach((line, i) => {
+            ctx.fillText(line, x, y + i * lineH);
+            if (this.underline) {
+                const w = ctx.measureText(line).width;
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth   = Math.max(1, this.fontSize * scaleY * 0.06);
+                ctx.beginPath();
+                ctx.moveTo(x, y + i * lineH + 2);
+                ctx.lineTo(x + w, y + i * lineH + 2);
+                ctx.stroke();
+            }
+        });
+        ctx.restore();
+    }
+
+    activate()   { this.active = true; }
+    deactivate() { this.active = false; if (this.editing) this._cancel(); }
 }
 
 // =============================================================================
@@ -1399,7 +1601,7 @@ class PWAManager {
 function setupKeyboard() {
     document.addEventListener('keydown', (e) => {
         // Non interferire con l'input testo inline
-        if (textMgr.active) return;
+        if (textMgr.editing) return;
         // Non interferire con il project-name in modifica
         if (document.getElementById('project-name').contentEditable === 'true') return;
 
@@ -1419,9 +1621,12 @@ function setupKeyboard() {
         }
 
         if (!e.ctrlKey && !e.metaKey) {
+            // Gestione tasti speciali per SelectManager (Escape, Delete, Backspace)
+            selectMgr?.handleKeydown(e);
+
             // Scorciatoie strumenti:
             //   p=penna  m=matita  c=pastello  h=evidenziatore
-            //   e=gomma  l=laser   t=testo     s=forme
+            //   e=gomma  l=laser   t=testo     s=forme  a=seleziona
             const toolMap = {
                 p: 'pen',
                 m: 'pencil',
@@ -1431,6 +1636,7 @@ function setupKeyboard() {
                 l: 'laser',
                 t: 'text',
                 s: 'shape',
+                a: 'select',
             };
             if (toolMap[e.key]) {
                 const btn = document.querySelector(`.tool-btn[data-tool="${toolMap[e.key]}"]`);
@@ -1615,11 +1821,196 @@ function setupProjectName() {
 }
 
 // =============================================================================
+// SEZIONE 13b — SelectManager
+// Strumento freccia/dito: selezione rettangolare e spostamento
+// =============================================================================
+
+class SelectManager {
+    constructor(drawCanvas, bgCanvas) {
+        this.drawCanvas = drawCanvas;
+        this.bgCanvas   = bgCanvas;
+        this.ctx        = drawCanvas.getContext('2d');
+        this.active     = false;   // strumento attivo
+        this.selection  = null;    // { x, y, w, h } rettangolo selezionato
+        this.dragData   = null;    // { startX, startY, imgData, selX, selY }
+        this.phase      = 'idle'; // 'idle' | 'selecting' | 'selected' | 'dragging'
+        this.startX     = 0;
+        this.startY     = 0;
+    }
+
+    activate()   { this.active = true;  this.phase = 'idle'; this.selection = null; }
+    deactivate() { this.active = false; this._clearSelection(); }
+
+    // Disegna il rettangolo di selezione tratteggiato sull'overlay
+    _drawSelectionRect(x, y, w, h) {
+        const oc  = document.getElementById('overlay-canvas');
+        const ctx = oc.getContext('2d');
+        ctx.clearRect(0, 0, oc.width, oc.height);
+        ctx.save();
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth   = 1.5;
+        ctx.setLineDash([6, 3]);
+        ctx.strokeRect(x, y, w, h);
+        // Handle angoli
+        ctx.fillStyle   = 'white';
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth   = 1;
+        ctx.setLineDash([]);
+        [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(([hx, hy]) => {
+            ctx.beginPath();
+            ctx.arc(hx, hy, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        });
+        ctx.restore();
+    }
+
+    _clearSelection() {
+        const oc = document.getElementById('overlay-canvas');
+        if (oc) oc.getContext('2d').clearRect(0, 0, oc.width, oc.height);
+        this.selection = null;
+        this.phase     = 'idle';
+    }
+
+    onPointerDown(x, y) {
+        if (!this.active) return false;
+
+        if (this.phase === 'selected' && this.selection) {
+            const { x: sx, y: sy, w, h } = this.selection;
+            // Dentro la selezione → inizia drag
+            if (x >= sx && x <= sx + w && y >= sy && y <= sy + h) {
+                this.phase    = 'dragging';
+                this.dragData = {
+                    startX: x,
+                    startY: y,
+                    imgData: this.ctx.getImageData(sx, sy, w, h),
+                    selX:   sx,
+                    selY:   sy,
+                };
+                // Cancella l'area originale
+                this.ctx.save();
+                this.ctx.globalCompositeOperation = 'destination-out';
+                this.ctx.fillStyle = 'rgba(255,255,255,1)';
+                this.ctx.fillRect(sx, sy, w, h);
+                this.ctx.restore();
+                return true;
+            }
+        }
+
+        // Nuova selezione rettangolare
+        this.phase  = 'selecting';
+        this.startX = x;
+        this.startY = y;
+        this._clearSelection();
+        return true;
+    }
+
+    onPointerMove(x, y) {
+        if (!this.active) return false;
+
+        if (this.phase === 'selecting') {
+            const rx = Math.min(x, this.startX);
+            const ry = Math.min(y, this.startY);
+            const rw = Math.abs(x - this.startX);
+            const rh = Math.abs(y - this.startY);
+            this._drawSelectionRect(rx, ry, rw, rh);
+            return true;
+        }
+
+        if (this.phase === 'dragging' && this.dragData) {
+            const dx   = x - this.dragData.startX;
+            const dy   = y - this.dragData.startY;
+            const newX = this.dragData.selX + dx;
+            const newY = this.dragData.selY + dy;
+            const { w, h } = this.selection;
+
+            // Preview su overlay
+            const oc  = document.getElementById('overlay-canvas');
+            const ctx = oc.getContext('2d');
+            ctx.clearRect(0, 0, oc.width, oc.height);
+
+            const tmp = document.createElement('canvas');
+            tmp.width  = w;
+            tmp.height = h;
+            tmp.getContext('2d').putImageData(this.dragData.imgData, 0, 0);
+            ctx.drawImage(tmp, newX, newY);
+
+            this._drawSelectionRect(newX, newY, w, h);
+            return true;
+        }
+
+        return this.phase !== 'idle';
+    }
+
+    onPointerUp(x, y) {
+        if (!this.active) return false;
+
+        if (this.phase === 'selecting') {
+            const rx = Math.min(x, this.startX);
+            const ry = Math.min(y, this.startY);
+            const rw = Math.abs(x - this.startX);
+            const rh = Math.abs(y - this.startY);
+            if (rw > 5 && rh > 5) {
+                this.selection = { x: rx, y: ry, w: rw, h: rh };
+                this.phase     = 'selected';
+                this._drawSelectionRect(rx, ry, rw, rh);
+            } else {
+                this._clearSelection();
+            }
+            return true;
+        }
+
+        if (this.phase === 'dragging' && this.dragData) {
+            const dx   = x - this.dragData.startX;
+            const dy   = y - this.dragData.startY;
+            const newX = this.dragData.selX + dx;
+            const newY = this.dragData.selY + dy;
+            const { w, h } = this.selection;
+
+            // Deposita definitivamente sul draw-canvas
+            const tmp = document.createElement('canvas');
+            tmp.width  = w;
+            tmp.height = h;
+            tmp.getContext('2d').putImageData(this.dragData.imgData, 0, 0);
+            this.ctx.drawImage(tmp, newX, newY);
+
+            // Aggiorna selezione e overlay
+            this.selection = { x: newX, y: newY, w, h };
+            this.phase     = 'selected';
+            const oc = document.getElementById('overlay-canvas');
+            oc.getContext('2d').clearRect(0, 0, oc.width, oc.height);
+            this._drawSelectionRect(newX, newY, w, h);
+            this.dragData = null;
+            return true;
+        }
+
+        return false;
+    }
+
+    // Gestisce Escape (deseleziona) e Delete/Backspace (cancella area selezionata)
+    handleKeydown(e) {
+        if (!this.active) return;
+        if (e.key === 'Escape') {
+            this._clearSelection();
+        }
+        if ((e.key === 'Delete' || e.key === 'Backspace') && this.phase === 'selected' && this.selection) {
+            const { x, y, w, h } = this.selection;
+            this.ctx.save();
+            this.ctx.globalCompositeOperation = 'destination-out';
+            this.ctx.fillStyle = 'rgba(255,255,255,1)';
+            this.ctx.fillRect(x, y, w, h);
+            this.ctx.restore();
+            this._clearSelection();
+        }
+    }
+}
+
+// =============================================================================
 // SEZIONE 14 — INIT
 // Istanziazione globale dei manager e avvio dell'applicazione.
 // =============================================================================
 
-let bgMgr, brush, laserMgr, canvasMgr, toolbarMgr, textMgr, projectMgr;
+let bgMgr, brush, laserMgr, canvasMgr, toolbarMgr, textMgr, projectMgr, selectMgr;
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Inizializza i manager nell'ordine corretto (le dipendenze prima)
@@ -1627,6 +2018,10 @@ document.addEventListener('DOMContentLoaded', () => {
     brush      = new BrushEngine();
     laserMgr   = new LaserManager(document.getElementById('overlay-canvas'));
     canvasMgr  = new CanvasManager(bgMgr, brush, laserMgr);
+    selectMgr  = new SelectManager(
+        document.getElementById('draw-canvas'),
+        document.getElementById('bg-canvas')
+    );
     toolbarMgr = new ToolbarManager();
     textMgr    = new TextManager();
     projectMgr = new ProjectManager();
