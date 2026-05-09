@@ -181,6 +181,12 @@
                         </svg>
                         <span>Seleziona</span>
                     </button>
+                    <button class="tool-btn" data-tool="pan" title="Mano — sposta la lavagna">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M6 14a2 2 0 0 0-2 2V16a8 8 0 0 0 8 8h2A8 8 0 0 0 22 16v-5"/>
+                      </svg>
+                      <span>Mano</span>
+                    </button>
                 </div>
 
                 <div class="tool-separator"></div>
@@ -349,6 +355,15 @@
             <button class="bg-opt" data-bg="lines-9" title="Righe 9mm — 3ª elementare"><div class="bg-preview bg-p-lines-9"></div><span>3ª elem.</span></button>
             <button class="bg-opt" data-bg="lines-7" title="Righe 7mm — 4ª elementare"><div class="bg-preview bg-p-lines-7"></div><span>4ª elem.</span></button>
             <button class="bg-opt" data-bg="lines-5" title="Righe 5mm — 5ª elementare / media"><div class="bg-preview bg-p-lines-5"></div><span>5ª elem.</span></button>
+        </div>
+        <!-- Sezione sfondi da Google Drive -->
+        <div id="bg-drive-section" class="bg-section" style="display:none">
+            <div class="bg-section-header">
+                <div class="popup-title-sub">Da Drive</div>
+            </div>
+            <div id="bg-drive-images" class="bg-drive-grid">
+                <div class="bg-drive-loading">Caricamento...</div>
+            </div>
         </div>
     </div>
 

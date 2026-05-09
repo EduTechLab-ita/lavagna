@@ -820,6 +820,12 @@ class CanvasManager {
             selectMgr?.onPointerDown(x, y);
             return;
         }
+        if (CONFIG.currentTool === 'pan') {
+            panMgr?.onPointerDown(e.clientX || e.touches?.[0]?.clientX || 0,
+                                  e.clientY || e.touches?.[0]?.clientY || 0);
+            CONFIG.isDrawing = true;
+            return;
+        }
         if (CONFIG.currentTool === 'laser') {
             this.laser.addPoint(x, y);
             return;
@@ -855,6 +861,11 @@ class CanvasManager {
 
         if (CONFIG.currentTool === 'select') {
             selectMgr?.onPointerMove(x, y);
+            return;
+        }
+        if (CONFIG.currentTool === 'pan') {
+            panMgr?.onPointerMove(e.clientX || e.touches?.[0]?.clientX || 0,
+                                  e.clientY || e.touches?.[0]?.clientY || 0);
             return;
         }
         if (CONFIG.currentTool === 'laser') {
@@ -893,6 +904,11 @@ class CanvasManager {
         if (CONFIG.currentTool === 'select') {
             const { x, y } = this.getCoords(e);
             selectMgr?.onPointerUp(x, y);
+            return;
+        }
+        if (CONFIG.currentTool === 'pan') {
+            panMgr?.onPointerUp();
+            CONFIG.isDrawing = false;
             return;
         }
         if (CONFIG.currentTool === 'laser') {
@@ -1074,11 +1090,21 @@ class ToolbarManager {
             this._updateOptionsRow();
             this._updateCursor();
             selectMgr?.activate();
+            panMgr?.deactivate();
+            return;
+        }
+        if (tool === 'pan') {
+            CONFIG.currentTool = 'pan';
+            this._updateActiveBtn(btn);
+            this._updateCursor();
+            panMgr?.activate();
+            selectMgr?.deactivate();
             return;
         }
 
         // Tutti gli altri strumenti: disattiva select e text
         selectMgr?.deactivate();
+        panMgr?.deactivate();
         if (tool !== 'text' && typeof textMgr !== 'undefined') {
             textMgr.deactivate();
         }
@@ -1128,7 +1154,8 @@ class ToolbarManager {
             text:   'text',
             laser:  'none',
             shape:  'crosshair',
-            select: 'default',
+            select: 'crosshair',
+            pan:    'grab',
         };
         canvas.style.cursor = cursorMap[CONFIG.currentTool] || 'default';
     }
@@ -1284,6 +1311,10 @@ class ToolbarManager {
             // Posiziona popup sopra la toolbar
             const tbRect = this.wrapper.getBoundingClientRect();
             popup.style.bottom = (window.innerHeight - tbRect.top + 12) + 'px';
+            // Se è il popup sfondi, carica le immagini da Drive
+            if (id === 'bg-popup') {
+                loadDriveBackgrounds();
+            }
         }
     }
 
@@ -1726,6 +1757,7 @@ function setupKeyboard() {
                 t: 'text',
                 s: 'shape',
                 a: 'select',
+                g: 'pan',
             };
             if (toolMap[e.key]) {
                 const btn = document.querySelector(`.tool-btn[data-tool="${toolMap[e.key]}"]`);
@@ -1929,6 +1961,63 @@ function setupProjectName() {
 }
 
 // =============================================================================
+// SEZIONE 13a — PanManager
+// Strumento mano: trascina per scorrere la lavagna
+// =============================================================================
+
+class PanManager {
+    constructor() {
+        this.active = false;
+        this.dx = 0;
+        this.dy = 0;
+        this._drag = { on: false, startX: 0, startY: 0, origDx: 0, origDy: 0 };
+    }
+
+    activate() {
+        this.active = true;
+        this._setCursor('grab');
+    }
+
+    deactivate() {
+        this.active = false;
+        this._setCursor('crosshair');
+    }
+
+    onPointerDown(clientX, clientY) {
+        this._drag = { on: true, startX: clientX, startY: clientY, origDx: this.dx, origDy: this.dy };
+        this._setCursor('grabbing');
+    }
+
+    onPointerMove(clientX, clientY) {
+        if (!this._drag.on) return;
+        this.dx = this._drag.origDx + (clientX - this._drag.startX);
+        this.dy = this._drag.origDy + (clientY - this._drag.startY);
+        this._applyTransform();
+    }
+
+    onPointerUp() {
+        this._drag.on = false;
+        this._setCursor('grab');
+    }
+
+    resetPan() {
+        this.dx = 0;
+        this.dy = 0;
+        this._applyTransform();
+    }
+
+    _applyTransform() {
+        const area = document.getElementById('canvas-area');
+        if (area) area.style.transform = `translate(${this.dx}px, ${this.dy}px)`;
+    }
+
+    _setCursor(cursor) {
+        const el = document.getElementById('draw-canvas');
+        if (el) el.style.cursor = cursor;
+    }
+}
+
+// =============================================================================
 // SEZIONE 13b — SelectManager
 // Strumento freccia/dito: selezione rettangolare e spostamento
 // =============================================================================
@@ -1952,6 +2041,7 @@ class SelectManager {
     // Disegna il rettangolo di selezione tratteggiato sull'overlay
     _drawSelectionRect(x, y, w, h) {
         const oc  = document.getElementById('overlay-canvas');
+        oc.style.pointerEvents = 'none'; // assicura che non intercetti i click
         const ctx = oc.getContext('2d');
         ctx.clearRect(0, 0, oc.width, oc.height);
         ctx.save();
@@ -2058,7 +2148,7 @@ class SelectManager {
             const ry = Math.min(y, this.startY);
             const rw = Math.abs(x - this.startX);
             const rh = Math.abs(y - this.startY);
-            if (rw > 5 && rh > 5) {
+            if (rw > 2 && rh > 2) {
                 this.selection = { x: rx, y: ry, w: rw, h: rh };
                 this.phase     = 'selected';
                 this._drawSelectionRect(rx, ry, rw, rh);
@@ -2114,11 +2204,71 @@ class SelectManager {
 }
 
 // =============================================================================
+// SEZIONE 13c — Sfondi da Google Drive
+// Carica e mostra le miniature della cartella "Sfondi" nel bg-popup.
+// =============================================================================
+
+async function loadDriveBackgrounds() {
+    const section = document.getElementById('bg-drive-section');
+    const grid    = document.getElementById('bg-drive-images');
+    if (!section || !grid) return;
+
+    // Mostra sezione solo se Drive connesso
+    if (typeof driveMgr === 'undefined' || !driveMgr || !driveMgr.isConnected()) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = 'block';
+    grid.innerHTML = '<div class="bg-drive-loading">Caricamento...</div>';
+
+    try {
+        const images = await driveMgr.listBackgrounds();
+        if (!images.length) {
+            grid.innerHTML = '<div class="bg-drive-empty">Nessun sfondo nella cartella Drive</div>';
+            return;
+        }
+        grid.innerHTML = '';
+        for (const img of images) {
+            const thumb = document.createElement('div');
+            thumb.className = 'bg-drive-thumb';
+            thumb.title = img.name;
+            if (img.thumbnailLink) {
+                thumb.style.backgroundImage = `url('${img.thumbnailLink}')`;
+                thumb.style.backgroundSize = 'cover';
+                thumb.style.backgroundPosition = 'center';
+            } else {
+                thumb.textContent = '\uD83D\uDDBC\uFE0F';
+            }
+            thumb.addEventListener('click', async () => {
+                toast('Caricamento sfondo...', 'info');
+                try {
+                    const dataURL = await driveMgr.loadBackgroundAsDataURL(img.id);
+                    const image = new Image();
+                    image.onload = () => {
+                        bgMgr.setImage(image);
+                        const popup = document.getElementById('bg-popup');
+                        if (popup) popup.style.display = 'none';
+                        toast('Sfondo applicato!', 'success');
+                    };
+                    image.src = dataURL;
+                } catch (err) {
+                    toast('Errore caricamento sfondo: ' + err.message, 'error');
+                }
+            });
+            grid.appendChild(thumb);
+        }
+    } catch (err) {
+        grid.innerHTML = `<div class="bg-drive-empty" style="color:#ef4444">Errore: ${err.message}</div>`;
+    }
+}
+
+// =============================================================================
 // SEZIONE 14 — INIT
 // Istanziazione globale dei manager e avvio dell'applicazione.
 // =============================================================================
 
-let bgMgr, brush, laserMgr, canvasMgr, toolbarMgr, textMgr, projectMgr, selectMgr;
+let bgMgr, brush, laserMgr, canvasMgr, toolbarMgr, textMgr, projectMgr, selectMgr, panMgr;
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Inizializza i manager nell'ordine corretto (le dipendenze prima)
@@ -2130,6 +2280,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('draw-canvas'),
         document.getElementById('bg-canvas')
     );
+    panMgr     = new PanManager();
     toolbarMgr = new ToolbarManager();
     textMgr    = new TextManager();
     projectMgr = new ProjectManager();
@@ -2144,8 +2295,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-export').addEventListener('click', () => canvasMgr.exportPNG());
     document.getElementById('btn-new').addEventListener('click',    () => projectMgr.newBoard());
 
-    // 3. Posizionamento area canvas (sotto header da 56px)
-    document.getElementById('canvas-area').style.top = '56px';
+    // 3. Posizionamento area canvas: gestito via CSS margin-top: 56px
 
     console.log('EduBoard v2 \u2014 pronto!');
     setTimeout(() => toast('Benvenuto in EduBoard! Clicca \u25b2 per gli strumenti', 'info'), 800);
