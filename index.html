@@ -43,22 +43,14 @@
                 </svg>
                 <span id="fullscreen-label">Espandi</span>
             </button>
-            <!-- Libreria lezioni Drive -->
-            <button class="hdr-btn" id="btn-library" title="Libreria lezioni (Google Drive)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-                </svg>
-                <span>Libreria</span>
-            </button>
             <!-- Connessione Drive -->
             <button class="hdr-btn" id="btn-drive" title="Connetti a Google Drive">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.44 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.21 6.21l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
                 </svg>
                 <span>Drive</span>
             </button>
-            <button class="hdr-btn hdr-btn--primary" id="btn-save" title="Salva">
+            <button class="hdr-btn hdr-btn--primary" id="btn-save" title="Salva la lavagna nel browser (localmente). Se Drive è connesso, salva anche sul tuo Google Drive.">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                 <span>Salva</span>
             </button>
@@ -179,6 +171,10 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><circle cx="17.5" cy="6.5" r="3.5"/><polygon points="12 14 20 22 4 22"/></svg>
                         <span>Forme</span>
                     </button>
+                    <button class="tool-btn" data-tool="geo" title="Strumenti geometrici" id="geo-tool-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 22 20 2 20"/><line x1="2" y1="20" x2="22" y2="20"/><line x1="7" y1="14" x2="17" y2="14"/></svg>
+                        <span>Geometria</span>
+                    </button>
                 </div>
 
                 <div class="tool-separator"></div>
@@ -217,6 +213,43 @@
 
         </div><!-- end floating-toolbar -->
     </div><!-- end toolbar-wrapper -->
+
+    <!-- Popup: Strumenti geometrici -->
+    <div id="geo-popup" class="popup-panel" style="display:none">
+        <div class="popup-title">Strumenti geometrici</div>
+        <div class="shape-grid">
+            <button class="shape-opt" id="btn-geo-ruler" title="Righello draggabile e ruotabile">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="4" y="14" width="32" height="12" rx="2"/>
+                    <line x1="10" y1="14" x2="10" y2="20"/>
+                    <line x1="16" y1="14" x2="16" y2="22"/>
+                    <line x1="22" y1="14" x2="22" y2="20"/>
+                    <line x1="28" y1="14" x2="28" y2="22"/>
+                </svg>
+                <span>Righello</span>
+            </button>
+            <button class="shape-opt" id="btn-geo-protractor" title="Goniometro draggabile">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 32 A16 16 0 0 1 34 32"/>
+                    <line x1="6" y1="32" x2="34" y2="32"/>
+                    <line x1="20" y1="32" x2="20" y2="16"/>
+                </svg>
+                <span>Goniometro</span>
+            </button>
+            <button class="shape-opt" id="btn-geo-compass" title="Compasso: click centro, trascina raggio">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="20" y1="4" x2="12" y2="32"/>
+                    <line x1="20" y1="4" x2="28" y2="32"/>
+                    <line x1="14" y1="20" x2="26" y2="20"/>
+                    <circle cx="20" cy="4" r="2" fill="currentColor"/>
+                </svg>
+                <span>Compasso</span>
+            </button>
+        </div>
+        <div class="shape-fill-row" style="font-size:0.75rem;color:var(--text-muted);padding:4px 8px 0">
+            Clicca per mostrare/nascondere. Trascina per spostare.
+        </div>
+    </div>
 
     <!-- Popup: Selezione forme -->
     <div id="shape-popup" class="popup-panel" style="display:none">
@@ -309,6 +342,7 @@
             <button class="bg-opt" data-bg="lines-12-aux" title="Righe 12mm con righino — 2ª elementare"><div class="bg-preview bg-p-lines-12-aux"></div><span>2ª elem.</span></button>
             <button class="bg-opt" data-bg="lines-9" title="Righe 9mm — 3ª elementare"><div class="bg-preview bg-p-lines-9"></div><span>3ª elem.</span></button>
             <button class="bg-opt" data-bg="lines-7" title="Righe 7mm — 4ª elementare"><div class="bg-preview bg-p-lines-7"></div><span>4ª elem.</span></button>
+            <button class="bg-opt" data-bg="lines-5" title="Righe 5mm — 5ª elementare / media"><div class="bg-preview bg-p-lines-5"></div><span>5ª elem.</span></button>
         </div>
     </div>
 
@@ -334,6 +368,25 @@
         <button id="update-btn">Aggiorna ora</button>
         <button id="dismiss-update" class="close-x">×</button>
     </div>
+
+    <!-- Linguetta libreria SINISTRA -->
+    <div id="lib-tab-left" class="lib-tab lib-tab--left" title="Apri libreria">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        <span>Libreria</span>
+    </div>
+
+    <!-- Linguetta libreria DESTRA -->
+    <div id="lib-tab-right" class="lib-tab lib-tab--right" title="Apri libreria">
+        <span>Libreria</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+    </div>
+
+    <!-- Pulsante exit fullscreen — semi-trasparente, solo in modalità fullscreen -->
+    <button id="btn-exit-fullscreen" class="exit-fs-btn" title="Esci dallo schermo intero (F11)" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
+        </svg>
+    </button>
 
     <script src="app.js"></script>
 

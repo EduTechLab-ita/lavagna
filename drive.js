@@ -1002,11 +1002,6 @@ function initDrive() {
         driveConnectBtn.update();
     }
 
-    // ── Pulsante Libreria (header) ─────────────────────────────────────────
-    document.getElementById('btn-library')?.addEventListener('click', () => {
-        libraryMgr.toggle();
-    });
-
     // ── Pulsante Drive (header) ────────────────────────────────────────────
     document.getElementById('btn-drive')?.addEventListener('click', () => {
         driveConnectBtn.handleClick();
@@ -1014,7 +1009,10 @@ function initDrive() {
 
     // ── Pulsante chiudi pannello libreria ──────────────────────────────────
     document.getElementById('library-close')?.addEventListener('click', () => {
-        libraryMgr.close();
+        const panel = document.getElementById('library-panel');
+        const side  = panel?.dataset.side || 'left';
+        panel?.classList.remove('open');
+        document.getElementById(`lib-tab-${side}`)?.classList.remove('lib-tab--active');
     });
 
     // ── Pulsante "Nuova cartella" nel pannello ─────────────────────────────

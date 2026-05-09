@@ -785,12 +785,11 @@ button {
     background: white;
     background-image:
         repeating-linear-gradient(
-            transparent 0px, transparent 14px,
-            #fca5a5 14px, #fca5a5 15px,
-            transparent 15px, transparent 22px,
-            #93c5fd 22px, #93c5fd 23px
+            transparent 0px, transparent 12px,
+            #f87171 12px, #f87171 14px,
+            transparent 14px, transparent 20px,
+            #60a5fa 20px, #60a5fa 22px
         );
-    background-size: 100% 23px;
 }
 
 /* 2ª elementare: righe blu + righino rosso più vicino */
@@ -798,20 +797,19 @@ button {
     background: white;
     background-image:
         repeating-linear-gradient(
-            transparent 0px, transparent 10px,
-            #fca5a5 10px, #fca5a5 11px,
-            transparent 11px, transparent 18px,
-            #93c5fd 18px, #93c5fd 19px
+            transparent 0px, transparent 8px,
+            #f87171 8px, #f87171 10px,
+            transparent 10px, transparent 16px,
+            #60a5fa 16px, #60a5fa 18px
         );
-    background-size: 100% 19px;
 }
 
 /* 3ª elementare: righe da 9mm */
 .bg-p-lines-9 {
     background: white;
     background-image: repeating-linear-gradient(
-        transparent 0px, transparent 13px,
-        #93c5fd 13px, #93c5fd 14px
+        transparent 0px, transparent 11px,
+        #60a5fa 11px, #60a5fa 13px
     );
 }
 
@@ -819,8 +817,8 @@ button {
 .bg-p-lines-7 {
     background: white;
     background-image: repeating-linear-gradient(
-        transparent 0px, transparent 9px,
-        #93c5fd 9px, #93c5fd 10px
+        transparent 0px, transparent 8px,
+        #60a5fa 8px, #60a5fa 10px
     );
 }
 
@@ -1298,4 +1296,117 @@ button {
         background: rgba(0,0,0,0.5);
         z-index: -1;
     }
+}
+
+
+/* ==========================================================================
+   GEO POPUP — pulsanti strumenti geometrici attivi
+   ========================================================================== */
+
+.shape-opt.geo-active {
+    border-color: var(--accent);
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--accent);
+}
+
+
+/* ===== LINGUETTE LIBRERIA LATERALI ===== */
+.lib-tab {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 210;
+    cursor: pointer;
+    background: rgba(30, 41, 59, 0.65);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.75);
+    padding: 14px 7px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+    touch-action: none;
+    transition: background 0.2s, color 0.2s, opacity 0.2s;
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+    writing-mode: vertical-rl;  /* testo verticale */
+    text-orientation: mixed;
+}
+.lib-tab--left {
+    left: 0;
+    border-radius: 0 10px 10px 0;
+    border-left: none;
+}
+.lib-tab--right {
+    right: 0;
+    border-radius: 10px 0 0 10px;
+    border-right: none;
+}
+.lib-tab:hover, .lib-tab.lib-tab--active {
+    background: rgba(59, 130, 246, 0.75);
+    color: white;
+}
+.lib-tab svg {
+    flex-shrink: 0;
+}
+/* Nasconde span testo su schermi piccoli */
+@media (max-width: 600px) {
+    .lib-tab span { display: none; }
+}
+
+/* Libreria aperta da destra */
+.library-panel.from-right {
+    left: auto;
+    right: 0;
+    border-right: none;
+    border-left: 1px solid var(--border);
+    transform: translateX(100%);  /* nascosta a destra */
+}
+.library-panel.from-right.open {
+    transform: translateX(0);
+}
+/* Close button a destra quando pannello è da sinistra */
+.library-panel:not(.from-right) #library-close { margin-left: auto; }
+
+
+/* ===== PULSANTE EXIT FULLSCREEN ===== */
+.exit-fs-btn {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 500;
+    background: rgba(15, 23, 42, 0.35);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, color 0.2s;
+    padding: 0;
+}
+.exit-fs-btn:hover {
+    background: rgba(15, 23, 42, 0.75);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* ===== FULLSCREEN MODE — header nascosto ===== */
+#app-header {
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+body.fullscreen-mode #app-header {
+    transform: translateY(-100%);
+    opacity: 0;
+    pointer-events: none;
+}
+body.fullscreen-mode #canvas-area {
+    top: 0 !important;
 }

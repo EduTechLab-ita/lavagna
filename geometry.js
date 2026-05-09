@@ -71,6 +71,7 @@ class RulerTool {
         this._renderMarks();
         this._setupDrag();
         this._setupRotate();
+        this._setupResize();
         wrapper.querySelector('#ruler-close').addEventListener('click', () => this.hide());
     }
 
@@ -123,6 +124,11 @@ class RulerTool {
         ctx.stroke();
     }
 
+    // Alias usato anche dalla logica di resize
+    _drawTicks() {
+        this._renderMarks();
+    }
+
     // ------------------------------------------------------------------
     // Visibilità
     // ------------------------------------------------------------------
@@ -136,6 +142,10 @@ class RulerTool {
     hide() {
         this.el.style.display = 'none';
         this.visible = false;
+    }
+
+    isVisible() {
+        return this.el && this.el.style.display !== 'none';
     }
 
     // ------------------------------------------------------------------
@@ -165,6 +175,7 @@ class RulerTool {
         const onStart = (e) => {
             // Non avviare il drag se si clicca su handle o chiudi
             if (e.target.id === 'ruler-rotate' || e.target.id === 'ruler-close') return;
+            if (e.target.classList.contains('ruler-resize-handle')) return;
             e.preventDefault();
             const pt = _getPoint(e);
             this._drag = {
@@ -245,6 +256,39 @@ class RulerTool {
     }
 
     // ------------------------------------------------------------------
+    // Resize handle
+    // ------------------------------------------------------------------
+
+    _setupResize() {
+        const resizeHandle = document.createElement('div');
+        resizeHandle.className = 'ruler-resize-handle';
+        resizeHandle.textContent = '⟺';
+        resizeHandle.title = 'Ridimensiona il righello';
+        this.body.appendChild(resizeHandle);
+
+        resizeHandle.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            const startX = e.clientX;
+            const startW = this.body.offsetWidth;
+            resizeHandle.setPointerCapture(e.pointerId);
+
+            const onMove = (ev) => {
+                const newW = Math.min(1200, Math.max(200, startW + (ev.clientX - startX)));
+                this.body.style.width = newW + 'px';
+                this.canvas.width = newW - 50; // spazio per handle rotate + close
+                this._drawTicks();
+            };
+            const onEnd = () => {
+                resizeHandle.removeEventListener('pointermove', onMove);
+                resizeHandle.removeEventListener('pointerup', onEnd);
+            };
+            resizeHandle.addEventListener('pointermove', onMove);
+            resizeHandle.addEventListener('pointerup', onEnd);
+        });
+    }
+
+    // ------------------------------------------------------------------
     // Snap alla retta del righello
     // ------------------------------------------------------------------
 
@@ -277,6 +321,7 @@ class ProtractorTool {
         this.el      = null;
         this.cvs     = null;
         this.visible = false;
+        this.scale   = 1.0;
 
         this.x = 200;
         this.y = 120;
@@ -295,7 +340,9 @@ class ProtractorTool {
         wrapper.style.display = 'none';
 
         wrapper.innerHTML = `
-            <canvas id="protractor-canvas" width="300" height="160"></canvas>
+            <div class="protractor-body">
+                <canvas id="protractor-canvas" width="300" height="160"></canvas>
+            </div>
             <div class="geo-close" id="protractor-close" title="Chiudi">&#215;</div>`;
 
         document.body.appendChild(wrapper);
@@ -305,6 +352,7 @@ class ProtractorTool {
 
         this._render();
         this._setupDrag();
+        this._setupResize();
         wrapper.querySelector('#protractor-close').addEventListener('click', () => this.hide());
     }
 
@@ -398,6 +446,10 @@ class ProtractorTool {
         this.visible = false;
     }
 
+    isVisible() {
+        return this.el && this.el.style.display !== 'none';
+    }
+
     // ------------------------------------------------------------------
     // Drag
     // ------------------------------------------------------------------
@@ -407,6 +459,7 @@ class ProtractorTool {
 
         const onStart = (e) => {
             if (e.target.id === 'protractor-close') return;
+            if (e.target.classList.contains('protractor-resize-handle')) return;
             e.preventDefault();
             const pt = _getPoint(e);
             this._drag = {
@@ -438,6 +491,40 @@ class ProtractorTool {
         el.addEventListener('pointerdown',  onStart);
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup',   onEnd);
+    }
+
+    // ------------------------------------------------------------------
+    // Resize handle
+    // ------------------------------------------------------------------
+
+    _setupResize() {
+        const resizeHandle = document.createElement('div');
+        resizeHandle.className = 'protractor-resize-handle';
+        resizeHandle.textContent = '⟺';
+        resizeHandle.title = 'Ridimensiona il goniometro';
+        this.el.appendChild(resizeHandle);
+
+        resizeHandle.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            const startX = e.clientX;
+            const startScale = this.scale;
+            resizeHandle.setPointerCapture(e.pointerId);
+
+            const onMove = (ev) => {
+                const delta = (ev.clientX - startX) / 100;
+                this.scale = Math.min(2.5, Math.max(0.5, startScale + delta));
+                const body = this.el.querySelector('.protractor-body');
+                body.style.transform = `scale(${this.scale})`;
+                body.style.transformOrigin = 'center bottom';
+            };
+            const onEnd = () => {
+                resizeHandle.removeEventListener('pointermove', onMove);
+                resizeHandle.removeEventListener('pointerup', onEnd);
+            };
+            resizeHandle.addEventListener('pointermove', onMove);
+            resizeHandle.addEventListener('pointerup', onEnd);
+        });
     }
 }
 
@@ -560,7 +647,6 @@ class GeometryManager {
         this.ruler.create();
         this.protractor.create();
 
-        this._injectToolbarButtons();
         this._setupButtons();
         this._patchCanvasManager();
     }
@@ -661,12 +747,34 @@ class GeometryManager {
     background: rgba(0, 0, 0, 0.55);
 }
 
+.ruler-resize-handle {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 32px;
+    cursor: ew-resize;
+    color: rgba(80, 40, 0, 0.6);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    z-index: 10;
+}
+
 /* ============================================================
    GONIOMETRO
    ============================================================ */
 
 #protractor-tool {
     position: fixed;
+}
+
+.protractor-body {
+    display: inline-block;
+    transform-origin: center bottom;
 }
 
 #protractor-canvas {
@@ -696,11 +804,26 @@ class GeometryManager {
     background: rgba(0, 0, 0, 0.55);
 }
 
+.protractor-resize-handle {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 18px;
+    height: 18px;
+    cursor: ew-resize;
+    color: rgba(59, 130, 246, 0.7);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+}
+
 /* ============================================================
-   GRUPPO GEOMETRIA NELLA TOOLBAR
+   STATO ATTIVO BOTTONI GEO
    ============================================================ */
 
-#geo-tool-group .tool-btn.geo-active {
+.tool-btn.geo-active {
     background: rgba(59, 130, 246, 0.20);
     color: #93c5fd;
 }
@@ -709,97 +832,61 @@ class GeometryManager {
     }
 
     // ------------------------------------------------------------------
-    // Inietta il gruppo pulsanti nella toolbar
-    // ------------------------------------------------------------------
-
-    _injectToolbarButtons() {
-        // Trova la .main-row nella toolbar per appendere il separatore + gruppo
-        const mainRow = document.querySelector('.toolbar-row.main-row');
-        if (!mainRow) return;
-
-        const sep = document.createElement('div');
-        sep.className = 'tool-separator';
-
-        const group = document.createElement('div');
-        group.className = 'tool-group';
-        group.id        = 'geo-tool-group';
-        group.innerHTML = `
-            <button class="tool-btn" data-tool="ruler" id="btn-geo-ruler" title="Righello">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <rect x="2" y="8" width="20" height="8" rx="1.5"/>
-                    <line x1="6"  y1="8" x2="6"  y2="12"/>
-                    <line x1="9"  y1="8" x2="9"  y2="11"/>
-                    <line x1="12" y1="8" x2="12" y2="12"/>
-                    <line x1="15" y1="8" x2="15" y2="11"/>
-                    <line x1="18" y1="8" x2="18" y2="12"/>
-                </svg>
-                <span>Righello</span>
-            </button>
-            <button class="tool-btn" data-tool="protractor" id="btn-geo-protractor" title="Goniometro">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path d="M3 18 A9 9 0 0 1 21 18"/>
-                    <line x1="3" y1="18" x2="21" y2="18"/>
-                    <line x1="12" y1="9"  x2="12" y2="18"/>
-                    <line x1="7"  y1="11" x2="8.5" y2="13.5"/>
-                    <line x1="17" y1="11" x2="15.5" y2="13.5"/>
-                </svg>
-                <span>Goniometro</span>
-            </button>
-            <button class="tool-btn" data-tool="compass" id="btn-geo-compass" title="Compasso">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <circle cx="12" cy="12" r="2"/>
-                    <line x1="12" y1="2"  x2="12" y2="10"/>
-                    <line x1="12" y1="14" x2="12" y2="22"/>
-                    <line x1="2"  y1="12" x2="10" y2="12"/>
-                    <line x1="14" y1="12" x2="22" y2="12"/>
-                </svg>
-                <span>Compasso</span>
-            </button>`;
-
-        mainRow.appendChild(sep);
-        mainRow.appendChild(group);
-    }
-
-    // ------------------------------------------------------------------
-    // Collegamento pulsanti
+    // Collegamento pulsanti nel geo-popup
     // ------------------------------------------------------------------
 
     _setupButtons() {
-        const btnRuler      = document.getElementById('btn-geo-ruler');
-        const btnProtractor = document.getElementById('btn-geo-protractor');
-        const btnCompass    = document.getElementById('btn-geo-compass');
-
+        // Bottone Righello
+        const btnRuler = document.getElementById('btn-geo-ruler');
         if (btnRuler) {
             btnRuler.addEventListener('click', () => {
-                if (this.ruler.visible) {
+                if (this.ruler.isVisible()) {
                     this.ruler.hide();
                     btnRuler.classList.remove('geo-active');
                 } else {
-                    this.showRuler();
+                    this.ruler.show();
                     btnRuler.classList.add('geo-active');
+                    // Chiudi popup
+                    const popup = document.getElementById('geo-popup');
+                    if (popup) popup.style.display = 'none';
                 }
             });
         }
 
-        if (btnProtractor) {
-            btnProtractor.addEventListener('click', () => {
-                if (this.protractor.visible) {
+        // Bottone Goniometro
+        const btnProt = document.getElementById('btn-geo-protractor');
+        if (btnProt) {
+            btnProt.addEventListener('click', () => {
+                if (this.protractor.isVisible()) {
                     this.protractor.hide();
-                    btnProtractor.classList.remove('geo-active');
+                    btnProt.classList.remove('geo-active');
                 } else {
-                    this.showProtractor();
-                    btnProtractor.classList.add('geo-active');
+                    this.protractor.show();
+                    btnProt.classList.add('geo-active');
+                    const popup = document.getElementById('geo-popup');
+                    if (popup) popup.style.display = 'none';
                 }
             });
         }
 
-        if (btnCompass) {
-            btnCompass.addEventListener('click', () => {
-                // Compasso è uno strumento di disegno: cambia CONFIG.currentTool
-                if (CONFIG.currentTool === 'compass' && this.compass.active) {
-                    this._deactivateCompass(btnCompass);
+        // Bottone Compasso
+        const btnComp = document.getElementById('btn-geo-compass');
+        if (btnComp) {
+            btnComp.addEventListener('click', () => {
+                if (CONFIG.currentTool === 'compass') {
+                    // Disattiva
+                    CONFIG.currentTool = 'pen';
+                    btnComp.classList.remove('geo-active');
+                    this.compass.deactivate();
+                    document.querySelectorAll('.tool-btn[data-tool="pen"]').forEach(b => b.classList.add('active'));
+                    toast('Compasso disattivato', 'info');
                 } else {
-                    this._activateCompass(btnCompass);
+                    CONFIG.currentTool = 'compass';
+                    btnComp.classList.add('geo-active');
+                    document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
+                    const popup = document.getElementById('geo-popup');
+                    if (popup) popup.style.display = 'none';
+                    this.compass.activate();
                 }
             });
         }
@@ -808,13 +895,13 @@ class GeometryManager {
     _activateCompass(btn) {
         // Deseleziona altri tool-btn
         document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+        if (btn) btn.classList.add('active');
         CONFIG.currentTool = 'compass';
         this.compass.activate();
     }
 
     _deactivateCompass(btn) {
-        btn.classList.remove('active');
+        if (btn) btn.classList.remove('active');
         CONFIG.currentTool = 'pen';
         this.compass.deactivate();
         // Ripristina il cursore
@@ -865,8 +952,8 @@ class GeometryManager {
                 return;
             }
 
-            // Snap al righello per penna/matita/pastello
-            if (geo.ruler.visible && CONFIG.isDrawing &&
+            // Snap al righello per penna/matita/pastello se righello visibile
+            if (geo.ruler.isVisible() && CONFIG.isDrawing &&
                 ['pen', 'pencil', 'pastel', 'marker'].includes(CONFIG.currentTool)) {
 
                 // Override getCoords temporaneamente con lo snap

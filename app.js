@@ -125,7 +125,7 @@ class BackgroundManager {
         }
 
         // Sfondi predefiniti
-        ctx.strokeStyle = '#bfdbfe'; // blue-200 — elegante e leggero
+        ctx.strokeStyle = '#94a3b8'; // slate-400 — visibile ma non invadente
         ctx.lineWidth = 1;
 
         switch (this.currentBg) {
@@ -955,6 +955,10 @@ class ToolbarManager {
         this._setupShapePanel();
         this._setupBgPanel();
         this._setupColorPalettePopup(); // Feature 2
+
+        // Mostra la riga opzioni subito (penna selezionata di default)
+        this._updateOptionsRow();
+        this._updateColorSwatches(CONFIG.currentTool);
     }
 
     show() {
@@ -1008,6 +1012,11 @@ class ToolbarManager {
             CONFIG.currentTool = 'shape';
             this._updateActiveBtn(btn);
             this._updateOptionsRow();
+            return;
+        }
+        if (tool === 'geo') {
+            this._togglePopup('geo-popup', btn);
+            this._updateActiveBtn(btn);
             return;
         }
         if (tool === 'upload-bg') {
@@ -1432,37 +1441,146 @@ function setupKeyboard() {
 }
 
 // =============================================================================
-// SEZIONE 12 — Feature 5: Fullscreen API
+// SEZIONE 12 — Feature 5: Fullscreen API (con header nascosto)
 // =============================================================================
 
 function setupFullscreen() {
-    const btn = document.getElementById('btn-fullscreen');
-    if (!btn) return;
+    const btnFs    = document.getElementById('btn-fullscreen');
+    const btnExit  = document.getElementById('btn-exit-fullscreen');
+    const icon     = document.getElementById('fullscreen-icon');
+    const label    = document.getElementById('fullscreen-label');
 
-    btn.addEventListener('click', () => {
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen();
+    function enterFs() {
+        const el = document.documentElement;
+        if (el.requestFullscreen)            el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+        else if (el.mozRequestFullScreen)    el.mozRequestFullScreen();
+    }
+
+    function exitFs() {
+        if (document.exitFullscreen)            document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        else if (document.mozCancelFullScreen)  document.mozCancelFullScreen();
+    }
+
+    function isFullscreen() {
+        return !!(document.fullscreenElement ||
+                  document.webkitFullscreenElement ||
+                  document.mozFullScreenElement);
+    }
+
+    function applyFullscreenUI(active) {
+        if (active) {
+            document.body.classList.add('fullscreen-mode');
+            if (btnExit) btnExit.style.display = 'flex';
+            if (icon)    icon.innerHTML = '<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>';
+            if (label)   label.textContent = 'Riduci';
         } else {
-            document.exitFullscreen();
+            document.body.classList.remove('fullscreen-mode');
+            if (btnExit) btnExit.style.display = 'none';
+            if (icon)    icon.innerHTML = '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>';
+            if (label)   label.textContent = 'Espandi';
         }
-    });
+    }
 
-    document.addEventListener('fullscreenchange', () => {
-        const isFS = !!document.fullscreenElement;
-        const icon = document.getElementById('fullscreen-icon');
-        const label = document.getElementById('fullscreen-label');
-        if (icon) {
-            icon.innerHTML = isFS
-                ? '<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>'
-                : '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>';
-        }
-        if (label) label.textContent = isFS ? 'Esci' : 'Espandi';
-    });
+    if (btnFs)   btnFs.addEventListener('click', () => isFullscreen() ? exitFs() : enterFs());
+    if (btnExit) btnExit.addEventListener('click', exitFs);
 
-    // F11 → fullscreen
+    // Tasto F11 (intercept + fullscreen API)
     document.addEventListener('keydown', e => {
-        if (e.key === 'F11') { e.preventDefault(); btn.click(); }
+        if (e.key === 'F11') { e.preventDefault(); isFullscreen() ? exitFs() : enterFs(); }
     });
+
+    // Ascolta cambiamenti fullscreen (es. utente preme Esc)
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange'].forEach(ev => {
+        document.addEventListener(ev, () => {
+            applyFullscreenUI(isFullscreen());
+            // Ridisegna il canvas dopo il resize
+            setTimeout(() => { if (typeof canvasMgr !== 'undefined') canvasMgr.resize(); }, 100);
+        });
+    });
+}
+
+// =============================================================================
+// SEZIONE 12b — Linguette libreria laterali + apertura da lato
+// =============================================================================
+
+function setupLibraryTabs() {
+    ['left', 'right'].forEach(side => {
+        const tab = document.getElementById(`lib-tab-${side}`);
+        if (!tab) return;
+
+        // Ripristina posizione salvata
+        const savedTop = localStorage.getItem(`lib-tab-${side}-top`);
+        if (savedTop) {
+            tab.style.top    = savedTop;
+            tab.style.transform = 'none';
+        }
+
+        let dragStartY = 0, dragStartTop = 0, isDragging = false;
+
+        tab.addEventListener('pointerdown', (e) => {
+            dragStartY   = e.clientY;
+            dragStartTop = tab.getBoundingClientRect().top;
+            isDragging   = false;
+            tab.setPointerCapture(e.pointerId);
+        });
+
+        tab.addEventListener('pointermove', (e) => {
+            const dy = Math.abs(e.clientY - dragStartY);
+            if (dy > 5) isDragging = true;
+            if (!isDragging) return;
+            const newTop = Math.max(40, Math.min(window.innerHeight - 80,
+                dragStartTop + (e.clientY - dragStartY)));
+            tab.style.top       = newTop + 'px';
+            tab.style.transform = 'none';
+            localStorage.setItem(`lib-tab-${side}-top`, newTop + 'px');
+        });
+
+        tab.addEventListener('pointerup', (e) => {
+            if (!isDragging) {
+                // È un click: apri/chiudi libreria dal lato corrispondente
+                if (typeof libraryMgr !== 'undefined' && libraryMgr) {
+                    openLibraryFrom(side);
+                } else {
+                    toast('Connetti Google Drive per usare la libreria', 'info');
+                }
+            }
+        });
+    });
+}
+
+function openLibraryFrom(side) {
+    const panel = document.getElementById('library-panel');
+    if (!panel) return;
+
+    const isOpen = panel.classList.contains('open');
+    const currentSide = panel.dataset.side || 'left';
+
+    if (isOpen && currentSide === side) {
+        // Chiudi
+        panel.classList.remove('open');
+        document.getElementById(`lib-tab-${side}`)?.classList.remove('lib-tab--active');
+        return;
+    }
+
+    // Aggiorna lato
+    panel.dataset.side = side;
+    if (side === 'right') {
+        panel.classList.add('from-right');
+    } else {
+        panel.classList.remove('from-right');
+    }
+
+    // Chiudi tab opposta
+    const otherSide = side === 'left' ? 'right' : 'left';
+    document.getElementById(`lib-tab-${otherSide}`)?.classList.remove('lib-tab--active');
+    document.getElementById(`lib-tab-${side}`)?.classList.add('lib-tab--active');
+
+    panel.classList.add('open');
+    if (typeof libraryMgr !== 'undefined' && libraryMgr) {
+        libraryMgr.refresh();
+    }
 }
 
 // =============================================================================
@@ -1516,6 +1634,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupKeyboard();
     setupFullscreen();    // Feature 5
     setupProjectName();   // Feature 6
+    setupLibraryTabs();   // Feature A: linguette libreria laterali
 
     // 2. Pulsanti header
     document.getElementById('btn-save').addEventListener('click',   () => projectMgr.save());
