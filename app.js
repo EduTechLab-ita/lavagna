@@ -784,11 +784,13 @@ class CanvasManager {
         this.bgMgr.resize(W, H);
         this.laser.resize(W, H);
 
-        // Ripristina disegno scalato al nuovo size
+        // Ripristina disegno senza distorsione (nessuna scalatura, mantiene proporzioni)
         if (savedURL && prevW > 0) {
             const img = new Image();
             img.onload = () => {
-                this.ctx.drawImage(img, 0, 0, W, H);
+                // Disegna all'origine senza scalare: il canvas è 3× viewport,
+                // quindi c'è abbondante spazio senza dover stirare il contenuto.
+                this.ctx.drawImage(img, 0, 0);
             };
             img.src = savedURL;
         }
@@ -1289,6 +1291,10 @@ class ToolbarManager {
         document.querySelectorAll('.bg-opt').forEach(btn => {
             btn.addEventListener('click', () => {
                 bgMgr.setBackground(btn.dataset.bg);
+                // Memorizza sfondo per la cartella corrente (se Drive connesso)
+                if (typeof libraryMgr !== 'undefined' && libraryMgr?.currentFolderId) {
+                    localStorage.setItem('folder-bg-' + libraryMgr.currentFolderId, btn.dataset.bg);
+                }
                 document.querySelectorAll('.bg-opt').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 this._closeAllPopups();
@@ -2348,11 +2354,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2. Pulsanti header
     document.getElementById('btn-save').addEventListener('click',   () => projectMgr.save());
-    document.getElementById('btn-export').addEventListener('click', () => canvasMgr.exportPNG());
+    document.getElementById('btn-export').addEventListener('click', () => _printBoard());
     document.getElementById('btn-new').addEventListener('click',    () => projectMgr.newBoard());
 
-    // 3. Posizionamento area canvas: gestito via CSS margin-top: 56px
+    // 3. Avviso modifiche non salvate alla chiusura finestra/tab
+    window.addEventListener('beforeunload', (e) => {
+        if (CONFIG.isDirty) {
+            e.preventDefault();
+            e.returnValue = 'Hai modifiche non salvate. Vuoi davvero uscire?';
+        }
+    });
 
     console.log('EduBoard v2 \u2014 pronto!');
     setTimeout(() => toast('Benvenuto in EduBoard! Clicca \u25b2 per gli strumenti', 'info'), 800);
 });
+
+// =============================================================================
+// SEZIONE 14 — STAMPA PDF
+// Apre finestra di stampa con l'intera lavagna (come OneNote)
+// =============================================================================
+
+function _printBoard() {
+    // Componi bg + draw in un canvas temporaneo
+    const tmp    = document.createElement('canvas');
+    tmp.width    = canvasMgr.canvas.width;
+    tmp.height   = canvasMgr.canvas.height;
+    const ctx    = tmp.getContext('2d');
+    const bgCvs  = document.getElementById('bg-canvas');
+    if (bgCvs) ctx.drawImage(bgCvs, 0, 0);
+    ctx.drawImage(canvasMgr.canvas, 0, 0);
+    const dataURL = tmp.toDataURL('image/png');
+
+    const win = window.open('', '_blank');
+    if (!win) { toast('Popup bloccato — abilita i popup per stampare.', 'error'); return; }
+    win.document.write(`<!DOCTYPE html><html><head><title>EduBoard \u2014 Stampa</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh}
+img{max-width:100%;max-height:100vh;object-fit:contain}
+@media print{body{margin:0}img{width:100%;height:100vh;object-fit:contain;page-break-after:avoid}}
+</style></head><body>
+<img src="${dataURL}">
+<script>window.onload=function(){window.print();setTimeout(function(){window.close();},1000)}<\/script>
+</body></html>`);
+    win.document.close();
+}

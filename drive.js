@@ -45,6 +45,7 @@ class DriveManager {
         // Stato connessione
         this.connected   = false;
         this.userEmail   = '';
+        this.userName    = '';   // nome visualizzato (da userinfo API)
 
         // ID cartelle Drive (cache in sessionStorage)
         this.rootFolderId    = null;   // "EduBoard"
@@ -82,6 +83,7 @@ class DriveManager {
                         // Recupera email utente
                         const info = await this._apiFetch('https://www.googleapis.com/oauth2/v2/userinfo');
                         this.userEmail = info.email || '';
+                        this.userName  = info.given_name || info.name || '';
 
                         // Inizializza struttura cartelle
                         await this._ensureRootFolder();
@@ -182,6 +184,7 @@ class DriveManager {
                 accessToken:     this.accessToken,
                 tokenExpiry:     this.tokenExpiry,
                 userEmail:       this.userEmail,
+                userName:        this.userName,
                 rootFolderId:    this.rootFolderId,
                 lessonsFolderId: this.lessonsFolderId,
                 bgFolderId:      this.bgFolderId,
@@ -813,6 +816,8 @@ class LibraryManager {
             document.getElementById('project-name').textContent = name;
 
             toast('Lezione "' + name + '" caricata!', 'success');
+            // Memorizza come ultima lezione aperta per auto-open al prossimo avvio
+            localStorage.setItem('eduboard_last_lesson', JSON.stringify({ fileId, fileName }));
             this.close();
         } catch (err) {
             toast('Errore apertura lezione: ' + err.message, 'error');
@@ -931,6 +936,14 @@ class LibraryManager {
         document.querySelectorAll('.tree-item.selected').forEach(el => el.classList.remove('selected'));
         itemEl.classList.add('selected');
         this.currentFolderId = folderId;
+        // Applica lo sfondo memorizzato per questa cartella (se presente)
+        const savedBg = localStorage.getItem('folder-bg-' + folderId);
+        if (savedBg && typeof bgMgr !== 'undefined') {
+            bgMgr.setBackground(savedBg);
+            document.querySelectorAll('.bg-opt').forEach(b => b.classList.remove('active'));
+            const btn = document.querySelector(`.bg-opt[data-bg="${savedBg}"]`);
+            if (btn) btn.classList.add('active');
+        }
     }
 
     /** Aggiorna il banner di stato Drive nel pannello. */
@@ -938,7 +951,8 @@ class LibraryManager {
         const statusEl = document.getElementById('library-drive-status');
         if (!statusEl) return;
         if (this.drive.isConnected()) {
-            statusEl.innerHTML = `<span class="drive-status-ok">☁️ ${this._esc(this.drive.userEmail)}</span>`;
+            const display = this.drive.userName || this.drive.userEmail;
+            statusEl.innerHTML = `<span class="drive-status-ok">☁️ ${this._esc(display)}</span>`;
         } else {
             statusEl.innerHTML = `<span class="drive-status-off">Drive non connesso</span>`;
         }
@@ -1120,6 +1134,27 @@ class LibraryManager {
 
 
 // =============================================================================
+// SEZIONE 2b — UTILITY
+// =============================================================================
+
+/**
+ * Apre automaticamente l'ultima lezione usata, se il Drive è connesso
+ * e la lavagna non ha modifiche non salvate.
+ */
+async function _autoOpenLastLesson() {
+    try {
+        if (!driveMgr?.isConnected() || !libraryMgr) return;
+        if (typeof CONFIG !== 'undefined' && CONFIG.isDirty) return; // non sovrascrivere lavoro in corso
+        const raw = localStorage.getItem('eduboard_last_lesson');
+        if (!raw) return;
+        const last = JSON.parse(raw);
+        if (!last?.fileId) return;
+        await libraryMgr.openLesson(last.fileId, last.fileName || 'ultima lezione');
+    } catch (_) {}
+}
+
+
+// =============================================================================
 // SEZIONE 3 — DriveConnectButton
 // Gestisce il pulsante Drive nell'header e il mini-pannello di stato
 // =============================================================================
@@ -1142,8 +1177,18 @@ class DriveConnectButton {
         } else if (this.drive.isConnected()) {
             this.btn.classList.add('drive-connected');
             this.btn.title = 'Drive — connesso (' + this.drive.userEmail + ')';
+            // Mostra il primo nome dell'utente invece di "Drive"
+            const span = this.btn.querySelector('span');
+            if (span) {
+                const firstName = this.drive.userName
+                    ? this.drive.userName.split(' ')[0]
+                    : this.drive.userEmail.split('@')[0];
+                span.textContent = firstName;
+            }
         } else {
             this.btn.title = 'Connetti a Google Drive';
+            const span = this.btn.querySelector('span');
+            if (span) span.textContent = 'Drive';
         }
     }
 
@@ -1155,7 +1200,10 @@ class DriveConnectButton {
             try {
                 await this.drive.connect();
                 this.update();
-                toast('Google Drive connesso! Benvenuto, ' + this.drive.userEmail, 'success');
+                const greeting = this.drive.userName || this.drive.userEmail;
+                toast('Google Drive connesso! Benvenuto, ' + greeting, 'success');
+                // Auto-apri ultima lezione
+                setTimeout(() => _autoOpenLastLesson(), 800);
             } catch (_) {}
         }
     }
@@ -1335,6 +1383,8 @@ function initDrive() {
             if (ok) {
                 driveConnectBtn.update();
                 libraryMgr._updateDriveStatus();
+                // Auto-apri ultima lezione (con delay per dare tempo al DOM di caricarsi)
+                setTimeout(() => _autoOpenLastLesson(), 1000);
             }
         });
     }
