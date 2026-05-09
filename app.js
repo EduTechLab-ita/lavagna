@@ -760,9 +760,11 @@ class CanvasManager {
     }
 
     resize() {
-        const W = window.innerWidth;
+        const vW = window.innerWidth;
         const headerH = document.body.classList.contains('fullscreen-mode') ? 0 : 56;
-        const H = window.innerHeight - headerH;
+        const vH = window.innerHeight - headerH;
+        const W = vW * 3;   // canvas 3× viewport per simulare area infinita
+        const H = vH * 3;
 
         // Salva disegno prima del resize
         const savedURL = this.canvas.width > 0 ? this.canvas.toDataURL() : null;
@@ -770,8 +772,15 @@ class CanvasManager {
 
         this.canvas.width = W;
         this.canvas.height = H;
+        this.canvas.style.width  = W + 'px';
+        this.canvas.style.height = H + 'px';
         this.overlayCanvas.width = W;
         this.overlayCanvas.height = H;
+        this.overlayCanvas.style.width  = W + 'px';
+        this.overlayCanvas.style.height = H + 'px';
+        // Nota: bgCanvas non ha stile gestito qui, è gestito da bgMgr
+        const bgCvs = document.getElementById('bg-canvas');
+        if (bgCvs) { bgCvs.style.width = W + 'px'; bgCvs.style.height = H + 'px'; }
         this.bgMgr.resize(W, H);
         this.laser.resize(W, H);
 
@@ -783,6 +792,9 @@ class CanvasManager {
             };
             img.src = savedURL;
         }
+
+        // Ricentra la vista dopo il resize
+        if (typeof panMgr !== 'undefined' && panMgr) panMgr.centerView();
     }
 
     getCoords(e) {
@@ -2004,11 +2016,23 @@ class PanManager {
         this.dx = 0;
         this.dy = 0;
         this._applyTransform();
+        // Rimuovi eventuale transform su canvas-area (legacy)
+        const area = document.getElementById('canvas-area');
+        if (area) area.style.transform = '';
+    }
+
+    centerView() {
+        // Il canvas è 3× viewport, partiamo da 0,0 per non perdere i disegni esistenti
+        this.dx = 0;
+        this.dy = 0;
+        this._applyTransform();
     }
 
     _applyTransform() {
-        const area = document.getElementById('canvas-area');
-        if (area) area.style.transform = `translate(${this.dx}px, ${this.dy}px)`;
+        ['bg-canvas', 'draw-canvas', 'overlay-canvas'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.transform = `translate(${this.dx}px, ${this.dy}px)`;
+        });
     }
 
     _setCursor(cursor) {
@@ -2035,7 +2059,17 @@ class SelectManager {
         this.startY     = 0;
     }
 
-    activate()   { this.active = true;  this.phase = 'idle'; this.selection = null; }
+    activate() {
+        this.active = true;
+        this.phase = 'idle';
+        this.selection = null;
+        // Assicura che overlay-canvas non intercetti i click
+        const oc = document.getElementById('overlay-canvas');
+        if (oc) oc.style.pointerEvents = 'none';
+        // Cursore
+        const dc = document.getElementById('draw-canvas');
+        if (dc) dc.style.cursor = 'crosshair';
+    }
     deactivate() { this.active = false; this._clearSelection(); }
 
     // Disegna il rettangolo di selezione tratteggiato sull'overlay
@@ -2100,6 +2134,7 @@ class SelectManager {
         this.startX = x;
         this.startY = y;
         this._clearSelection();
+        if (typeof toast === 'function') toast('Trascina per selezionare un\'area', 'info');
         return true;
     }
 
@@ -2238,22 +2273,42 @@ async function loadDriveBackgrounds() {
                 thumb.style.backgroundSize = 'cover';
                 thumb.style.backgroundPosition = 'center';
             } else {
-                thumb.textContent = '\uD83D\uDDBC\uFE0F';
+                thumb.textContent = img.mimeType === 'application/pdf' ? '📄' : '🖼️';
+            }
+            // Mostra badge se PDF
+            if (img.mimeType === 'application/pdf') {
+                const badge = document.createElement('span');
+                badge.textContent = 'PDF';
+                badge.style.cssText = 'position:absolute;bottom:2px;right:2px;background:rgba(239,68,68,0.85);color:white;font-size:9px;padding:1px 3px;border-radius:2px;line-height:1.2';
+                thumb.style.position = 'relative';
+                thumb.appendChild(badge);
             }
             thumb.addEventListener('click', async () => {
+                if (img.mimeType === 'application/pdf') {
+                    toast('I PDF non possono essere usati come sfondo — converti in JPG o PNG', 'error');
+                    return;
+                }
                 toast('Caricamento sfondo...', 'info');
                 try {
-                    const dataURL = await driveMgr.loadBackgroundAsDataURL(img.id);
+                    const token = gapi.auth.getToken()?.access_token;
+                    if (!token) { toast('Connetti Drive prima', 'error'); return; }
+                    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${img.id}?alt=media`, {
+                        headers: { Authorization: 'Bearer ' + token }
+                    });
+                    const blob = await res.blob();
+                    const url  = URL.createObjectURL(blob);
                     const image = new Image();
                     image.onload = () => {
                         bgMgr.setImage(image);
                         const popup = document.getElementById('bg-popup');
                         if (popup) popup.style.display = 'none';
                         toast('Sfondo applicato!', 'success');
+                        URL.revokeObjectURL(url);
                     };
-                    image.src = dataURL;
+                    image.onerror = () => toast('Errore caricamento immagine', 'error');
+                    image.src = url;
                 } catch (err) {
-                    toast('Errore caricamento sfondo: ' + err.message, 'error');
+                    toast('Errore: ' + err.message, 'error');
                 }
             });
             grid.appendChild(thumb);
@@ -2281,6 +2336,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('bg-canvas')
     );
     panMgr     = new PanManager();
+    panMgr.centerView();
     toolbarMgr = new ToolbarManager();
     textMgr    = new TextManager();
     projectMgr = new ProjectManager();

@@ -181,8 +181,7 @@ button {
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    /* width e height gestiti via JS (canvas 3× viewport per pan infinito) */
 }
 
 #bg-canvas {

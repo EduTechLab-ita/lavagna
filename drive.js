@@ -394,10 +394,10 @@ class DriveManager {
         this._checkConnected();
         await this._ensureBgFolder();
         const q = encodeURIComponent(
-            `'${this.bgFolderId}' in parents and mimeType contains 'image/' and trashed=false`
+            `'${this.bgFolderId}' in parents and (mimeType contains 'image/' or mimeType='application/pdf') and trashed=false`
         );
         const resp = await this._apiFetch(
-            `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,thumbnailLink,webContentLink)&orderBy=name`
+            `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType,thumbnailLink,webContentLink)&orderBy=name`
         );
         return resp.files || [];
     }
