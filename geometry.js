@@ -58,6 +58,7 @@ class RulerTool {
         wrapper.innerHTML = `
             <div class="ruler-body" id="ruler-body">
                 <canvas id="ruler-canvas" width="560" height="48"></canvas>
+                <input type="number" id="ruler-angle-input" class="ruler-angle-input" value="0" min="-360" max="360" step="1" title="Angolo (°)">
                 <div class="ruler-rotate-handle" id="ruler-rotate" title="Ruota">&#8635;</div>
                 <div class="ruler-close" id="ruler-close" title="Chiudi">&#215;</div>
             </div>`;
@@ -73,6 +74,15 @@ class RulerTool {
         this._setupRotate();
         this._setupResize();
         wrapper.querySelector('#ruler-close').addEventListener('click', () => this.hide());
+        const angleInput = wrapper.querySelector('#ruler-angle-input');
+        angleInput.addEventListener('pointerdown', (e) => e.stopPropagation());
+        angleInput.addEventListener('change', (e) => {
+            this.angle = parseFloat(e.target.value) || 0;
+            this._applyTransform();
+        });
+        angleInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { this.angle = parseFloat(e.target.value) || 0; this._applyTransform(); e.target.blur(); }
+        });
     }
 
     // ------------------------------------------------------------------
@@ -156,6 +166,11 @@ class RulerTool {
         this.el.style.left = this.x + 'px';
         this.el.style.top  = this.y + 'px';
         this.body.style.transform = `rotate(${this.angle}deg)`;
+        const input = this.el ? this.el.querySelector('#ruler-angle-input') : null;
+        if (input && document.activeElement !== input) {
+            let display = ((this.angle % 360) + 360) % 360;
+            input.value = Math.round(display);
+        }
         this._updateCenter();
     }
 
@@ -176,6 +191,7 @@ class RulerTool {
             // Non avviare il drag se si clicca su handle o chiudi
             if (e.target.id === 'ruler-rotate' || e.target.id === 'ruler-close') return;
             if (e.target.classList.contains('ruler-resize-handle')) return;
+            if (e.target.tagName === 'INPUT') return;
             e.preventDefault();
             const pt = _getPoint(e);
             this._drag = {
@@ -323,10 +339,14 @@ class ProtractorTool {
         this.visible = false;
         this.scale   = 1.0;
 
-        this.x = 200;
-        this.y = 120;
+        this.x     = 200;
+        this.y     = 120;
+        this.angle = 0;
+        this.cx    = 0;
+        this.cy    = 0;
 
         this._drag = { active: false, startX: 0, startY: 0, origX: 0, origY: 0 };
+        this._rot  = { active: false, startAngle: 0, startMouse: 0 };
     }
 
     // ------------------------------------------------------------------
@@ -342,8 +362,10 @@ class ProtractorTool {
         wrapper.innerHTML = `
             <div class="protractor-body">
                 <canvas id="protractor-canvas" width="300" height="160"></canvas>
-            </div>
-            <div class="geo-close" id="protractor-close" title="Chiudi">&#215;</div>`;
+                <input type="number" id="protractor-angle-input" class="geo-angle-input" value="0" min="-360" max="360" step="1" title="Angolo (°)">
+                <div class="protractor-rotate-handle" id="protractor-rotate" title="Ruota">&#8635;</div>
+                <div class="geo-close" id="protractor-close" title="Chiudi">&#215;</div>
+            </div>`;
 
         document.body.appendChild(wrapper);
 
@@ -353,7 +375,17 @@ class ProtractorTool {
         this._render();
         this._setupDrag();
         this._setupResize();
+        this._setupRotate();
         wrapper.querySelector('#protractor-close').addEventListener('click', () => this.hide());
+        const angleInput = wrapper.querySelector('#protractor-angle-input');
+        angleInput.addEventListener('pointerdown', (e) => e.stopPropagation());
+        angleInput.addEventListener('change', (e) => {
+            this.angle = parseFloat(e.target.value) || 0;
+            this._applyTransform();
+        });
+        angleInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { this.angle = parseFloat(e.target.value) || 0; this._applyTransform(); e.target.blur(); }
+        });
     }
 
     // ------------------------------------------------------------------
@@ -436,8 +468,7 @@ class ProtractorTool {
 
     show() {
         this.el.style.display = 'block';
-        this.el.style.left    = this.x + 'px';
-        this.el.style.top     = this.y + 'px';
+        this._applyTransform();
         this.visible = true;
     }
 
@@ -451,6 +482,74 @@ class ProtractorTool {
     }
 
     // ------------------------------------------------------------------
+    // Posizionamento & trasformazione
+    // ------------------------------------------------------------------
+
+    _applyTransform() {
+        this.el.style.left = this.x + 'px';
+        this.el.style.top  = this.y + 'px';
+        const body = this.el.querySelector('.protractor-body');
+        body.style.transform = `scale(${this.scale}) rotate(${this.angle}deg)`;
+        body.style.transformOrigin = 'center bottom';
+        const input = this.el ? this.el.querySelector('#protractor-angle-input') : null;
+        if (input && document.activeElement !== input) {
+            let display = ((this.angle % 360) + 360) % 360;
+            input.value = Math.round(display);
+        }
+        this._updateCenter();
+    }
+
+    _updateCenter() {
+        const body = this.el.querySelector('.protractor-body');
+        const rect = body.getBoundingClientRect();
+        this.cx = rect.left + rect.width  / 2;
+        this.cy = rect.top  + rect.height;
+    }
+
+    _setupRotate() {
+        const handle = this.el.querySelector('#protractor-rotate');
+        if (!handle) return;
+
+        const onStart = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this._updateCenter();
+            const pt = _getPoint(e);
+            const dx = pt.x - this.cx;
+            const dy = pt.y - this.cy;
+            const mouseAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+            this._rot = {
+                active:     true,
+                startAngle: this.angle,
+                startMouse: mouseAngle
+            };
+            handle.style.cursor = 'grabbing';
+        };
+
+        const onMove = (e) => {
+            if (!this._rot.active) return;
+            e.preventDefault();
+            const pt = _getPoint(e);
+            const dx = pt.x - this.cx;
+            const dy = pt.y - this.cy;
+            const mouseAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+            this.angle = this._rot.startAngle + (mouseAngle - this._rot.startMouse);
+            this._applyTransform();
+        };
+
+        const onEnd = () => {
+            if (!this._rot.active) return;
+            this._rot.active = false;
+            handle.style.cursor = 'grab';
+            this._updateCenter();
+        };
+
+        handle.addEventListener('pointerdown', onStart);
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup',   onEnd);
+    }
+
+    // ------------------------------------------------------------------
     // Drag
     // ------------------------------------------------------------------
 
@@ -459,7 +558,9 @@ class ProtractorTool {
 
         const onStart = (e) => {
             if (e.target.id === 'protractor-close') return;
+            if (e.target.id === 'protractor-rotate') return;
             if (e.target.classList.contains('protractor-resize-handle')) return;
+            if (e.target.tagName === 'INPUT') return;
             e.preventDefault();
             const pt = _getPoint(e);
             this._drag = {
@@ -478,8 +579,7 @@ class ProtractorTool {
             const pt = _getPoint(e);
             this.x = this._drag.origX + (pt.x - this._drag.startX);
             this.y = this._drag.origY + (pt.y - this._drag.startY);
-            el.style.left = this.x + 'px';
-            el.style.top  = this.y + 'px';
+            this._applyTransform();
         };
 
         const onEnd = () => {
@@ -740,7 +840,7 @@ class GeometryManager {
     font-size: 13px;
     color: #fff;
     line-height: 1;
-    z-index: 3;
+    z-index: 15;
 }
 
 .ruler-close:hover {
@@ -818,6 +918,53 @@ class GeometryManager {
     justify-content: center;
     user-select: none;
 }
+
+.ruler-angle-input,
+.geo-angle-input {
+    position: absolute;
+    bottom: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 52px;
+    height: 18px;
+    border: 1px solid rgba(80, 40, 0, 0.40);
+    border-radius: 3px;
+    background: rgba(255, 240, 200, 0.85);
+    color: rgba(60, 30, 0, 0.90);
+    font-size: 11px;
+    text-align: center;
+    padding: 0 2px;
+    cursor: text;
+    z-index: 5;
+    outline: none;
+}
+.geo-angle-input {
+    bottom: auto;
+    top: 2px;
+    left: 2px;
+    transform: none;
+    background: rgba(200, 220, 255, 0.85);
+    color: rgba(30, 58, 138, 0.90);
+    border-color: rgba(59, 130, 246, 0.40);
+    width: 48px;
+}
+.protractor-rotate-handle {
+    position: absolute;
+    top: 2px;
+    right: 24px;
+    width: 20px;
+    height: 20px;
+    cursor: grab;
+    color: rgba(30, 58, 138, 0.85);
+    font-size: 18px;
+    line-height: 1;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 4;
+}
+.protractor-rotate-handle:active { cursor: grabbing; }
 
 /* ============================================================
    STATO ATTIVO BOTTONI GEO
@@ -918,10 +1065,7 @@ class GeometryManager {
     // ------------------------------------------------------------------
 
     _patchCanvasManager() {
-        // Aspetta che canvasMgr esista (geometry.js caricato dopo app.js,
-        // ma potrebbe essere chiamato prima del DOMContentLoaded di app.js)
         if (typeof canvasMgr === 'undefined' || !canvasMgr) {
-            // Riprova dopo un tick
             setTimeout(() => this._patchCanvasManager(), 50);
             return;
         }
@@ -929,7 +1073,6 @@ class GeometryManager {
         const mgr = canvasMgr;
         const geo  = this;
 
-        // Salva i metodi originali
         const origStart = mgr._onStart.bind(mgr);
         const origMove  = mgr._onMove.bind(mgr);
         const origEnd   = mgr._onEnd.bind(mgr);
@@ -939,6 +1082,18 @@ class GeometryManager {
                 const { x, y } = mgr.getCoords(e);
                 geo.compass.handleStart(x, y);
                 CONFIG.isDrawing = true;
+                return;
+            }
+            if (geo.ruler.isVisible() &&
+                ['pen', 'pencil', 'pastel', 'marker'].includes(CONFIG.currentTool)) {
+                const raw = mgr.getCoords(e);
+                const { x, y } = geo.ruler.snapToRuler(raw.x, raw.y);
+                if (typeof toolbarMgr !== 'undefined') toolbarMgr.hide();
+                CONFIG.isDrawing = true;
+                mgr._saveUndo();
+                CONFIG.lastX = x;
+                CONFIG.lastY = y;
+                mgr._drawSegment(x, y, x, y);
                 return;
             }
             origStart(e);
@@ -951,27 +1106,26 @@ class GeometryManager {
                 geo.compass.handleMove(x, y);
                 return;
             }
-
-            // Snap al righello per penna/matita/pastello se righello visibile
             if (geo.ruler.isVisible() && CONFIG.isDrawing &&
                 ['pen', 'pencil', 'pastel', 'marker'].includes(CONFIG.currentTool)) {
-
-                // Override getCoords temporaneamente con lo snap
-                const origGetCoords = mgr.getCoords.bind(mgr);
-                mgr.getCoords = (ev) => {
-                    const raw = origGetCoords(ev);
-                    const snapped = geo.ruler.snapToRuler(raw.x, raw.y);
-                    mgr.getCoords = origGetCoords; // ripristina subito
-                    return snapped;
-                };
+                const raw = mgr.getCoords(e);
+                const { x, y } = geo.ruler.snapToRuler(raw.x, raw.y);
+                mgr._drawSegment(CONFIG.lastX, CONFIG.lastY, x, y);
+                CONFIG.lastX = x;
+                CONFIG.lastY = y;
+                return;
             }
-
             origMove(e);
         };
 
         mgr._onEnd = function(e) {
             if (CONFIG.currentTool === 'compass' && geo.compass.active) {
                 geo.compass.handleEnd();
+                CONFIG.isDrawing = false;
+                return;
+            }
+            if (geo.ruler.isVisible() && CONFIG.isDrawing &&
+                ['pen', 'pencil', 'pastel', 'marker'].includes(CONFIG.currentTool)) {
                 CONFIG.isDrawing = false;
                 return;
             }
