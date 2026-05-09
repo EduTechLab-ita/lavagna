@@ -625,36 +625,45 @@ class LibraryManager {
             const item = this._createTreeItem('folder', '📁', folder.name, indent);
             container.appendChild(item);
 
-            // Click su cartella: seleziona come destinazione corrente
-            item.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this._selectFolder(folder.id, item);
-            });
-
-            // Pulsanti contestuali cartella
-            this._addContextButtons(item, folder, 'folder');
-
             // Sottocartella collassabile
             const subContainer = document.createElement('div');
             subContainer.className = 'tree-subtree';
             subContainer.style.display = 'none';
+            subContainer.dataset.loaded = 'false';
             container.appendChild(subContainer);
 
-            // Toggle espansione
-            item.querySelector('.tree-icon').addEventListener('click', async (e) => {
+            // Click su TUTTA la riga cartella → espandi/collassa + seleziona
+            item.addEventListener('click', async (e) => {
                 e.stopPropagation();
+                this._selectFolder(folder.id, item);
+
                 const isOpen = subContainer.style.display !== 'none';
+                const iconEl = item.querySelector('.tree-icon');
                 if (isOpen) {
                     subContainer.style.display = 'none';
-                    item.querySelector('.tree-icon').textContent = '📁';
+                    iconEl.textContent = '📁';
                 } else {
-                    subContainer.innerHTML = '<div class="tree-loading" style="padding-left:' + (indent + 16) + 'px">...</div>';
                     subContainer.style.display = 'block';
-                    item.querySelector('.tree-icon').textContent = '📂';
-                    subContainer.innerHTML = '';
-                    await this.renderTree(folder.id, subContainer, depth + 1);
+                    iconEl.textContent = '📂';
+                    // Carica i figli solo la prima volta
+                    if (subContainer.dataset.loaded === 'false') {
+                        subContainer.dataset.loaded = 'true';
+                        subContainer.innerHTML = `<div class="tree-loading" style="padding-left:${indent + 16}px">⏳ Caricamento...</div>`;
+                        try {
+                            subContainer.innerHTML = '';
+                            await this.renderTree(folder.id, subContainer, depth + 1);
+                            if (!subContainer.children.length) {
+                                subContainer.innerHTML = `<div class="tree-empty" style="padding-left:${indent + 16}px;font-size:0.78rem;color:var(--text-muted)">Cartella vuota</div>`;
+                            }
+                        } catch (err) {
+                            subContainer.innerHTML = `<div class="tree-empty" style="padding-left:${indent + 16}px;color:#ef4444">Errore: ${err.message}</div>`;
+                        }
+                    }
                 }
             });
+
+            // Pulsanti contestuali cartella (rinomina/elimina) — stopPropagation interno
+            this._addContextButtons(item, folder, 'folder');
         }
 
         // --- File lezioni ---
