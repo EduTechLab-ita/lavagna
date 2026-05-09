@@ -13,6 +13,21 @@
 'use strict';
 
 // =============================================================================
+// COLORI CARTELLE — 8 opzioni predefinite
+// =============================================================================
+
+const FOLDER_COLORS = [
+    '#ef4444', // rosso
+    '#f97316', // arancione
+    '#eab308', // giallo
+    '#22c55e', // verde
+    '#3b82f6', // blu
+    '#8b5cf6', // viola
+    '#ec4899', // rosa
+    '#64748b', // grigio (default)
+];
+
+// =============================================================================
 // SEZIONE 1 — DriveManager
 // Gestisce autenticazione OAuth2 e tutte le operazioni su Drive API v3
 // =============================================================================
@@ -269,6 +284,22 @@ class DriveManager {
             'PATCH',
             { name: newName }
         );
+    }
+
+    /**
+     * Sposta un file o cartella in una nuova cartella padre.
+     * @param {string} fileId        - ID elemento da spostare
+     * @param {string} newParentId   - ID nuova cartella destinazione
+     * @param {string} oldParentId   - ID vecchia cartella origine
+     * @returns {Object} risposta API con id e parents
+     */
+    async moveItem(fileId, newParentId, oldParentId) {
+        this._checkConnected();
+        const url = `https://www.googleapis.com/drive/v3/files/${fileId}` +
+            `?addParents=${encodeURIComponent(newParentId)}` +
+            `&removeParents=${encodeURIComponent(oldParentId)}` +
+            `&fields=id,parents`;
+        return this._apiFetch(url, 'PATCH');
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -625,6 +656,11 @@ class LibraryManager {
             const item = this._createTreeItem('folder', '📁', folder.name, indent);
             container.appendChild(item);
 
+            // Cerchietto colore cartella
+            const colorDot = this._createColorDot(folder.id);
+            // Inserisci il dot prima dell'icona cartella
+            item.insertBefore(colorDot, item.firstChild);
+
             // Sottocartella collassabile
             const subContainer = document.createElement('div');
             subContainer.className = 'tree-subtree';
@@ -664,6 +700,10 @@ class LibraryManager {
 
             // Pulsanti contestuali cartella (rinomina/elimina) — stopPropagation interno
             this._addContextButtons(item, folder, 'folder');
+
+            // Drag-and-drop — questa cartella è sia draggable che drop target
+            this._makeDraggable(item, folder.id, parentId, folder.name, 'folder');
+            this._makeDropTarget(item, subContainer, folder.id);
         }
 
         // --- File lezioni ---
@@ -679,6 +719,9 @@ class LibraryManager {
             });
 
             this._addContextButtons(item, { id: file.id, name }, 'lesson');
+
+            // Drag-and-drop — i file sono solo draggable (non drop target)
+            this._makeDraggable(item, file.id, parentId, file.name, 'lesson');
         }
     }
 
@@ -893,6 +936,163 @@ class LibraryManager {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // COLORI CARTELLE
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Crea il cerchietto colorato per una cartella.
+     * Gestisce click → popup con 8 swatches.
+     * @param {string} folderId
+     * @returns {HTMLElement} il <span class="folder-color-dot">
+     */
+    _createColorDot(folderId) {
+        const storageKey = 'folder-color-' + folderId;
+        const currentColor = localStorage.getItem(storageKey) || '#64748b';
+
+        const dot = document.createElement('span');
+        dot.className = 'folder-color-dot';
+        dot.style.backgroundColor = currentColor;
+        dot.title = 'Cambia colore cartella';
+
+        dot.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._showColorPopup(dot, folderId, storageKey);
+        });
+
+        return dot;
+    }
+
+    /**
+     * Mostra il mini popup con gli 8 swatches di colore.
+     * @param {HTMLElement} dotEl    - il cerchietto che ha scatenato il click
+     * @param {string}      folderId
+     * @param {string}      storageKey
+     */
+    _showColorPopup(dotEl, folderId, storageKey) {
+        // Chiudi eventuali popup già aperti
+        document.querySelector('.folder-color-popup')?.remove();
+
+        const currentColor = localStorage.getItem(storageKey) || '#64748b';
+
+        const popup = document.createElement('div');
+        popup.className = 'folder-color-popup';
+
+        for (const color of FOLDER_COLORS) {
+            const swatch = document.createElement('div');
+            swatch.className = 'folder-color-swatch' + (color === currentColor ? ' selected' : '');
+            swatch.style.backgroundColor = color;
+            swatch.title = color;
+
+            swatch.addEventListener('click', (e) => {
+                e.stopPropagation();
+                localStorage.setItem(storageKey, color);
+                dotEl.style.backgroundColor = color;
+                popup.remove();
+            });
+
+            popup.appendChild(swatch);
+        }
+
+        document.body.appendChild(popup);
+
+        // Posiziona il popup vicino al cerchietto
+        const rect = dotEl.getBoundingClientRect();
+        popup.style.left = Math.min(rect.left, window.innerWidth - 116) + 'px';
+        popup.style.top  = (rect.bottom + 4) + 'px';
+
+        // Chiudi cliccando fuori
+        const closeHandler = (e) => {
+            if (!popup.contains(e.target) && e.target !== dotEl) {
+                popup.remove();
+                document.removeEventListener('click', closeHandler, true);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeHandler, true), 0);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // DRAG AND DROP
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Rende un elemento riga trascinabile.
+     * @param {HTMLElement} item      - la riga DOM
+     * @param {string}      id        - ID Drive dell'elemento
+     * @param {string}      parentId  - ID cartella padre corrente
+     * @param {string}      name      - nome elemento
+     * @param {string}      type      - 'folder' | 'lesson'
+     */
+    _makeDraggable(item, id, parentId, name, type) {
+        item.setAttribute('draggable', 'true');
+
+        item.addEventListener('dragstart', (e) => {
+            e.stopPropagation();
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', JSON.stringify({ id, parentId, name, type }));
+            item.style.opacity = '0.5';
+        });
+
+        item.addEventListener('dragend', () => {
+            item.style.opacity = '';
+        });
+    }
+
+    /**
+     * Rende una cartella un drop target.
+     * @param {HTMLElement} item         - la riga DOM della cartella
+     * @param {HTMLElement} subContainer - il subContainer figli (può essere null)
+     * @param {string}      folderId     - ID Drive della cartella destinazione
+     */
+    _makeDropTarget(item, subContainer, folderId) {
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = 'move';
+        });
+
+        item.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            item.classList.add('tree-drop-target');
+        });
+
+        item.addEventListener('dragleave', (e) => {
+            // Rimuovi highlight solo se si esce effettivamente dall'elemento
+            if (!item.contains(e.relatedTarget)) {
+                item.classList.remove('tree-drop-target');
+            }
+        });
+
+        item.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            item.classList.remove('tree-drop-target');
+
+            let dragData;
+            try {
+                dragData = JSON.parse(e.dataTransfer.getData('text/plain'));
+            } catch (_) {
+                return;
+            }
+
+            // Evita di spostare un elemento in se stesso
+            if (dragData.id === folderId) return;
+            // Evita di spostare nella stessa cartella
+            if (dragData.parentId === folderId) return;
+
+            try {
+                toast('Spostamento in corso...', 'info');
+                await this.drive.moveItem(dragData.id, folderId, dragData.parentId);
+                toast(`"${dragData.name}" spostato.`, 'success');
+                // Ricarica l'albero per riflettere la nuova struttura
+                this.refresh();
+            } catch (err) {
+                toast('Errore spostamento: ' + err.message, 'error');
+            }
+        });
+    }
 }
 
 
@@ -990,6 +1190,63 @@ class DriveConnectButton {
 
 
 // =============================================================================
+// SEZIONE 3b — CSS INIETTATO
+// Stili per colori cartelle e drag-and-drop (iniettati nel <head>)
+// =============================================================================
+
+function _injectDriveStyles() {
+    if (document.getElementById('drive-extra-styles')) return; // già iniettato
+    const style = document.createElement('style');
+    style.id = 'drive-extra-styles';
+    style.textContent = `
+/* ── Colori cartelle ── */
+.folder-color-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    cursor: pointer;
+    flex-shrink: 0;
+    border: 1px solid rgba(255,255,255,0.3);
+    transition: transform 0.1s;
+    margin-right: 4px;
+}
+.folder-color-dot:hover { transform: scale(1.3); }
+.folder-color-popup {
+    position: fixed;
+    background: var(--bg-elevated, #1e293b);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    width: 100px;
+    z-index: 9999;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.folder-color-swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.1s, transform 0.1s;
+}
+.folder-color-swatch:hover { transform: scale(1.15); border-color: rgba(255,255,255,0.5); }
+.folder-color-swatch.selected { border-color: white; }
+
+/* ── Drag and drop ── */
+.tree-drop-target {
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px dashed rgba(59, 130, 246, 0.6);
+    border-radius: 4px;
+}
+`;
+    document.head.appendChild(style);
+}
+
+// =============================================================================
 // SEZIONE 4 — INIT
 // Collegamento globale: istanziazione e wiring degli event listener
 // =============================================================================
@@ -1001,6 +1258,8 @@ let driveMgr, libraryMgr, driveConnectBtn;
  * (oppure si attiva automaticamente tramite window load listener)
  */
 function initDrive() {
+    _injectDriveStyles();
+
     driveMgr        = new DriveManager();
     libraryMgr      = new LibraryManager(driveMgr);
     driveConnectBtn = new DriveConnectButton(driveMgr);

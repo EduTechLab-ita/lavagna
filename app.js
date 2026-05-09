@@ -151,8 +151,8 @@ class BackgroundManager {
                 this._drawStaff(ctx, W, H);
                 break;
             // Feature 4 — Righe Primaria
-            case 'lines-15-aux': // 1a elementare — 15mm con righino ausiliario a 8mm
-                this._drawLinesWithAux(ctx, W, H, 60, 32); // 60px ≈ 15mm, 32px ≈ 8mm
+            case 'lines-15-aux': // 1a elementare — 3 zone grande-piccola-grande
+                this._drawLinesThreeZone(ctx, W, H, 36, 20); // 36px grande, 20px piccola (x-height)
                 break;
             case 'lines-12-aux': // 2a elementare — 12mm con righino
                 this._drawLinesWithAux(ctx, W, H, 48, 24);
@@ -220,17 +220,17 @@ class BackgroundManager {
         }
     }
 
-    // Feature 4: righino ausiliario per primaria
+    // Feature 4a: righino ausiliario per 2a elementare (2 zone)
     _drawLinesWithAux(ctx, W, H, spacing, auxOffset) {
         // Riga principale blu
-        ctx.strokeStyle = '#93c5fd';
+        ctx.strokeStyle = '#60a5fa';
         ctx.lineWidth = 1.2;
         for (let y = spacing; y < H; y += spacing) {
             ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
         }
-        // Righino ausiliario rosso (a metà)
-        ctx.strokeStyle = '#fca5a5';
-        ctx.lineWidth = 0.7;
+        // Righino ausiliario rosso
+        ctx.strokeStyle = '#f87171';
+        ctx.lineWidth = 0.9;
         for (let y = spacing; y < H; y += spacing) {
             const auxY = y - spacing + auxOffset;
             if (auxY > 0) {
@@ -238,7 +238,32 @@ class BackgroundManager {
             }
         }
         // Margine sinistro rosso
-        ctx.strokeStyle = '#fca5a5';
+        ctx.strokeStyle = '#f87171';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, 0); ctx.lineTo(60, H); ctx.stroke();
+    }
+
+    // Feature 4b: righe a 3 zone per 1a elementare (grande-piccola-grande)
+    _drawLinesThreeZone(ctx, W, H, large, small) {
+        const period = large + small + large;
+        for (let y = large; y < H; y += period) {
+            // Rigo superiore (leggero, grigio-blu) — tetto lettere alte
+            ctx.strokeStyle = '#93c5fd';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+            // Rigo x-height (rosso) — tetto lettere piccole, dove si scrive
+            const xhY = y + large;
+            ctx.strokeStyle = '#f87171';
+            ctx.lineWidth = 1.0;
+            ctx.beginPath(); ctx.moveTo(0, xhY); ctx.lineTo(W, xhY); ctx.stroke();
+            // Baseline (blu, più spessa) — riga di base
+            const baseY = y + large + small;
+            ctx.strokeStyle = '#60a5fa';
+            ctx.lineWidth = 1.4;
+            ctx.beginPath(); ctx.moveTo(0, baseY); ctx.lineTo(W, baseY); ctx.stroke();
+        }
+        // Margine sinistro rosso
+        ctx.strokeStyle = '#f87171';
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(60, 0); ctx.lineTo(60, H); ctx.stroke();
     }
@@ -1676,21 +1701,35 @@ function setupFullscreen() {
     }
 
     function applyFullscreenUI(active) {
+        const header = document.getElementById('app-header');
         if (active) {
             document.body.classList.add('fullscreen-mode');
+            if (header)  header.style.display = 'none';
             if (btnExit) btnExit.style.display = 'flex';
             if (icon)    icon.innerHTML = '<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>';
             if (label)   label.textContent = 'Riduci';
         } else {
             document.body.classList.remove('fullscreen-mode');
+            if (header)  header.style.display = '';
             if (btnExit) btnExit.style.display = 'none';
             if (icon)    icon.innerHTML = '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>';
             if (label)   label.textContent = 'Espandi';
         }
     }
 
-    if (btnFs)   btnFs.addEventListener('click', () => isFullscreen() ? exitFs() : enterFs());
-    if (btnExit) btnExit.addEventListener('click', exitFs);
+    if (btnFs) btnFs.addEventListener('click', () => {
+        if (isFullscreen()) {
+            exitFs();
+            applyFullscreenUI(false);
+        } else {
+            enterFs();
+            applyFullscreenUI(true);
+        }
+    });
+    if (btnExit) btnExit.addEventListener('click', () => {
+        exitFs();
+        applyFullscreenUI(false);
+    });
 
     // Tasto F11 (intercept + fullscreen API)
     document.addEventListener('keydown', e => {

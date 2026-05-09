@@ -57,6 +57,7 @@ class RulerTool {
 
         wrapper.innerHTML = `
             <div class="ruler-body" id="ruler-body">
+                <div class="ruler-drag-handle" id="ruler-drag" title="Trascina per spostare">⠿</div>
                 <canvas id="ruler-canvas" width="560" height="48"></canvas>
                 <input type="number" id="ruler-angle-input" class="ruler-angle-input" value="0" min="-360" max="360" step="1" title="Angolo (°)">
                 <div class="ruler-rotate-handle" id="ruler-rotate" title="Ruota">&#8635;</div>
@@ -185,14 +186,9 @@ class RulerTool {
     // ------------------------------------------------------------------
 
     _setupDrag() {
-        const body = this.body;
-
         const onStart = (e) => {
-            // Non avviare il drag se si clicca su handle o chiudi
-            if (e.target.id === 'ruler-rotate' || e.target.id === 'ruler-close') return;
-            if (e.target.classList.contains('ruler-resize-handle')) return;
-            if (e.target.tagName === 'INPUT') return;
             e.preventDefault();
+            e.stopPropagation();
             const pt = _getPoint(e);
             this._drag = {
                 active: true,
@@ -201,7 +197,6 @@ class RulerTool {
                 origX:  this.x,
                 origY:  this.y
             };
-            body.style.cursor = 'grabbing';
         };
 
         const onMove = (e) => {
@@ -216,11 +211,12 @@ class RulerTool {
         const onEnd = () => {
             if (!this._drag.active) return;
             this._drag.active = false;
-            body.style.cursor = 'move';
             this._updateCenter();
         };
 
-        body.addEventListener('pointerdown',  onStart);
+        // Il drag è attivo SOLO sull'handle dedicato
+        const dragHandle = this.el.querySelector('#ruler-drag');
+        if (dragHandle) dragHandle.addEventListener('pointerdown', onStart);
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup',   onEnd);
     }
@@ -365,6 +361,7 @@ class ProtractorTool {
                 <input type="number" id="protractor-angle-input" class="geo-angle-input" value="0" min="-360" max="360" step="1" title="Angolo (°)">
                 <div class="protractor-rotate-handle" id="protractor-rotate" title="Ruota">&#8635;</div>
                 <div class="geo-close" id="protractor-close" title="Chiudi">&#215;</div>
+                <div class="protractor-drag-handle" id="protractor-drag" title="Trascina per spostare">⠿</div>
             </div>`;
 
         document.body.appendChild(wrapper);
@@ -554,14 +551,9 @@ class ProtractorTool {
     // ------------------------------------------------------------------
 
     _setupDrag() {
-        const el = this.el;
-
         const onStart = (e) => {
-            if (e.target.id === 'protractor-close') return;
-            if (e.target.id === 'protractor-rotate') return;
-            if (e.target.classList.contains('protractor-resize-handle')) return;
-            if (e.target.tagName === 'INPUT') return;
             e.preventDefault();
+            e.stopPropagation();
             const pt = _getPoint(e);
             this._drag = {
                 active: true,
@@ -570,7 +562,6 @@ class ProtractorTool {
                 origX:  this.x,
                 origY:  this.y
             };
-            el.style.cursor = 'grabbing';
         };
 
         const onMove = (e) => {
@@ -585,10 +576,12 @@ class ProtractorTool {
         const onEnd = () => {
             if (!this._drag.active) return;
             this._drag.active = false;
-            el.style.cursor = 'move';
+            this._updateCenter();
         };
 
-        el.addEventListener('pointerdown',  onStart);
+        // Il drag è attivo SOLO sull'handle dedicato
+        const dragHandle = this.el.querySelector('#protractor-drag');
+        if (dragHandle) dragHandle.addEventListener('pointerdown', onStart);
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup',   onEnd);
     }
@@ -847,6 +840,26 @@ class GeometryManager {
     background: rgba(0, 0, 0, 0.55);
 }
 
+.ruler-drag-handle {
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 32px;
+    cursor: grab;
+    color: rgba(80, 40, 0, 0.65);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    z-index: 4;
+    border-radius: 3px;
+}
+.ruler-drag-handle:hover { background: rgba(80,40,0,0.10); }
+.ruler-drag-handle:active { cursor: grabbing; }
+
 .ruler-resize-handle {
     position: absolute;
     right: 4px;
@@ -918,6 +931,27 @@ class GeometryManager {
     justify-content: center;
     user-select: none;
 }
+
+.protractor-drag-handle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 28px;
+    height: 28px;
+    cursor: grab;
+    color: rgba(30, 58, 138, 0.65);
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    z-index: 4;
+    border-radius: 50%;
+    background: rgba(200, 220, 255, 0.5);
+}
+.protractor-drag-handle:hover { background: rgba(200,220,255,0.8); }
+.protractor-drag-handle:active { cursor: grabbing; }
 
 .ruler-angle-input,
 .geo-angle-input {
