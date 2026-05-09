@@ -1522,17 +1522,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-export').addEventListener('click', () => canvasMgr.exportPNG());
     document.getElementById('btn-new').addEventListener('click',    () => projectMgr.newBoard());
 
-    // Stub per pulsanti aggiuntivi (Library/Drive) se presenti
-    const btnLibrary = document.getElementById('btn-library');
-    if (btnLibrary) btnLibrary.addEventListener('click', () => toast('Funzione Libreria in arrivo!', 'info'));
-    const btnDrive = document.getElementById('btn-drive');
-    if (btnDrive) btnDrive.addEventListener('click', () => toast('Connessione Drive in arrivo!', 'info'));
-    const btnLibraryClose = document.getElementById('library-close');
-    if (btnLibraryClose) btnLibraryClose.addEventListener('click', () => {
-        const panel = document.getElementById('library-panel');
-        if (panel) panel.style.display = 'none';
-    });
-
     // 3. Posizionamento area canvas (sotto header da 56px)
     document.getElementById('canvas-area').style.top = '56px';
 
