@@ -410,7 +410,11 @@ button {
     align-items: center;
     gap: 4px;
     flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
+.main-row::-webkit-scrollbar { display: none; }
 
 /* Gruppi di strumenti correlati */
 .tool-group {
@@ -1466,7 +1470,7 @@ body.fullscreen-mode #app-header {
     pointer-events: none;
 }
 body.fullscreen-mode #canvas-area {
-    top: 0 !important;
+    margin-top: 0 !important;
 }
 
 /* ===== MODAL — Salva prima di continuare ===== */

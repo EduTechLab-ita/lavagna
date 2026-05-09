@@ -761,7 +761,8 @@ class CanvasManager {
 
     resize() {
         const W = window.innerWidth;
-        const H = window.innerHeight - 56; // 56px header
+        const headerH = document.body.classList.contains('fullscreen-mode') ? 0 : 56;
+        const H = window.innerHeight - headerH;
 
         // Salva disegno prima del resize
         const savedURL = this.canvas.width > 0 ? this.canvas.toDataURL() : null;
@@ -1764,20 +1765,25 @@ function setupFullscreen() {
     }
 
     function applyFullscreenUI(active) {
-        const header = document.getElementById('app-header');
+        const header     = document.getElementById('app-header');
+        const canvasArea = document.getElementById('canvas-area');
         if (active) {
             document.body.classList.add('fullscreen-mode');
-            if (header)  header.style.display = 'none';
+            if (header)     header.style.display     = 'none';
+            if (canvasArea) canvasArea.style.marginTop = '0';
             if (btnExit) btnExit.style.display = 'flex';
             if (icon)    icon.innerHTML = '<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>';
             if (label)   label.textContent = 'Riduci';
         } else {
             document.body.classList.remove('fullscreen-mode');
-            if (header)  header.style.display = '';
+            if (header)     header.style.display     = '';
+            if (canvasArea) canvasArea.style.marginTop = '';
             if (btnExit) btnExit.style.display = 'none';
             if (icon)    icon.innerHTML = '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>';
             if (label)   label.textContent = 'Espandi';
         }
+        // Ridisegna il canvas con le nuove dimensioni
+        setTimeout(() => canvasMgr?.resize(), 0);
     }
 
     if (btnFs) btnFs.addEventListener('click', () => {

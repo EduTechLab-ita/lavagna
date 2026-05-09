@@ -583,6 +583,9 @@ class LibraryManager {
 
         // Cartella correntemente selezionata per il salvataggio
         this.currentFolderId = null;
+
+        // Stato cartelle espanse: sopravvive al refresh
+        this._expandedFolders = new Set();
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -609,6 +612,7 @@ class LibraryManager {
 
     async refresh() {
         this._updateDriveStatus();
+        const savedScroll = this.treeEl.scrollTop;
         this.treeEl.innerHTML = '<div class="tree-loading">Caricamento...</div>';
 
         if (!this.drive.isConnected()) {
@@ -628,6 +632,8 @@ class LibraryManager {
             if (!this.treeEl.hasChildNodes()) {
                 this.treeEl.innerHTML = '<div class="tree-empty">Nessuna lezione salvata.</div>';
             }
+            // Ripristina posizione scroll
+            this.treeEl.scrollTop = savedScroll;
         } catch (err) {
             this.treeEl.innerHTML = `<div class="tree-empty tree-error">Errore: ${err.message}</div>`;
         }
@@ -668,35 +674,47 @@ class LibraryManager {
             subContainer.dataset.loaded = 'false';
             container.appendChild(subContainer);
 
+            // Helper per espandere la cartella (usato sia dal click che dall'auto-restore)
+            const expandFolder = async () => {
+                const iconEl = item.querySelector('.tree-icon');
+                subContainer.style.display = 'block';
+                if (iconEl) iconEl.textContent = '📂';
+                this._expandedFolders.add(folder.id);
+                if (subContainer.dataset.loaded === 'false') {
+                    subContainer.dataset.loaded = 'true';
+                    subContainer.innerHTML = `<div class="tree-loading" style="padding-left:${indent + 16}px">⏳ Caricamento...</div>`;
+                    try {
+                        subContainer.innerHTML = '';
+                        await this.renderTree(folder.id, subContainer, depth + 1);
+                        if (!subContainer.children.length) {
+                            subContainer.innerHTML = `<div class="tree-empty" style="padding-left:${indent + 16}px;font-size:0.78rem;color:var(--text-muted)">Cartella vuota</div>`;
+                        }
+                    } catch (err) {
+                        subContainer.innerHTML = `<div class="tree-empty" style="padding-left:${indent + 16}px;color:#ef4444">Errore: ${err.message}</div>`;
+                    }
+                }
+            };
+
             // Click su TUTTA la riga cartella → espandi/collassa + seleziona
             item.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 this._selectFolder(folder.id, item);
 
                 const isOpen = subContainer.style.display !== 'none';
-                const iconEl = item.querySelector('.tree-icon');
                 if (isOpen) {
                     subContainer.style.display = 'none';
-                    iconEl.textContent = '📁';
+                    const iconEl = item.querySelector('.tree-icon');
+                    if (iconEl) iconEl.textContent = '📁';
+                    this._expandedFolders.delete(folder.id);
                 } else {
-                    subContainer.style.display = 'block';
-                    iconEl.textContent = '📂';
-                    // Carica i figli solo la prima volta
-                    if (subContainer.dataset.loaded === 'false') {
-                        subContainer.dataset.loaded = 'true';
-                        subContainer.innerHTML = `<div class="tree-loading" style="padding-left:${indent + 16}px">⏳ Caricamento...</div>`;
-                        try {
-                            subContainer.innerHTML = '';
-                            await this.renderTree(folder.id, subContainer, depth + 1);
-                            if (!subContainer.children.length) {
-                                subContainer.innerHTML = `<div class="tree-empty" style="padding-left:${indent + 16}px;font-size:0.78rem;color:var(--text-muted)">Cartella vuota</div>`;
-                            }
-                        } catch (err) {
-                            subContainer.innerHTML = `<div class="tree-empty" style="padding-left:${indent + 16}px;color:#ef4444">Errore: ${err.message}</div>`;
-                        }
-                    }
+                    await expandFolder();
                 }
             });
+
+            // Auto-espandi se era aperta prima del refresh
+            if (this._expandedFolders.has(folder.id)) {
+                expandFolder(); // non awaita per non bloccare il render iniziale
+            }
 
             // Pulsanti contestuali cartella (rinomina/elimina) — stopPropagation interno
             this._addContextButtons(item, folder, 'folder');
