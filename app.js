@@ -1,866 +1,1151 @@
-// Configurazione globale
-const CONFIG = {
-    tools: {
-        pencil: { size: 4, color: '#000000', opacity: 1.0 },
-        pen: { size: 4, color: '#000000', opacity: 1.0 },
-        marker: { size: 12, color: '#FFFF00', opacity: 0.6 },
-        fountain: { size: 6, color: '#000080', opacity: 1.0 },
-        eraser: { size: 20 }
-    },
-    backgrounds: {
-        blank: 'white',
-        lines: 'repeating-linear-gradient(transparent, transparent 24px, #e2e8f0 24px, #e2e8f0 25px)',
-        squares: 'repeating-linear-gradient(0deg, #e2e8f0, #e2e8f0 1px, transparent 1px, transparent 20px), repeating-linear-gradient(90deg, #e2e8f0, #e2e8f0 1px, transparent 1px, transparent 20px)',
-        music: 'repeating-linear-gradient(transparent, transparent 15px, #e2e8f0 15px, #e2e8f0 16px, transparent 16px, transparent 31px, #e2e8f0 31px, #e2e8f0 32px, transparent 32px, transparent 47px, #e2e8f0 47px, #e2e8f0 48px, transparent 48px, transparent 63px, #e2e8f0 63px, #e2e8f0 64px, transparent 64px, transparent 79px, #e2e8f0 79px, #e2e8f0 80px)',
-        dots: 'radial-gradient(circle, #e2e8f0 1px, transparent 1px)'
-    }
-};
+/**
+ * EduBoard v2 — Lavagna digitale interattiva per la scuola
+ * Architettura: 3 canvas sovrapposti (bg, draw, overlay)
+ * NO import/export — script tag normale, classi ES6
+ */
 
-// Stato globale dell'applicazione
-const AppState = {
-    currentTool: 'pencil',
-    currentBackground: 'blank',
+'use strict';
+
+// =============================================================================
+// SEZIONE 1 — CONFIG GLOBALE
+// =============================================================================
+
+const CONFIG = {
+    currentTool: 'pen',
+    currentColor: '#000000',
+    currentSize: 3,
+    currentShape: 'line',
+    shapeFill: false,
+    currentBg: 'white',
     isDrawing: false,
     lastX: 0,
     lastY: 0,
+    shapeStartX: 0,
+    shapeStartY: 0,
+    shapeSnapshot: null,  // ImageData per preview live forme
     undoStack: [],
     redoStack: [],
-    maxUndoSteps: 50,
-    currentProject: 'Nuova Lavagna'
+    maxUndo: 50,
+    toolbarVisible: false,
+    projectName: 'Nuova Lavagna',
+    // Strumenti che usano colore + dimensione
+    drawTools: ['pen', 'pencil', 'pastel', 'marker', 'eraser'],
 };
 
-// Gestione Canvas
-class CanvasManager {
+// =============================================================================
+// SEZIONE 2 — BackgroundManager
+// Gestisce il canvas di sfondo (#bg-canvas): colori, righe, griglie, immagini
+// =============================================================================
+
+class BackgroundManager {
     constructor() {
-        this.canvas = document.getElementById('whiteboard');
+        this.canvas = document.getElementById('bg-canvas');
         this.ctx = this.canvas.getContext('2d');
-        this.setupCanvas();
-        this.setupEventListeners();
+        this.currentBg = 'white';
+        this.uploadedImage = null; // HTMLImageElement se caricata foto
     }
 
-    setupCanvas() {
-        this.resizeCanvas();
-        window.addEventListener('resize', () => this.resizeCanvas());
-        
-        // Configurazione iniziale del contesto
-        this.ctx.lineCap = 'round';
-        this.ctx.lineJoin = 'round';
-        this.ctx.imageSmoothingEnabled = true;
+    resize(w, h) {
+        this.canvas.width = w;
+        this.canvas.height = h;
+        this.render();
     }
 
-    resizeCanvas() {
-        const rect = this.canvas.parentElement.getBoundingClientRect();
-        this.canvas.width = rect.width;
-        this.canvas.height = rect.height;
-        this.applyBackground();
-    }
+    render() {
+        const ctx = this.ctx;
+        const W = this.canvas.width;
+        const H = this.canvas.height;
 
-    setupEventListeners() {
-        // Mouse events
-        this.canvas.addEventListener('mousedown', (e) => this.startDrawing(e));
-        this.canvas.addEventListener('mousemove', (e) => this.draw(e));
-        this.canvas.addEventListener('mouseup', () => this.stopDrawing());
-        this.canvas.addEventListener('mouseout', () => this.stopDrawing());
+        // Sfondo bianco base sempre presente
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, W, H);
 
-        // Touch events per dispositivi mobili
-        this.canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            const mouseEvent = new MouseEvent('mousedown', {
-                clientX: touch.clientX,
-                clientY: touch.clientY
-            });
-            this.canvas.dispatchEvent(mouseEvent);
-        });
-
-        this.canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            const mouseEvent = new MouseEvent('mousemove', {
-                clientX: touch.clientX,
-                clientY: touch.clientY
-            });
-            this.canvas.dispatchEvent(mouseEvent);
-        });
-
-        this.canvas.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            const mouseEvent = new MouseEvent('mouseup', {});
-            this.canvas.dispatchEvent(mouseEvent);
-        });
-    }
-
-    getCoordinates(e) {
-        const rect = this.canvas.getBoundingClientRect();
-        return {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top
-        };
-    }
-
-    startDrawing(e) {
-        if (AppState.currentTool === 'hand') return;
-        
-        AppState.isDrawing = true;
-        const coords = this.getCoordinates(e);
-        AppState.lastX = coords.x;
-        AppState.lastY = coords.y;
-
-        // Salva stato per undo
-        this.saveState();
-
-        if (AppState.currentTool === 'text') {
-            this.addText(coords.x, coords.y);
+        if (this.uploadedImage) {
+            // Cover: scala per coprire tutto mantenendo proporzioni
+            const img = this.uploadedImage;
+            const scaleX = W / img.width;
+            const scaleY = H / img.height;
+            const scale = Math.max(scaleX, scaleY);
+            const w = img.width * scale;
+            const h = img.height * scale;
+            const x = (W - w) / 2;
+            const y = (H - h) / 2;
+            ctx.globalAlpha = 0.9;
+            ctx.drawImage(img, x, y, w, h);
+            ctx.globalAlpha = 1;
             return;
         }
 
-        this.setupBrush();
-        this.ctx.beginPath();
-        this.ctx.moveTo(coords.x, coords.y);
-    }
+        // Sfondi predefiniti
+        ctx.strokeStyle = '#bfdbfe'; // blue-200 — elegante e leggero
+        ctx.lineWidth = 1;
 
-    draw(e) {
-        if (!AppState.isDrawing || AppState.currentTool === 'hand' || AppState.currentTool === 'text') return;
-
-        const coords = this.getCoordinates(e);
-        
-        if (AppState.currentTool === 'eraser') {
-            this.erase(coords.x, coords.y);
-        } else {
-            this.ctx.lineTo(coords.x, coords.y);
-            this.ctx.stroke();
-        }
-
-        AppState.lastX = coords.x;
-        AppState.lastY = coords.y;
-    }
-
-    stopDrawing() {
-        if (AppState.isDrawing) {
-            AppState.isDrawing = false;
-            this.ctx.beginPath();
-        }
-    }
-
-    setupBrush() {
-        const tool = CONFIG.tools[AppState.currentTool];
-        
-        if (AppState.currentTool === 'eraser') {
-            this.ctx.globalCompositeOperation = 'destination-out';
-            this.ctx.lineWidth = tool.size;
-        } else {
-            this.ctx.globalCompositeOperation = 'source-over';
-            this.ctx.strokeStyle = tool.color;
-            this.ctx.lineWidth = tool.size;
-            this.ctx.globalAlpha = tool.opacity;
+        switch (this.currentBg) {
+            case 'lines-8': // 8mm ≈ 30px a 96dpi
+                this._drawLines(ctx, W, H, 30);
+                break;
+            case 'lines-5': // 5mm ≈ 19px
+                this._drawLines(ctx, W, H, 19);
+                break;
+            case 'lines-3': // 3mm ≈ 11px
+                this._drawLines(ctx, W, H, 11);
+                break;
+            case 'grid-10': // quadretti 10mm ≈ 38px
+                this._drawGrid(ctx, W, H, 38);
+                break;
+            case 'grid-5': // quadretti 5mm ≈ 19px
+                this._drawGrid(ctx, W, H, 19);
+                break;
+            case 'dots':
+                this._drawDots(ctx, W, H, 20);
+                break;
+            case 'staff': // pentagramma musicale
+                this._drawStaff(ctx, W, H);
+                break;
+            // 'white': solo bianco (già fatto sopra)
         }
     }
 
-    erase(x, y) {
-        this.ctx.save();
-        this.ctx.globalCompositeOperation = 'destination-out';
-        this.ctx.beginPath();
-        this.ctx.arc(x, y, CONFIG.tools.eraser.size / 2, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.restore();
-    }
-
-    addText(x, y) {
-        const text = prompt('Inserisci il testo:');
-        if (text) {
-            this.ctx.save();
-            this.ctx.font = '16px Inter, sans-serif';
-            this.ctx.fillStyle = CONFIG.tools[AppState.currentTool]?.color || '#000000';
-            this.ctx.fillText(text, x, y);
-            this.ctx.restore();
+    _drawLines(ctx, W, H, spacing) {
+        for (let y = spacing; y < H; y += spacing) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(W, y);
+            ctx.stroke();
         }
     }
 
-    applyBackground() {
-        this.canvas.className = '';
-        this.canvas.style.background = '';
-        
-        if (AppState.currentBackground === 'blank') {
-            this.canvas.style.background = CONFIG.backgrounds.blank;
-        } else {
-            this.canvas.className = `canvas-${AppState.currentBackground}`;
+    _drawGrid(ctx, W, H, spacing) {
+        ctx.strokeStyle = '#dbeafe'; // più leggero per le colonne
+        for (let x = spacing; x < W; x += spacing) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, H);
+            ctx.stroke();
         }
+        ctx.strokeStyle = '#bfdbfe';
+        for (let y = spacing; y < H; y += spacing) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(W, y);
+            ctx.stroke();
+        }
+    }
+
+    _drawDots(ctx, W, H, spacing) {
+        ctx.fillStyle = '#94a3b8';
+        for (let x = spacing; x < W; x += spacing) {
+            for (let y = spacing; y < H; y += spacing) {
+                ctx.beginPath();
+                ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    }
+
+    _drawStaff(ctx, W, H) {
+        // Gruppi da 5 righe con spazio più grande tra i gruppi
+        const lineSpacing = 12;  // tra le righe del pentagramma
+        const groupSpacing = 60; // tra un pentagramma e il successivo
+        let y = groupSpacing;
+        while (y + lineSpacing * 4 < H) {
+            for (let i = 0; i < 5; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, y + i * lineSpacing);
+                ctx.lineTo(W, y + i * lineSpacing);
+                ctx.stroke();
+            }
+            y += lineSpacing * 4 + groupSpacing;
+        }
+    }
+
+    setBackground(bgKey) {
+        this.currentBg = bgKey;
+        this.uploadedImage = null;
+        this.render();
+        CONFIG.currentBg = bgKey;
+    }
+
+    setImage(imgElement) {
+        this.uploadedImage = imgElement;
+        this.currentBg = 'image';
+        this.render();
+    }
+}
+
+// =============================================================================
+// SEZIONE 3 — BrushEngine
+// Contiene i metodi per disegnare ogni tipo di pennello. NON accede al DOM.
+// =============================================================================
+
+class BrushEngine {
+
+    // Penna liscia — tratto netto e scorrevole
+    pen(ctx, x0, y0, x1, y1, size, color) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = color;
+        ctx.lineWidth = size;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // Matita HB — tratto granuloso, leggermente irregolare
+    pencil(ctx, x0, y0, x1, y1, size, color) {
+        const dist = Math.hypot(x1 - x0, y1 - y0);
+        const steps = Math.max(1, Math.ceil(dist * 1.5));
+        ctx.save();
+        ctx.fillStyle = color;
+        ctx.globalCompositeOperation = 'source-over';
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const x = x0 + t * (x1 - x0);
+            const y = y0 + t * (y1 - y0);
+            // 4-6 punti per step, dispersi casualmente
+            const numDots = Math.floor(size * 0.7) + 3;
+            for (let d = 0; d < numDots; d++) {
+                const spread = size * 0.45;
+                const dx = (Math.random() - 0.5) * spread;
+                const dy = (Math.random() - 0.5) * spread;
+                const dotR = Math.random() * size * 0.11 + size * 0.04;
+                ctx.globalAlpha = Math.random() * 0.45 + 0.2;
+                ctx.beginPath();
+                ctx.arc(x + dx, y + dy, dotR, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        ctx.restore();
+    }
+
+    // Pastello morbido — sfumato con strati multipli (no filter:blur per performance)
+    pastel(ctx, x0, y0, x1, y1, size, color) {
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = color;
+        ctx.globalCompositeOperation = 'source-over';
+        const layers = [
+            { w: size * 3.5, a: 0.022 },
+            { w: size * 2.5, a: 0.035 },
+            { w: size * 1.8, a: 0.055 },
+            { w: size * 1.2, a: 0.08  },
+            { w: size * 0.7, a: 0.12  },
+            { w: size * 0.35, a: 0.18 },
+        ];
+        layers.forEach(({ w, a }) => {
+            ctx.globalAlpha = a;
+            ctx.lineWidth = w;
+            ctx.beginPath();
+            ctx.moveTo(x0, y0);
+            ctx.lineTo(x1, y1);
+            ctx.stroke();
+        });
+        ctx.restore();
+    }
+
+    // Evidenziatore — tratto largo e semitrasparente
+    marker(ctx, x0, y0, x1, y1, size, color) {
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = size * 2.5;
+        ctx.lineCap = 'square';
+        ctx.lineJoin = 'round';
+        ctx.globalAlpha = 0.35;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // Gomma — cancella usando destination-out (mostra il bg-canvas sotto)
+    eraser(ctx, x, y, size) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // Forme geometriche — disegna su ctx passato, con colore e spessore dati
+    shape(ctx, type, x0, y0, x1, y1, size, color, fill) {
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = size;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+
+        switch (type) {
+            case 'line':
+                ctx.moveTo(x0, y0);
+                ctx.lineTo(x1, y1);
+                ctx.stroke();
+                break;
+
+            case 'rect':
+                if (fill) {
+                    ctx.globalAlpha = 0.15;
+                    ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+                    ctx.globalAlpha = 1;
+                }
+                ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+                break;
+
+            case 'circle': {
+                const rx = Math.abs(x1 - x0) / 2;
+                const ry = Math.abs(y1 - y0) / 2;
+                const cx = (x0 + x1) / 2;
+                const cy = (y0 + y1) / 2;
+                ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+                if (fill) {
+                    ctx.globalAlpha = 0.15;
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                }
+                ctx.stroke();
+                break;
+            }
+
+            case 'triangle': {
+                const mx = (x0 + x1) / 2;
+                ctx.moveTo(mx, y0);
+                ctx.lineTo(x1, y1);
+                ctx.lineTo(x0, y1);
+                ctx.closePath();
+                if (fill) {
+                    ctx.globalAlpha = 0.15;
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                }
+                ctx.stroke();
+                break;
+            }
+
+            case 'arrow': {
+                const dx = x1 - x0;
+                const dy = y1 - y0;
+                const len = Math.hypot(dx, dy);
+                if (len === 0) break;
+                const ux = dx / len;
+                const uy = dy / len;
+                const headLen = Math.min(30, len * 0.35);
+                ctx.moveTo(x0, y0);
+                ctx.lineTo(x1, y1);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x1 - headLen * (ux - uy * 0.4), y1 - headLen * (uy + ux * 0.4));
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x1 - headLen * (ux + uy * 0.4), y1 - headLen * (uy - ux * 0.4));
+                ctx.stroke();
+                break;
+            }
+
+            case 'star': {
+                const cx2 = (x0 + x1) / 2;
+                const cy2 = (y0 + y1) / 2;
+                const outerR = Math.min(Math.abs(x1 - x0), Math.abs(y1 - y0)) / 2;
+                const innerR = outerR * 0.4;
+                for (let i = 0; i < 10; i++) {
+                    const angle = (i * Math.PI) / 5 - Math.PI / 2;
+                    const r = i % 2 === 0 ? outerR : innerR;
+                    if (i === 0) {
+                        ctx.moveTo(cx2 + r * Math.cos(angle), cy2 + r * Math.sin(angle));
+                    } else {
+                        ctx.lineTo(cx2 + r * Math.cos(angle), cy2 + r * Math.sin(angle));
+                    }
+                }
+                ctx.closePath();
+                if (fill) {
+                    ctx.globalAlpha = 0.15;
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                }
+                ctx.stroke();
+                break;
+            }
+        }
+
+        ctx.restore();
+    }
+}
+
+// =============================================================================
+// SEZIONE 4 — LaserManager
+// Effetto laser rosso con trail che svanisce. Usa #overlay-canvas.
+// =============================================================================
+
+class LaserManager {
+    constructor(overlayCanvas) {
+        this.canvas = overlayCanvas;
+        this.ctx = overlayCanvas.getContext('2d');
+        this.points = []; // { x, y, t }
+        this.animFrame = null;
+        this.active = false;
+    }
+
+    addPoint(x, y) {
+        this.points.push({ x, y, t: performance.now() });
+        if (!this.animFrame) this._animate();
+    }
+
+    stop() {
+        // Continua l'animazione finché i punti svaniscono da soli
+    }
+
+    _animate() {
+        const now = performance.now();
+        const lifetime = 700; // ms prima che un punto sparisca
+        this.points = this.points.filter(p => now - p.t < lifetime);
+
+        const ctx = this.ctx;
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        if (this.points.length === 0) {
+            this.animFrame = null;
+            return;
+        }
+
+        // Disegna cerchio rosso con glow sull'ultimo punto
+        const last = this.points[this.points.length - 1];
+        ctx.save();
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = 24;
+        ctx.fillStyle = '#ff3333';
+        ctx.globalAlpha = 0.95;
+        ctx.beginPath();
+        ctx.arc(last.x, last.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Disegna trail che svanisce
+        if (this.points.length > 1) {
+            for (let i = 0; i < this.points.length - 1; i++) {
+                const p = this.points[i];
+                const age = (now - p.t) / lifetime;
+                const alpha = (1 - age) * 0.5;
+                const r = 4 * (1 - age * 0.7);
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = '#ff4444';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        this.animFrame = requestAnimationFrame(() => this._animate());
     }
 
     clear() {
-        this.saveState();
+        this.points = [];
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     }
 
-    saveState() {
-        AppState.undoStack.push(this.canvas.toDataURL());
-        if (AppState.undoStack.length > AppState.maxUndoSteps) {
-            AppState.undoStack.shift();
+    resize(w, h) {
+        this.canvas.width = w;
+        this.canvas.height = h;
+    }
+}
+
+// =============================================================================
+// SEZIONE 5 — CanvasManager
+// Gestisce draw-canvas, eventi mouse/touch, undo/redo.
+// Dipende da: bgMgr, brush, laserMgr (globali); toolbarMgr, textMgr (globali post-init)
+// =============================================================================
+
+class CanvasManager {
+    constructor(bgMgr, brush, laserMgr) {
+        this.bgMgr = bgMgr;
+        this.brush = brush;
+        this.laser = laserMgr;
+
+        this.canvas = document.getElementById('draw-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.overlayCanvas = document.getElementById('overlay-canvas');
+        this.overlayCtx = this.overlayCanvas.getContext('2d');
+
+        this.undoStack = [];
+        this.redoStack = [];
+
+        this._setupEvents();
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+    }
+
+    resize() {
+        const W = window.innerWidth;
+        const H = window.innerHeight - 56; // 56px header
+
+        // Salva disegno prima del resize
+        const savedURL = this.canvas.width > 0 ? this.canvas.toDataURL() : null;
+        const prevW = this.canvas.width;
+
+        this.canvas.width = W;
+        this.canvas.height = H;
+        this.overlayCanvas.width = W;
+        this.overlayCanvas.height = H;
+        this.bgMgr.resize(W, H);
+        this.laser.resize(W, H);
+
+        // Ripristina disegno scalato al nuovo size
+        if (savedURL && prevW > 0) {
+            const img = new Image();
+            img.onload = () => {
+                this.ctx.drawImage(img, 0, 0, W, H);
+            };
+            img.src = savedURL;
         }
-        AppState.redoStack = [];
+    }
+
+    getCoords(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        if (e.touches) {
+            return {
+                x: e.touches[0].clientX - rect.left,
+                y: e.touches[0].clientY - rect.top
+            };
+        }
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+
+    _setupEvents() {
+        const el = this.canvas;
+        // Mouse
+        el.addEventListener('mousedown',  e => this._onStart(e));
+        el.addEventListener('mousemove',  e => this._onMove(e));
+        el.addEventListener('mouseup',    e => this._onEnd(e));
+        el.addEventListener('mouseleave', e => this._onEnd(e));
+        // Touch
+        el.addEventListener('touchstart', e => { e.preventDefault(); this._onStart(e); }, { passive: false });
+        el.addEventListener('touchmove',  e => { e.preventDefault(); this._onMove(e);  }, { passive: false });
+        el.addEventListener('touchend',   e => { e.preventDefault(); this._onEnd(e);   }, { passive: false });
+    }
+
+    _onStart(e) {
+        const { x, y } = this.getCoords(e);
+        CONFIG.isDrawing = true;
+
+        // Auto-hide toolbar quando si inizia a disegnare
+        toolbarMgr.hide();
+
+        if (CONFIG.currentTool === 'laser') {
+            this.laser.addPoint(x, y);
+            return;
+        }
+        if (CONFIG.currentTool === 'text') {
+            textMgr.placeInput(x, y);
+            CONFIG.isDrawing = false;
+            return;
+        }
+        if (CONFIG.currentTool === 'shape') {
+            CONFIG.shapeStartX = x;
+            CONFIG.shapeStartY = y;
+            CONFIG.shapeSnapshot = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+            return;
+        }
+
+        // Tutti gli altri strumenti: salva undo state all'inizio del tratto
+        this._saveUndo();
+        CONFIG.lastX = x;
+        CONFIG.lastY = y;
+
+        // Disegna il punto iniziale (dot)
+        if (CONFIG.currentTool === 'eraser') {
+            this.brush.eraser(this.ctx, x, y, CONFIG.currentSize * 2);
+        } else {
+            this._drawSegment(x, y, x, y);
+        }
+    }
+
+    _onMove(e) {
+        if (!CONFIG.isDrawing) return;
+        const { x, y } = this.getCoords(e);
+
+        if (CONFIG.currentTool === 'laser') {
+            this.laser.addPoint(x, y);
+            return;
+        }
+        if (CONFIG.currentTool === 'shape') {
+            // Preview live: ripristina snapshot + disegna forma aggiornata
+            this.ctx.putImageData(CONFIG.shapeSnapshot, 0, 0);
+            this.brush.shape(
+                this.ctx,
+                CONFIG.currentShape,
+                CONFIG.shapeStartX, CONFIG.shapeStartY,
+                x, y,
+                CONFIG.currentSize,
+                CONFIG.currentColor,
+                CONFIG.shapeFill
+            );
+            return;
+        }
+
+        if (CONFIG.currentTool === 'eraser') {
+            this.brush.eraser(this.ctx, x, y, CONFIG.currentSize * 2);
+        } else {
+            this._drawSegment(CONFIG.lastX, CONFIG.lastY, x, y);
+        }
+
+        CONFIG.lastX = x;
+        CONFIG.lastY = y;
+    }
+
+    _onEnd(e) {
+        if (!CONFIG.isDrawing) return;
+        CONFIG.isDrawing = false;
+
+        if (CONFIG.currentTool === 'laser') {
+            this.laser.stop();
+            return;
+        }
+        if (CONFIG.currentTool === 'shape') {
+            // La forma è già sul canvas (dall'ultimo _onMove)
+            this._saveUndo(); // salva DOPO aver disegnato la forma
+            CONFIG.shapeSnapshot = null;
+            return;
+        }
+    }
+
+    _drawSegment(x0, y0, x1, y1) {
+        const tool  = CONFIG.currentTool;
+        const color = CONFIG.currentColor;
+        const size  = CONFIG.currentSize;
+
+        switch (tool) {
+            case 'pen':    this.brush.pen(this.ctx, x0, y0, x1, y1, size, color);    break;
+            case 'pencil': this.brush.pencil(this.ctx, x0, y0, x1, y1, size, color); break;
+            case 'pastel': this.brush.pastel(this.ctx, x0, y0, x1, y1, size, color); break;
+            case 'marker': this.brush.marker(this.ctx, x0, y0, x1, y1, size, color); break;
+        }
+    }
+
+    _saveUndo() {
+        this.undoStack.push(this.canvas.toDataURL());
+        if (this.undoStack.length > CONFIG.maxUndo) this.undoStack.shift();
+        this.redoStack = [];
     }
 
     undo() {
-        if (AppState.undoStack.length > 0) {
-            AppState.redoStack.push(this.canvas.toDataURL());
-            const previousState = AppState.undoStack.pop();
-            this.loadState(previousState);
-        }
+        if (this.undoStack.length === 0) return;
+        this.redoStack.push(this.canvas.toDataURL());
+        const prev = this.undoStack.pop();
+        this._loadURL(prev);
     }
 
     redo() {
-        if (AppState.redoStack.length > 0) {
-            AppState.undoStack.push(this.canvas.toDataURL());
-            const nextState = AppState.redoStack.pop();
-            this.loadState(nextState);
-        }
+        if (this.redoStack.length === 0) return;
+        this.undoStack.push(this.canvas.toDataURL());
+        const next = this.redoStack.pop();
+        this._loadURL(next);
     }
 
-    loadState(dataURL) {
+    _loadURL(url) {
         const img = new Image();
         img.onload = () => {
             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
             this.ctx.drawImage(img, 0, 0);
         };
-        img.src = dataURL;
+        img.src = url;
+    }
+
+    clear() {
+        this._saveUndo();
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.laser.clear();
+    }
+
+    exportPNG() {
+        // Componi bg + draw in un canvas temporaneo per l'export
+        const tmp = document.createElement('canvas');
+        tmp.width  = this.canvas.width;
+        tmp.height = this.canvas.height;
+        const tCtx = tmp.getContext('2d');
+        tCtx.drawImage(this.bgMgr.canvas, 0, 0);
+        tCtx.drawImage(this.canvas, 0, 0);
+        const url = tmp.toDataURL('image/png');
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = (CONFIG.projectName || 'eduboard') + '.png';
+        a.click();
+    }
+
+    getDataURL() {
+        return this.canvas.toDataURL();
     }
 }
 
-// Gestione Toolbar
+// =============================================================================
+// SEZIONE 6 — ToolbarManager
+// Gestisce la toolbar a scomparsa, la selezione strumenti, i pannelli opzioni.
+// Dipende da: canvasMgr, bgMgr (globali post-init)
+// =============================================================================
+
 class ToolbarManager {
-    constructor(canvasManager) {
-        this.canvasManager = canvasManager;
-        this.setupToolButtons();
-        this.setupPanels();
-        this.setupControls();
+    constructor() {
+        this.wrapper    = document.getElementById('toolbar-wrapper');
+        this.toggleBtn  = document.getElementById('toolbar-toggle');
+        this.optionsRow = document.getElementById('tool-options-row');
+        this.visible    = false;
+
+        this._setupToggle();
+        this._setupTools();
+        this._setupColors();
+        this._setupSizes();
+        this._setupShapePanel();
+        this._setupBgPanel();
     }
 
-    setupToolButtons() {
-        // Gestione strumenti principali
-        document.querySelectorAll('.tool-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const tool = btn.dataset.tool;
-                if (tool) {
-                    this.selectTool(tool);
-                }
+    show() {
+        this.visible = true;
+        this.wrapper.classList.add('visible');
+        this.toggleBtn.querySelector('#toggle-arrow').style.transform = 'rotate(180deg)';
+    }
+
+    hide() {
+        this.visible = false;
+        this.wrapper.classList.remove('visible');
+        this.toggleBtn.querySelector('#toggle-arrow').style.transform = 'rotate(0deg)';
+        this._closeAllPopups();
+    }
+
+    toggle() {
+        if (this.visible) this.hide(); else this.show();
+    }
+
+    _setupToggle() {
+        this.toggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggle();
+        });
+    }
+
+    _setupTools() {
+        document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this._selectTool(btn.dataset.tool, btn);
             });
         });
 
-        // Gestione pannelli espandibili
-        document.querySelectorAll('.toolbar-btn[data-tool]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const tool = btn.dataset.tool;
-                if (['pencil', 'pen', 'marker', 'fountain'].includes(tool)) {
-                    this.togglePanel('pen-panel');
-                }
+        document.getElementById('btn-undo').addEventListener('click',  () => canvasMgr.undo());
+        document.getElementById('btn-redo').addEventListener('click',  () => canvasMgr.redo());
+        document.getElementById('btn-clear').addEventListener('click', () => {
+            if (confirm('Cancellare tutto il disegno?')) canvasMgr.clear();
+        });
+    }
+
+    _selectTool(tool, btn) {
+        // Chiudi popup aperti
+        this._closeAllPopups();
+
+        if (tool === 'background') {
+            this._togglePopup('bg-popup', btn);
+            return;
+        }
+        if (tool === 'shape') {
+            this._togglePopup('shape-popup', btn);
+            CONFIG.currentTool = 'shape';
+            this._updateActiveBtn(btn);
+            this._updateOptionsRow();
+            return;
+        }
+        if (tool === 'upload-bg') {
+            document.getElementById('file-bg-input').click();
+            return;
+        }
+
+        CONFIG.currentTool = tool;
+        this._updateActiveBtn(btn);
+        this._updateOptionsRow();
+        this._updateCursor();
+    }
+
+    _updateActiveBtn(activeBtn) {
+        document.querySelectorAll('.tool-btn[data-tool]').forEach(b => {
+            b.classList.remove('active');
+        });
+        if (activeBtn) activeBtn.classList.add('active');
+    }
+
+    _updateOptionsRow() {
+        const tool = CONFIG.currentTool;
+        const showOptions = ['pen', 'pencil', 'pastel', 'marker', 'eraser', 'shape', 'text'].includes(tool);
+        this.optionsRow.style.display = showOptions ? 'flex' : 'none';
+
+        // Nascondi colori per strumenti che non ne hanno bisogno
+        const showColors = !['eraser', 'laser'].includes(tool);
+        document.getElementById('options-colors').style.display = showColors ? 'flex' : 'none';
+        const divider = document.querySelector('.options-divider');
+        if (divider) divider.style.display = showColors ? 'block' : 'none';
+    }
+
+    _updateCursor() {
+        const canvas = document.getElementById('draw-canvas');
+        const cursorMap = {
+            pen:    'crosshair',
+            pencil: 'crosshair',
+            pastel: 'crosshair',
+            marker: 'crosshair',
+            eraser: 'cell',
+            text:   'text',
+            laser:  'none',
+            shape:  'crosshair',
+        };
+        canvas.style.cursor = cursorMap[CONFIG.currentTool] || 'default';
+    }
+
+    _setupColors() {
+        document.querySelectorAll('.color-swatch').forEach(btn => {
+            if (btn.id === 'color-custom') return;
+            btn.addEventListener('click', () => {
+                CONFIG.currentColor = btn.dataset.color;
+                document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
             });
         });
-    }
 
-    selectTool(tool) {
-        if (tool === 'clear') {
-            if (confirm('Sei sicuro di voler cancellare tutto?')) {
-                this.canvasManager.clear();
-            }
-            return;
-        }
-
-        if (tool === 'upload') {
-            document.getElementById('file-input').click();
-            return;
-        }
-
-        // Aggiorna stato
-        AppState.currentTool = tool;
-
-        // Aggiorna UI
-        document.querySelectorAll('.tool-btn').forEach(btn => {
-            btn.classList.remove('active');
+        document.getElementById('color-custom').addEventListener('click', () => {
+            document.getElementById('color-picker-input').click();
         });
 
-        const activeBtn = document.querySelector(`[data-tool="${tool}"]`);
-        if (activeBtn) {
-            activeBtn.classList.add('active');
-        }
-
-        // Aggiorna cursore
-        this.updateCursor();
-    }
-
-    updateCursor() {
-        const canvas = this.canvasManager.canvas;
-        
-        switch (AppState.currentTool) {
-            case 'hand':
-                canvas.style.cursor = 'grab';
-                break;
-            case 'eraser':
-                canvas.style.cursor = 'crosshair';
-                break;
-            case 'text':
-                canvas.style.cursor = 'text';
-                break;
-            default:
-                canvas.style.cursor = 'crosshair';
-        }
-    }
-
-    togglePanel(panelId) {
-        const panel = document.getElementById(panelId);
-        const isActive = panel.classList.contains('active');
-        
-        // Chiudi tutti i pannelli
-        document.querySelectorAll('.expand-panel').forEach(p => {
-            p.classList.remove('active');
+        document.getElementById('color-picker-input').addEventListener('input', (e) => {
+            CONFIG.currentColor = e.target.value;
+            const customBtn = document.getElementById('color-custom');
+            customBtn.style.background = e.target.value;
+            document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
+            customBtn.classList.add('active');
         });
-
-        // Apri il pannello selezionato se non era attivo
-        if (!isActive) {
-            panel.classList.add('active');
-        }
     }
 
-    setupPanels() {
-        // Gestione dimensioni
+    _setupSizes() {
         document.querySelectorAll('.size-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                const size = parseInt(btn.dataset.size);
-                CONFIG.tools[AppState.currentTool].size = size;
-                
+                CONFIG.currentSize = parseInt(btn.dataset.size);
                 document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
             });
         });
+    }
 
-        // Gestione colori
-        document.querySelectorAll('.color-btn').forEach(btn => {
+    _setupShapePanel() {
+        document.querySelectorAll('.shape-opt').forEach(btn => {
             btn.addEventListener('click', () => {
-                if (btn.id === 'custom-color') {
-                    document.getElementById('color-picker').click();
-                    return;
-                }
-
-                const color = btn.dataset.color;
-                CONFIG.tools[AppState.currentTool].color = color;
-                
-                document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+                CONFIG.currentShape = btn.dataset.shape;
+                document.querySelectorAll('.shape-opt').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
+                this._closeAllPopups();
             });
         });
 
-        // Color picker personalizzato
-        document.getElementById('color-picker').addEventListener('change', (e) => {
-            const color = e.target.value;
-            CONFIG.tools[AppState.currentTool].color = color;
-            
-            // Aggiorna il pulsante custom
-            const customBtn = document.getElementById('custom-color');
-            customBtn.style.background = color;
-            
-            document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
-            customBtn.classList.add('active');
-        });
-
-        // Gestione sfondi
-        document.querySelectorAll('.bg-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const bg = btn.dataset.bg;
-                AppState.currentBackground = bg;
-                this.canvasManager.applyBackground();
-                
-                document.querySelectorAll('.bg-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-            });
+        document.getElementById('shape-fill-check').addEventListener('change', (e) => {
+            CONFIG.shapeFill = e.target.checked;
         });
     }
 
-    setupControls() {
-        // Undo/Redo
-        document.getElementById('undo-btn').addEventListener('click', () => {
-            this.canvasManager.undo();
+    _setupBgPanel() {
+        document.querySelectorAll('.bg-opt').forEach(btn => {
+            btn.addEventListener('click', () => {
+                bgMgr.setBackground(btn.dataset.bg);
+                document.querySelectorAll('.bg-opt').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this._closeAllPopups();
+                toast('Sfondo aggiornato');
+            });
         });
 
-        document.getElementById('redo-btn').addEventListener('click', () => {
-            this.canvasManager.redo();
+        document.getElementById('file-bg-input').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    bgMgr.setImage(img);
+                    document.querySelectorAll('.bg-opt').forEach(b => b.classList.remove('active'));
+                    toast('Immagine sfondo caricata');
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+            e.target.value = ''; // reset per consentire ri-selezione stessa immagine
         });
+    }
 
-        // Chiusura pannelli quando si clicca fuori
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.floating-toolbar')) {
-                document.querySelectorAll('.expand-panel').forEach(panel => {
-                    panel.classList.remove('active');
-                });
-            }
-        });
+    _togglePopup(id, triggerBtn) {
+        const popup = document.getElementById(id);
+        const isVisible = popup.style.display !== 'none';
+        this._closeAllPopups();
+        if (!isVisible) {
+            popup.style.display = 'block';
+            // Posiziona popup sopra la toolbar
+            const tbRect = this.wrapper.getBoundingClientRect();
+            popup.style.bottom = (window.innerHeight - tbRect.top + 12) + 'px';
+        }
+    }
+
+    _closeAllPopups() {
+        document.getElementById('shape-popup').style.display = 'none';
+        document.getElementById('bg-popup').style.display = 'none';
     }
 }
 
-// Gestione Progetti
-class ProjectManager {
+// =============================================================================
+// SEZIONE 7 — TextManager
+// Gestisce l'input testo inline (no prompt!).
+// Dipende da: canvasMgr (globale post-init)
+// =============================================================================
+
+class TextManager {
     constructor() {
-        this.setupEventListeners();
+        this.el     = document.getElementById('text-cursor');
+        this.active = false;
+        this._setup();
     }
 
-    setupEventListeners() {
-        // Pulsante progetti
-        document.getElementById('projects-btn').addEventListener('click', () => {
-            this.toggleSidebar();
-        });
-
-        // Pulsante salva
-        document.getElementById('save-btn').addEventListener('click', () => {
-            this.showSaveModal();
-        });
-
-        // Chiusura sidebar
-        document.getElementById('sidebar-close').addEventListener('click', () => {
-            this.closeSidebar();
-        });
-
-        // Gestione cartelle
-        document.querySelectorAll('.folder-header').forEach(header => {
-            header.addEventListener('click', () => {
-                this.toggleFolder(header);
-            });
-        });
-
-        // Gestione progetti
-        document.querySelectorAll('.project-item').forEach(item => {
-            item.addEventListener('click', () => {
-                this.loadProject(item.dataset.project);
-            });
-        });
-
-        // Form di salvataggio
-        document.getElementById('save-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.saveProject();
-        });
-
-        document.getElementById('cancel-save').addEventListener('click', () => {
-            this.hideSaveModal();
-        });
-    }
-
-    toggleSidebar() {
-        const sidebar = document.getElementById('sidebar');
-        sidebar.classList.toggle('open');
-    }
-
-    closeSidebar() {
-        document.getElementById('sidebar').classList.remove('open');
-    }
-
-    toggleFolder(header) {
-        const folder = header.parentElement;
-        const content = folder.querySelector('.folder-content');
-        const toggle = header.querySelector('.folder-toggle');
-        
-        if (content.style.display === 'none' || !content.style.display) {
-            content.style.display = 'block';
-            toggle.textContent = '▼';
-        } else {
-            content.style.display = 'none';
-            toggle.textContent = '▶';
-        }
-    }
-
-    showSaveModal() {
-        document.getElementById('save-modal').classList.add('show');
-        document.getElementById('project-name').focus();
-    }
-
-    hideSaveModal() {
-        document.getElementById('save-modal').classList.remove('show');
-        document.getElementById('save-form').reset();
-    }
-
-    saveProject() {
-        const name = document.getElementById('project-name').value;
-        const folder = document.getElementById('project-folder').value;
-        
-        if (!name.trim()) {
-            alert('Inserisci un nome per il progetto');
-            return;
-        }
-
-        // Salva nel localStorage
-        const projectData = {
-            name: name,
-            folder: folder,
-            canvas: canvasManager.canvas.toDataURL(),
-            background: AppState.currentBackground,
-            timestamp: new Date().toISOString()
-        };
-
-        const projects = JSON.parse(localStorage.getItem('eduboard-projects') || '{}');
-        const projectId = `${folder}-${Date.now()}`;
-        projects[projectId] = projectData;
-        localStorage.setItem('eduboard-projects', JSON.stringify(projects));
-
-        // Aggiorna nome progetto corrente
-        AppState.currentProject = name;
-        document.getElementById('project-info').textContent = name;
-
-        this.hideSaveModal();
-        this.showNotification('Progetto salvato con successo!');
-    }
-
-    loadProject(projectId) {
-        const projects = JSON.parse(localStorage.getItem('eduboard-projects') || '{}');
-        const project = projects[projectId];
-        
-        if (project) {
-            // Carica il canvas
-            const img = new Image();
-            img.onload = () => {
-                canvasManager.ctx.clearRect(0, 0, canvasManager.canvas.width, canvasManager.canvas.height);
-                canvasManager.ctx.drawImage(img, 0, 0);
-            };
-            img.src = project.canvas;
-
-            // Aggiorna stato
-            AppState.currentProject = project.name;
-            AppState.currentBackground = project.background;
-            
-            // Aggiorna UI
-            document.getElementById('project-info').textContent = project.name;
-            canvasManager.applyBackground();
-            
-            this.closeSidebar();
-            this.showNotification(`Progetto "${project.name}" caricato!`);
-        }
-    }
-
-    showNotification(message) {
-        // Crea notifica temporanea
-        const notification = document.createElement('div');
-        notification.className = 'notification';
-        notification.textContent = message;
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: var(--success);
-            color: white;
-            padding: 12px 20px;
-            border-radius: var(--radius-sm);
-            box-shadow: var(--shadow-lg);
-            z-index: 1000;
-            animation: slideIn 0.3s ease;
-        `;
-        
-        document.body.appendChild(notification);
-        
-        setTimeout(() => {
-            notification.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => notification.remove(), 300);
-        }, 3000);
-    }
-}
-
-// Gestione File Upload
-class FileManager {
-    constructor(canvasManager) {
-        this.canvasManager = canvasManager;
-        this.setupEventListeners();
-    }
-
-    setupEventListeners() {
-        const fileInput = document.getElementById('file-input');
-        
-        fileInput.addEventListener('change', (e) => {
-            this.handleFiles(e.target.files);
-        });
-
-        // Drag & Drop
-        const canvas = this.canvasManager.canvas;
-        
-        canvas.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            canvas.style.opacity = '0.7';
-        });
-
-        canvas.addEventListener('dragleave', () => {
-            canvas.style.opacity = '1';
-        });
-
-        canvas.addEventListener('drop', (e) => {
-            e.preventDefault();
-            canvas.style.opacity = '1';
-            this.handleFiles(e.dataTransfer.files);
-        });
-    }
-
-    handleFiles(files) {
-        Array.from(files).forEach(file => {
-            if (file.type.startsWith('image/')) {
-                this.loadImage(file);
+    _setup() {
+        this.el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this._commit();
+            }
+            if (e.key === 'Escape') {
+                this._cancel();
             }
         });
+
+        // Click sul canvas mentre si sta scrivendo: conferma il testo
+        document.getElementById('draw-canvas').addEventListener('mousedown', () => {
+            if (this.active) this._commit();
+        });
     }
 
-    loadImage(file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-                this.canvasManager.saveState();
-                
-                // Calcola dimensioni per mantenere proporzioni
-                const maxWidth = this.canvasManager.canvas.width * 0.8;
-                const maxHeight = this.canvasManager.canvas.height * 0.8;
-                
-                let { width, height } = img;
-                
-                if (width > maxWidth) {
-                    height = (height * maxWidth) / width;
-                    width = maxWidth;
-                }
-                
-                if (height > maxHeight) {
-                    width = (width * maxHeight) / height;
-                    height = maxHeight;
-                }
+    placeInput(x, y) {
+        this.active = true;
+        const el = this.el;
+        el.style.display   = 'block';
+        el.style.left      = x + 'px';
+        el.style.top       = (y + 56 - 24) + 'px'; // 56=header, 24=line-height offset
+        el.style.fontSize  = Math.max(16, CONFIG.currentSize * 3) + 'px';
+        el.style.color     = CONFIG.currentColor;
+        el.innerText       = '';
+        el.focus();
+        // Posiziona il cursore alla fine del contenuto
+        const range = document.createRange();
+        const sel   = window.getSelection();
+        range.selectNodeContents(el);
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+    }
 
-                // Centra l'immagine
-                const x = (this.canvasManager.canvas.width - width) / 2;
-                const y = (this.canvasManager.canvas.height - height) / 2;
+    _commit() {
+        if (!this.active) return;
+        const text = this.el.innerText.trim();
+        const x    = parseInt(this.el.style.left);
+        const y    = parseInt(this.el.style.top) - 56 + 24;
 
-                this.canvasManager.ctx.drawImage(img, x, y, width, height);
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
+        if (text) {
+            const ctx = canvasMgr.ctx;
+            canvasMgr._saveUndo();
+            ctx.save();
+            ctx.font      = `${Math.max(16, CONFIG.currentSize * 3)}px Inter, sans-serif`;
+            ctx.fillStyle = CONFIG.currentColor;
+            ctx.globalAlpha = 1;
+            // Supporto testo multilinea (Shift+Enter)
+            const lines = text.split('\n');
+            const lineH = Math.max(16, CONFIG.currentSize * 3) * 1.3;
+            lines.forEach((line, i) => {
+                ctx.fillText(line, x, y + i * lineH);
+            });
+            ctx.restore();
+        }
+
+        this._cancel();
+    }
+
+    _cancel() {
+        this.active      = false;
+        this.el.style.display = 'none';
+        this.el.innerText    = '';
     }
 }
 
-// Gestione PWA
+// =============================================================================
+// SEZIONE 8 — ProjectManager
+// Salvataggio su LocalStorage ed esportazione.
+// Dipende da: canvasMgr, bgMgr (globali post-init)
+// =============================================================================
+
+class ProjectManager {
+    save() {
+        const name = prompt('Nome progetto:', CONFIG.projectName) || CONFIG.projectName;
+        CONFIG.projectName = name;
+        document.getElementById('project-name').textContent = name;
+
+        const data = {
+            name,
+            drawing: canvasMgr.getDataURL(),
+            bg: CONFIG.currentBg,
+            ts: Date.now()
+        };
+        const projects = JSON.parse(localStorage.getItem('eduboard-v2') || '{}');
+        projects[name + '_' + Date.now()] = data;
+        localStorage.setItem('eduboard-v2', JSON.stringify(projects));
+        toast('Progetto salvato!', 'success');
+    }
+
+    newBoard() {
+        if (confirm('Nuova lavagna? Il disegno non salvato andra\u0300 perso.')) {
+            canvasMgr.clear();
+            bgMgr.setBackground('white');
+            CONFIG.projectName = 'Nuova Lavagna';
+            document.getElementById('project-name').textContent = CONFIG.projectName;
+            document.querySelectorAll('.bg-opt').forEach(b => b.classList.remove('active'));
+            const whiteBtn = document.querySelector('.bg-opt[data-bg="white"]');
+            if (whiteBtn) whiteBtn.classList.add('active');
+        }
+    }
+}
+
+// =============================================================================
+// SEZIONE 9 — Toast
+// Funzione globale per notifiche temporanee a schermo.
+// =============================================================================
+
+function toast(msg, type = 'info') {
+    const container = document.getElementById('toast-container');
+    const el = document.createElement('div');
+    el.className   = `toast ${type}`;
+    el.textContent = msg;
+    container.appendChild(el);
+    setTimeout(() => el.remove(), 3200);
+}
+
+// =============================================================================
+// SEZIONE 10 — PWAManager
+// Gestisce registrazione Service Worker e banner aggiornamento.
+// =============================================================================
+
 class PWAManager {
     constructor() {
-        // Skip Service Worker in development/unsupported environments
-        if (this.isServiceWorkerSupported()) {
-            this.setupServiceWorker();
-        }
-        this.setupInstallPrompt();
-    }
-
-    isServiceWorkerSupported() {
-        // Check for WebContainer environment (StackBlitz)
-        if (typeof window !== 'undefined' && 
-            (window.WEB_CONTAINER_NAME || 
-             window.location.href.includes('stackblitz.io') ||
-             window.location.href.includes('webcontainer.io') ||
-             window.location.href.includes('bolt.new'))) {
-            console.log('[PWA] Service Worker saltato in ambiente WebContainer');
-            return false;
-        }
-
-        // Skip in development environments
-        if (window.location.hostname === 'localhost' || 
-            window.location.hostname === '127.0.0.1' ||
-            window.location.port === '3000' ||
-            window.location.port === '5173' ||
-            window.location.protocol === 'http:') {
-            console.log('[PWA] Service Worker saltato in ambiente di sviluppo');
-            return false;
-        }
-
-        // Check if Service Workers are supported
-        if (!('serviceWorker' in navigator)) {
-            console.log('[PWA] Service Worker non supportato');
-            return false;
-        }
-
-        // Require HTTPS (except localhost)
-        if (!window.location.protocol.startsWith('https') && 
-            window.location.hostname !== 'localhost') {
-            console.log('[PWA] Service Worker richiede HTTPS');
-            return false;
-        }
-
-        return true;
-    }
-
-    async setupServiceWorker() {
-        try {
-            const registration = await navigator.serviceWorker.register('/sw.js');
-            console.log('[PWA] Service Worker registrato:', registration);
-
-            // Gestione aggiornamenti
-            registration.addEventListener('updatefound', () => {
-                const newWorker = registration.installing;
-                newWorker.addEventListener('statechange', () => {
-                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        this.showUpdateBanner();
-                    }
+        if ('serviceWorker' in navigator && location.protocol === 'https:') {
+            navigator.serviceWorker.register('./sw.js').then(reg => {
+                reg.addEventListener('updatefound', () => {
+                    const w = reg.installing;
+                    w.addEventListener('statechange', () => {
+                        if (w.state === 'installed' && navigator.serviceWorker.controller) {
+                            document.getElementById('update-banner').style.display = 'flex';
+                        }
+                    });
+                });
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    window.location.reload();
                 });
             });
-
-            // Ascolta messaggi dal Service Worker
-            navigator.serviceWorker.addEventListener('message', (event) => {
-                if (event.data.type === 'UPDATE_AVAILABLE') {
-                    this.showUpdateBanner();
-                }
-            });
-
-        } catch (error) {
-            console.error('[PWA] Errore registrazione Service Worker:', error);
         }
-    }
-
-    setupInstallPrompt() {
-        let deferredPrompt;
-
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            this.showInstallButton();
-        });
-
-        // Gestione installazione
-        document.addEventListener('click', async (e) => {
-            if (e.target.matches('.install-btn')) {
-                if (deferredPrompt) {
-                    deferredPrompt.prompt();
-                    const { outcome } = await deferredPrompt.userChoice;
-                    console.log('[PWA] Installazione:', outcome);
-                    deferredPrompt = null;
-                }
-            }
-        });
-    }
-
-    showInstallButton() {
-        // Mostra pulsante di installazione se non già presente
-        if (!document.querySelector('.install-btn')) {
-            const installBtn = document.createElement('button');
-            installBtn.className = 'install-btn header-btn';
-            installBtn.innerHTML = '📱 Installa App';
-            document.querySelector('.header-right').appendChild(installBtn);
-        }
-    }
-
-    showUpdateBanner() {
-        const banner = document.getElementById('update-banner');
-        banner.classList.add('show');
 
         document.getElementById('update-btn').addEventListener('click', () => {
-            if (navigator.serviceWorker.controller) {
-                navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
-                window.location.reload();
-            }
+            navigator.serviceWorker.controller?.postMessage({ type: 'SKIP_WAITING' });
         });
-
         document.getElementById('dismiss-update').addEventListener('click', () => {
-            banner.classList.remove('show');
+            document.getElementById('update-banner').style.display = 'none';
         });
     }
 }
 
-// Gestione Scorciatoie da Tastiera
-class KeyboardManager {
-    constructor(canvasManager, projectManager) {
-        this.canvasManager = canvasManager;
-        this.projectManager = projectManager;
-        this.setupEventListeners();
-    }
+// =============================================================================
+// SEZIONE 11 — Keyboard shortcuts
+// =============================================================================
 
-    setupEventListeners() {
-        document.addEventListener('keydown', (e) => {
-            // Previeni azioni di default per le nostre scorciatoie
-            if (e.ctrlKey || e.metaKey) {
-                switch (e.key.toLowerCase()) {
-                    case 's':
-                        e.preventDefault();
-                        this.projectManager.showSaveModal();
-                        break;
-                    case 'z':
-                        e.preventDefault();
-                        if (e.shiftKey) {
-                            this.canvasManager.redo();
-                        } else {
-                            this.canvasManager.undo();
-                        }
-                        break;
-                    case 'n':
-                        e.preventDefault();
-                        if (confirm('Creare una nuova lavagna? Le modifiche non salvate andranno perse.')) {
-                            this.canvasManager.clear();
-                            AppState.currentProject = 'Nuova Lavagna';
-                            document.getElementById('project-info').textContent = AppState.currentProject;
-                        }
-                        break;
-                }
-            }
+function setupKeyboard() {
+    document.addEventListener('keydown', (e) => {
+        // Non interferire con l'input testo inline
+        if (textMgr.active) return;
 
-            // Scorciatoie per strumenti (senza modificatori)
-            if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-                switch (e.key.toLowerCase()) {
-                    case 'p':
-                        toolbarManager.selectTool('pencil');
-                        break;
-                    case 'b':
-                        toolbarManager.selectTool('pen');
-                        break;
-                    case 'e':
-                        toolbarManager.selectTool('eraser');
-                        break;
-                    case 't':
-                        toolbarManager.selectTool('text');
-                        break;
-                    case 'h':
-                        toolbarManager.selectTool('hand');
-                        break;
-                }
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key === 'z') {
+                e.preventDefault();
+                e.shiftKey ? canvasMgr.redo() : canvasMgr.undo();
             }
-        });
-    }
+            if (e.key === 'y') {
+                e.preventDefault();
+                canvasMgr.redo();
+            }
+            if (e.key === 's') {
+                e.preventDefault();
+                projectMgr.save();
+            }
+        }
+
+        if (!e.ctrlKey && !e.metaKey) {
+            // Scorciatoie strumenti:
+            //   p=penna  m=matita  c=pastello  h=evidenziatore
+            //   e=gomma  l=laser   t=testo     s=forme
+            const toolMap = {
+                p: 'pen',
+                m: 'pencil',
+                c: 'pastel',
+                h: 'marker',
+                e: 'eraser',
+                l: 'laser',
+                t: 'text',
+                s: 'shape',
+            };
+            if (toolMap[e.key]) {
+                const btn = document.querySelector(`.tool-btn[data-tool="${toolMap[e.key]}"]`);
+                if (btn) btn.click();
+            }
+        }
+    });
 }
 
-// Inizializzazione App
-let canvasManager, toolbarManager, projectManager, fileManager, pwaManager, keyboardManager;
+// =============================================================================
+// SEZIONE 12 — INIT
+// Istanziazione globale dei manager e avvio dell'applicazione.
+// Le variabili globali sono dichiarate con let prima del DOMContentLoaded
+// così tutte le classi possono cross-riferirsi dopo l'init completo.
+// =============================================================================
+
+let bgMgr, brush, laserMgr, canvasMgr, toolbarMgr, textMgr, projectMgr;
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🎨 EduBoard - Inizializzazione...');
+    // 1. Inizializza i manager nell'ordine corretto (le dipendenze prima)
+    bgMgr      = new BackgroundManager();
+    brush      = new BrushEngine();
+    laserMgr   = new LaserManager(document.getElementById('overlay-canvas'));
+    canvasMgr  = new CanvasManager(bgMgr, brush, laserMgr);
+    toolbarMgr = new ToolbarManager();
+    textMgr    = new TextManager();
+    projectMgr = new ProjectManager();
+    new PWAManager();
+    setupKeyboard();
 
-    try {
-        // Inizializza componenti
-        canvasManager = new CanvasManager();
-        toolbarManager = new ToolbarManager(canvasManager);
-        projectManager = new ProjectManager();
-        fileManager = new FileManager(canvasManager);
-        pwaManager = new PWAManager();
-        keyboardManager = new KeyboardManager(canvasManager, projectManager);
+    // 2. Pulsanti header
+    document.getElementById('btn-save').addEventListener('click',   () => projectMgr.save());
+    document.getElementById('btn-export').addEventListener('click', () => canvasMgr.exportPNG());
+    document.getElementById('btn-new').addEventListener('click',    () => projectMgr.newBoard());
 
-        // Stato iniziale
-        toolbarManager.selectTool('pencil');
-        
-        console.log('✅ EduBoard - Pronto!');
-        
-        // Mostra messaggio di benvenuto
-        setTimeout(() => {
-            projectManager.showNotification('Benvenuto in EduBoard! 🎨');
-        }, 1000);
-    } catch (error) {
-        console.error('❌ Errore inizializzazione EduBoard:', error);
-    }
+    // 3. Posizionamento area canvas (sotto header da 56px)
+    document.getElementById('canvas-area').style.top = '56px';
+
+    console.log('EduBoard v2 \u2014 pronto!');
+    setTimeout(() => toast('Benvenuto in EduBoard! Clicca \u25b2 per gli strumenti', 'info'), 800);
 });
-
-// Gestione errori globali
-window.addEventListener('error', (e) => {
-    console.error('Errore EduBoard:', e.error);
-});
-
-window.addEventListener('unhandledrejection', (e) => {
-    console.error('Promise rifiutata:', e.reason);
-});
-
-// Export per debug
-window.EduBoard = {
-    AppState,
-    CONFIG,
-    canvasManager,
-    toolbarManager,
-    projectManager
-};

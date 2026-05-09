@@ -2,412 +2,248 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduBoard - Lavagna Digitale Interattiva</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EduBoard - Lavagna Digitale</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#2563EB">
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#0f172a">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="EduBoard">
     <link rel="icon" type="image/png" sizes="192x192" href="./icon-192x192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="./icon-512x512.png">
     <link rel="apple-touch-icon" href="./icon-192x192.png">
-    <meta name="description" content="Lavagna digitale professionale per la scuola con strumenti avanzati, sfondi educativi e gestione progetti intelligente">
+    <meta name="description" content="Lavagna digitale interattiva per la scuola — EduTechLab">
 </head>
 <body>
+
     <!-- Header -->
-    <header>
+    <header id="app-header">
         <div class="header-left">
             <div class="logo">
                 <img src="./icon-192x192.png" alt="EduBoard" class="logo-icon">
-                <h1>EduBoard</h1>
+                <span class="logo-text">EduBoard</span>
             </div>
-            <div class="project-info" id="project-info">
-                Nuova Lavagna
-            </div>
+            <div class="project-badge" id="project-name">Nuova Lavagna</div>
         </div>
         <div class="header-right">
-            <button class="header-btn" id="projects-btn">📁 Progetti</button>
-            <button class="header-btn primary" id="save-btn">💾 Salva</button>
+            <button class="hdr-btn" id="btn-new" title="Nuova lavagna">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                <span>Nuova</span>
+            </button>
+            <button class="hdr-btn" id="btn-export" title="Esporta PNG">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Esporta</span>
+            </button>
+            <button class="hdr-btn hdr-btn--primary" id="btn-save" title="Salva">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                <span>Salva</span>
+            </button>
         </div>
     </header>
 
-    <!-- Area Canvas -->
-    <div class="canvas-area">
-        <canvas id="whiteboard"></canvas>
-        
-        <!-- Strumenti geometrici -->
-        <div id="ruler" class="geometric-tool advanced-ruler" style="display: none;">
-            <div class="ruler-marks"></div>
-        </div>
+    <!-- Area principale -->
+    <main id="canvas-area">
+        <!-- Layer 1: Sfondo -->
+        <canvas id="bg-canvas"></canvas>
+        <!-- Layer 2: Disegno -->
+        <canvas id="draw-canvas"></canvas>
+        <!-- Layer 3: Laser / Preview forme -->
+        <canvas id="overlay-canvas"></canvas>
+        <!-- Layer 4: Input testo inline -->
+        <div id="text-cursor" contenteditable="true" spellcheck="false" style="display:none"></div>
+    </main>
 
-        <div id="protractor" class="geometric-tool" style="display: none;">
-            <div class="protractor-marks"></div>
+    <!-- ===== TOOLBAR WRAPPER ===== -->
+    <div id="toolbar-wrapper">
+
+        <!-- Linguetta toggle — sempre visibile -->
+        <button id="toolbar-toggle" title="Mostra/Nascondi strumenti">
+            <svg id="toggle-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="18 15 12 9 6 15"/>
+            </svg>
+        </button>
+
+        <!-- Toolbar principale -->
+        <div id="floating-toolbar">
+
+            <!-- Riga opzioni contestuali (colore + dimensione) -->
+            <div id="tool-options-row" class="toolbar-row options-row" style="display:none">
+                <div class="options-colors" id="options-colors">
+                    <button class="color-swatch active" data-color="#000000" style="background:#000000" title="Nero"></button>
+                    <button class="color-swatch" data-color="#1d4ed8" style="background:#1d4ed8" title="Blu"></button>
+                    <button class="color-swatch" data-color="#dc2626" style="background:#dc2626" title="Rosso"></button>
+                    <button class="color-swatch" data-color="#16a34a" style="background:#16a34a" title="Verde"></button>
+                    <button class="color-swatch" data-color="#d97706" style="background:#d97706" title="Arancio"></button>
+                    <button class="color-swatch" data-color="#7c3aed" style="background:#7c3aed" title="Viola"></button>
+                    <button class="color-swatch" data-color="#be185d" style="background:#be185d" title="Rosa"></button>
+                    <button class="color-swatch" data-color="#0891b2" style="background:#0891b2" title="Azzurro"></button>
+                    <button class="color-swatch" data-color="#854d0e" style="background:#854d0e" title="Marrone"></button>
+                    <button class="color-swatch" data-color="#ffffff" style="background:#ffffff;border:2px solid #64748b" title="Bianco"></button>
+                    <button class="color-swatch color-custom" id="color-custom" title="Colore personalizzato">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+                    </button>
+                </div>
+                <div class="options-divider"></div>
+                <div class="options-sizes" id="options-sizes">
+                    <button class="size-btn active" data-size="3"><span class="size-dot" style="width:4px;height:4px"></span></button>
+                    <button class="size-btn" data-size="6"><span class="size-dot" style="width:7px;height:7px"></span></button>
+                    <button class="size-btn" data-size="10"><span class="size-dot" style="width:11px;height:11px"></span></button>
+                    <button class="size-btn" data-size="16"><span class="size-dot" style="width:16px;height:16px"></span></button>
+                    <button class="size-btn" data-size="24"><span class="size-dot" style="width:22px;height:22px"></span></button>
+                </div>
+            </div>
+
+            <!-- Riga strumenti principali -->
+            <div class="toolbar-row main-row">
+
+                <!-- Gruppo 1: Penne -->
+                <div class="tool-group">
+                    <button class="tool-btn active" data-tool="pen" title="Penna">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        <span>Penna</span>
+                    </button>
+                    <button class="tool-btn" data-tool="pencil" title="Matita HB">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+                        <span>Matita</span>
+                    </button>
+                    <button class="tool-btn" data-tool="pastel" title="Pastello morbido">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/></svg>
+                        <span>Pastello</span>
+                    </button>
+                    <button class="tool-btn" data-tool="marker" title="Evidenziatore">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="8" width="18" height="8" rx="3"/><path d="M21 12H3"/></svg>
+                        <span>Evidenz.</span>
+                    </button>
+                    <button class="tool-btn" data-tool="eraser" title="Gomma">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 20H7L3 16l10-10 7 7-3.5 3.5"/><path d="M6.0001 20L18 8"/></svg>
+                        <span>Gomma</span>
+                    </button>
+                </div>
+
+                <div class="tool-separator"></div>
+
+                <!-- Gruppo 2: Speciali -->
+                <div class="tool-group">
+                    <button class="tool-btn" data-tool="laser" title="Puntatore laser">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
+                        <span>Laser</span>
+                    </button>
+                    <button class="tool-btn" data-tool="text" title="Testo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+                        <span>Testo</span>
+                    </button>
+                    <button class="tool-btn" data-tool="shape" title="Forme" id="shape-tool-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><circle cx="17.5" cy="6.5" r="3.5"/><polygon points="12 14 20 22 4 22"/></svg>
+                        <span>Forme</span>
+                    </button>
+                </div>
+
+                <div class="tool-separator"></div>
+
+                <!-- Gruppo 3: Sfondo + Azioni -->
+                <div class="tool-group">
+                    <button class="tool-btn" data-tool="background" title="Sfondo" id="bg-tool-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                        <span>Sfondo</span>
+                    </button>
+                    <button class="tool-btn" data-tool="upload-bg" title="Carica immagine sfondo" id="upload-bg-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        <span>Foto sfondo</span>
+                    </button>
+                </div>
+
+                <div class="tool-separator"></div>
+
+                <!-- Gruppo 4: Undo/Redo/Cancella -->
+                <div class="tool-group">
+                    <button class="tool-btn action-btn" id="btn-undo" title="Annulla (Ctrl+Z)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7v6h6"/><path d="M3 13A9 9 0 1 0 5.17 7"/></svg>
+                        <span>Annulla</span>
+                    </button>
+                    <button class="tool-btn action-btn" id="btn-redo" title="Ripeti (Ctrl+Y)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 7v6h-6"/><path d="M21 13A9 9 0 1 1 18.83 7"/></svg>
+                        <span>Ripeti</span>
+                    </button>
+                    <button class="tool-btn action-btn danger-btn" id="btn-clear" title="Cancella tutto">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                        <span>Cancella</span>
+                    </button>
+                </div>
+
+            </div><!-- end main-row -->
+
+        </div><!-- end floating-toolbar -->
+    </div><!-- end toolbar-wrapper -->
+
+    <!-- Popup: Selezione forme -->
+    <div id="shape-popup" class="popup-panel" style="display:none">
+        <div class="popup-title">Forme</div>
+        <div class="shape-grid">
+            <button class="shape-opt active" data-shape="line" title="Linea retta">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="34" x2="34" y2="6"/></svg>
+                <span>Linea</span>
+            </button>
+            <button class="shape-opt" data-shape="rect" title="Rettangolo">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="5" y="10" width="30" height="20" rx="2"/></svg>
+                <span>Rettangolo</span>
+            </button>
+            <button class="shape-opt" data-shape="circle" title="Cerchio/Ellisse">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><ellipse cx="20" cy="20" rx="15" ry="12"/></svg>
+                <span>Ellisse</span>
+            </button>
+            <button class="shape-opt" data-shape="triangle" title="Triangolo">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="20,5 35,35 5,35"/></svg>
+                <span>Triangolo</span>
+            </button>
+            <button class="shape-opt" data-shape="arrow" title="Freccia">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="20" x2="34" y2="20"/><polyline points="24,12 34,20 24,28"/></svg>
+                <span>Freccia</span>
+            </button>
+            <button class="shape-opt" data-shape="star" title="Stella">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="20,4 24.9,14.8 37,16.2 28,25 30.2,37 20,31.3 9.8,37 12,25 3,16.2 15.1,14.8"/></svg>
+                <span>Stella</span>
+            </button>
+        </div>
+        <div class="shape-fill-row">
+            <label class="toggle-label">
+                <input type="checkbox" id="shape-fill-check">
+                <span class="toggle-slider"></span>
+                Riempimento
+            </label>
         </div>
     </div>
 
-    <!-- Barra strumenti flottante -->
-    <div id="floating-toolbar" class="floating-toolbar">
-        <!-- Strumenti di disegno -->
-        <div class="toolbar-item" data-tooltip="Matita">
-            <button class="toolbar-btn tool-btn active" data-tool="pencil">
-                <div class="tool-icon pencil-icon">
-                    <div class="pencil-body">
-                        <div class="pencil-tip"></div>
-                        <div class="pencil-band"></div>
-                    </div>
-                </div>
-            </button>
-        </div>
-
-        <div class="toolbar-item" data-tooltip="Biro">
-            <button class="toolbar-btn tool-btn" data-tool="pen">
-                <div class="tool-icon pen-icon">
-                    <div class="pen-body">
-                        <div class="pen-tip"></div>
-                        <div class="pen-clip"></div>
-                    </div>
-                </div>
-            </button>
-        </div>
-
-        <div class="toolbar-item" data-tooltip="Evidenziatore">
-            <button class="toolbar-btn tool-btn" data-tool="marker">
-                <div class="tool-icon marker-icon">
-                    <div class="marker-body">
-                        <div class="marker-tip"></div>
-                        <div class="marker-cap"></div>
-                    </div>
-                </div>
-            </button>
-        </div>
-
-        <div class="toolbar-item" data-tooltip="Stilografica">
-            <button class="toolbar-btn tool-btn" data-tool="fountain">
-                <div class="tool-icon fountain-icon">
-                    <div class="fountain-body">
-                        <div class="fountain-nib"></div>
-                        <div class="fountain-cap"></div>
-                    </div>
-                </div>
-            </button>
-        </div>
-
-        <div class="toolbar-item" data-tooltip="Gomma">
-            <button class="toolbar-btn tool-btn" data-tool="eraser">
-                <div class="tool-icon">
-                    <div class="eraser-body">
-                        <div class="eraser-band"></div>
-                    </div>
-                </div>
-            </button>
-        </div>
-
-        <div class="toolbar-divider"></div>
-
-        <div class="toolbar-item" data-tooltip="Testo">
-            <button class="toolbar-btn tool-btn" data-tool="text">
-                <div class="tool-icon">
-                    <div class="text-lines">
-                        <div class="text-line"></div>
-                        <div class="text-line"></div>
-                        <div class="text-line"></div>
-                    </div>
-                </div>
-            </button>
-        </div>
-
-        <div class="toolbar-item" data-tooltip="Mano">
-            <button class="toolbar-btn tool-btn" data-tool="hand">
-                <div class="tool-icon hand-icon">
-                    <div class="hand-palm">
-                        <div class="hand-fingers">
-                            <div class="finger"></div>
-                            <div class="finger"></div>
-                            <div class="finger"></div>
-                            <div class="finger"></div>
-                        </div>
-                        <div class="hand-thumb"></div>
-                    </div>
-                </div>
-            </button>
-        </div>
-
-        <div class="toolbar-item" data-tooltip="Lazo">
-            <button class="toolbar-btn tool-btn" data-tool="lasso">
-                <div class="tool-icon">
-                    <div class="lasso-rope">
-                        <div class="lasso-handle"></div>
-                    </div>
-                </div>
-            </button>
-        </div>
-
-        <div class="toolbar-divider"></div>
-
-        <div class="toolbar-item" data-tooltip="Carica File">
-            <button class="toolbar-btn tool-btn" data-tool="upload">
-                <div class="tool-icon">
-                    <div class="upload-folder">
-                        <div class="upload-arrow">+</div>
-                    </div>
-                </div>
-            </button>
-        </div>
-
-        <div class="toolbar-item" data-tooltip="Cancella Tutto">
-            <button class="toolbar-btn tool-btn danger" data-tool="clear">
-                <div class="tool-icon">
-                    <div class="clear-circle">
-                        <span>×</span>
-                    </div>
-                </div>
-            </button>
-        </div>
-
-        <div class="toolbar-divider"></div>
-
-        <div class="toolbar-item" data-tooltip="Annulla">
-            <button class="toolbar-btn tool-btn" id="undo-btn">
-                <div class="tool-icon">
-                    <div class="undo-arrow">↶</div>
-                </div>
-            </button>
-        </div>
-
-        <div class="toolbar-item" data-tooltip="Ripeti">
-            <button class="toolbar-btn tool-btn" id="redo-btn">
-                <div class="tool-icon">
-                    <div class="redo-arrow">↷</div>
-                </div>
-            </button>
-        </div>
-
-        <!-- Pannelli espandibili -->
-        <div id="pen-panel" class="expand-panel">
-            <div class="panel-content">
-                <div class="tool-section">
-                    <h4>Dimensioni</h4>
-                    <div class="size-selector">
-                        <button class="size-btn" data-size="2">
-                            <div class="size-dot size-1"></div>
-                        </button>
-                        <button class="size-btn active" data-size="4">
-                            <div class="size-dot size-2"></div>
-                        </button>
-                        <button class="size-btn" data-size="8">
-                            <div class="size-dot size-3"></div>
-                        </button>
-                        <button class="size-btn" data-size="12">
-                            <div class="size-dot size-4"></div>
-                        </button>
-                        <button class="size-btn" data-size="20">
-                            <div class="size-dot size-5"></div>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="tool-section">
-                    <h4>Colori</h4>
-                    <div class="color-palette">
-                        <button class="color-btn active" data-color="#000000" style="background: #000000;"></button>
-                        <button class="color-btn" data-color="#1e40af" style="background: #1e40af;"></button>
-                        <button class="color-btn" data-color="#dc2626" style="background: #dc2626;"></button>
-                        <button class="color-btn" data-color="#d97706" style="background: #d97706;"></button>
-                        <button class="color-btn" data-color="#059669" style="background: #059669;"></button>
-                        <button class="color-btn" data-color="#0284c7" style="background: #0284c7;"></button>
-                        <button class="color-btn" data-color="#7c3aed" style="background: #7c3aed;"></button>
-                        <button class="color-btn" data-color="#65a30d" style="background: #65a30d;"></button>
-                        <button class="color-btn custom" id="custom-color">+</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="background-panel" class="expand-panel">
-            <div class="panel-content">
-                <div class="tool-section">
-                    <h4>Sfondi</h4>
-                    <div class="bg-grid">
-                        <button class="bg-btn active" data-bg="blank">
-                            <div class="bg-preview bg-blank"></div>
-                            <span>Bianco</span>
-                        </button>
-                        <button class="bg-btn" data-bg="lines">
-                            <div class="bg-preview bg-lines"></div>
-                            <span>Righe</span>
-                        </button>
-                        <button class="bg-btn" data-bg="squares">
-                            <div class="bg-preview bg-squares"></div>
-                            <span>Quadretti</span>
-                        </button>
-                        <button class="bg-btn" data-bg="music">
-                            <div class="bg-preview bg-music"></div>
-                            <span>Pentagramma</span>
-                        </button>
-                        <button class="bg-btn" data-bg="dots">
-                            <div class="bg-preview bg-dots"></div>
-                            <span>Puntini</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="shapes-panel" class="expand-panel">
-            <div class="panel-content">
-                <div class="tool-section">
-                    <h4>Forme</h4>
-                    <div class="shapes-grid">
-                        <button class="shape-btn" data-shape="line">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                            </svg>
-                            <span>Linea</span>
-                        </button>
-                        <button class="shape-btn" data-shape="rectangle">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                            </svg>
-                            <span>Rettangolo</span>
-                        </button>
-                        <button class="shape-btn" data-shape="circle">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"></circle>
-                            </svg>
-                            <span>Cerchio</span>
-                        </button>
-                        <button class="shape-btn" data-shape="triangle">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polygon points="12,2 22,20 2,20"></polygon>
-                            </svg>
-                            <span>Triangolo</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="geometry-panel" class="expand-panel">
-            <div class="panel-content">
-                <div class="tool-section">
-                    <h4>Strumenti Geometrici</h4>
-                    <div class="geometry-tools">
-                        <button class="geometry-btn" id="ruler-btn">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
-                            </svg>
-                            <span>Righello</span>
-                        </button>
-                        <button class="geometry-btn" id="protractor-btn">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 2a10 10 0 0 1 10 10H2a10 10 0 0 1 10-10z"></path>
-                                <path d="M12 12v-8"></path>
-                            </svg>
-                            <span>Goniometro</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
+    <!-- Popup: Selezione sfondo -->
+    <div id="bg-popup" class="popup-panel" style="display:none">
+        <div class="popup-title">Sfondo</div>
+        <div class="bg-grid">
+            <button class="bg-opt active" data-bg="white" title="Bianco"><div class="bg-preview" style="background:#fff"></div><span>Bianco</span></button>
+            <button class="bg-opt" data-bg="lines-8" title="Righe larghe (8mm)"><div class="bg-preview bg-p-lines-8"></div><span>Righe 8mm</span></button>
+            <button class="bg-opt" data-bg="lines-5" title="Righe medie (5mm)"><div class="bg-preview bg-p-lines-5"></div><span>Righe 5mm</span></button>
+            <button class="bg-opt" data-bg="lines-3" title="Righe strette (3mm)"><div class="bg-preview bg-p-lines-3"></div><span>Righe 3mm</span></button>
+            <button class="bg-opt" data-bg="grid-10" title="Quadretti 10mm"><div class="bg-preview bg-p-grid-10"></div><span>Quadr. 10mm</span></button>
+            <button class="bg-opt" data-bg="grid-5" title="Quadretti 5mm"><div class="bg-preview bg-p-grid-5"></div><span>Quadr. 5mm</span></button>
+            <button class="bg-opt" data-bg="dots" title="Puntini"><div class="bg-preview bg-p-dots"></div><span>Puntini</span></button>
+            <button class="bg-opt" data-bg="staff" title="Pentagramma"><div class="bg-preview bg-p-staff"></div><span>Penta­gramma</span></button>
         </div>
     </div>
 
-    <!-- Sidebar progetti -->
-    <div id="sidebar" class="sidebar">
-        <div class="sidebar-header">
-            <h3>I Miei Progetti</h3>
-            <button class="close-btn" id="sidebar-close">×</button>
-        </div>
-        <div class="sidebar-content">
-            <div class="folder">
-                <div class="folder-header" data-folder="matematica">
-                    <span class="folder-icon">📐</span>
-                    <span class="folder-name">Matematica</span>
-                    <span class="folder-toggle">▼</span>
-                </div>
-                <div class="folder-content">
-                    <div class="project-item" data-project="geometria-1">Geometria - Triangoli</div>
-                    <div class="project-item" data-project="algebra-1">Algebra - Equazioni</div>
-                    <div class="project-item" data-project="calcolo-1">Calcolo - Derivate</div>
-                </div>
-            </div>
+    <!-- Input file nascosti -->
+    <input type="file" id="file-bg-input" accept="image/*" style="display:none">
+    <input type="color" id="color-picker-input" style="display:none">
 
-            <div class="folder">
-                <div class="folder-header" data-folder="italiano">
-                    <span class="folder-icon">📚</span>
-                    <span class="folder-name">Italiano</span>
-                    <span class="folder-toggle">▼</span>
-                </div>
-                <div class="folder-content">
-                    <div class="project-item" data-project="letteratura-1">Letteratura - Dante</div>
-                    <div class="project-item" data-project="grammatica-1">Grammatica - Analisi</div>
-                </div>
-            </div>
+    <!-- Toast container -->
+    <div id="toast-container"></div>
 
-            <div class="folder">
-                <div class="folder-header" data-folder="scienze">
-                    <span class="folder-icon">🔬</span>
-                    <span class="folder-name">Scienze</span>
-                    <span class="folder-toggle">▼</span>
-                </div>
-                <div class="folder-content">
-                    <div class="project-item" data-project="chimica-1">Chimica - Molecole</div>
-                    <div class="project-item" data-project="fisica-1">Fisica - Forze</div>
-                    <div class="project-item" data-project="biologia-1">Biologia - Cellule</div>
-                </div>
-            </div>
-        </div>
+    <!-- Banner aggiornamento SW -->
+    <div id="update-banner" class="update-banner" style="display:none">
+        <span>Nuova versione disponibile!</span>
+        <button id="update-btn">Aggiorna ora</button>
+        <button id="dismiss-update" class="close-x">×</button>
     </div>
 
-    <!-- Modal salvataggio -->
-    <div id="save-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Salva Progetto</h3>
-            </div>
-            <form id="save-form">
-                <div class="form-group">
-                    <label for="project-name">Nome Progetto</label>
-                    <input type="text" id="project-name" placeholder="Inserisci nome progetto" required>
-                </div>
-                <div class="form-group">
-                    <label for="project-folder">Cartella</label>
-                    <select id="project-folder" required>
-                        <option value="matematica">📐 Matematica</option>
-                        <option value="italiano">📚 Italiano</option>
-                        <option value="scienze">🔬 Scienze</option>
-                        <option value="generale">📁 Generale</option>
-                    </select>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn-secondary" id="cancel-save">Annulla</button>
-                    <button type="submit" class="btn-primary">Salva</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Banner aggiornamento PWA -->
-    <div id="update-banner" class="update-banner">
-        <div class="update-content">
-            <div class="update-icon">🚀</div>
-            <div class="update-text">
-                <strong>Aggiornamento Disponibile!</strong>
-                <p>Una nuova versione di EduBoard è pronta per essere installata.</p>
-            </div>
-            <button class="update-btn" id="update-btn">Aggiorna</button>
-            <button class="dismiss-btn" id="dismiss-update">×</button>
-        </div>
-    </div>
-
-    <!-- Input nascosto per colore personalizzato -->
-    <input type="color" id="color-picker" style="display: none;">
-
-    <!-- Input nascosto per upload file -->
-    <input type="file" id="file-input" accept="image/*,.pdf,.doc,.docx" multiple style="display: none;">
-
-    <script type="module" src="app.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>

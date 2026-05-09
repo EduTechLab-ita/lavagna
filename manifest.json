@@ -4,8 +4,8 @@
   "description": "Lavagna digitale professionale per la scuola con strumenti avanzati, sfondi educativi e gestione progetti intelligente",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#EFF6FF",
-  "theme_color": "#2563EB",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
   "orientation": "landscape-primary",
   "categories": ["education", "productivity"],
   "icons": [

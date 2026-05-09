@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v3'; // Incrementato per forzare aggiornamento
+const CACHE_NAME = 'eduboard-v4'; // v4 — riscrittura completa EduBoard v2
 const urlsToCache = [
   './',
   './index.html',
