@@ -1,0 +1,1061 @@
+/**
+ * EduBoard — drive.js
+ * Integrazione Google Drive: salvataggio lezioni, sfondi personalizzati,
+ * libreria lezioni con struttura ad albero.
+ *
+ * Dipende dai globali di app.js: canvasMgr, bgMgr, CONFIG, toast
+ * Usa Google Identity Services (GIS) — script caricato in index.html
+ *
+ * TOKEN: salvato in sessionStorage (si perde alla chiusura del browser)
+ * AUTORE: generato da Claude Code — EduTechLab Italia
+ */
+
+'use strict';
+
+// =============================================================================
+// SEZIONE 1 — DriveManager
+// Gestisce autenticazione OAuth2 e tutte le operazioni su Drive API v3
+// =============================================================================
+
+class DriveManager {
+    constructor() {
+        // OAuth2 — stesso CLIENT_ID usato da CAArtella, ValPrimaria, ComportamentoScuola
+        this.CLIENT_ID  = '374342529488-c123a5j5v8hnfs241udbl55fos5thfq6.apps.googleusercontent.com';
+        this.SCOPE      = 'https://www.googleapis.com/auth/drive.file email profile';
+
+        // Token OAuth2 — letto da sessionStorage all'avvio
+        this.accessToken = null;
+        this.tokenExpiry = 0;
+
+        // Stato connessione
+        this.connected   = false;
+        this.userEmail   = '';
+
+        // ID cartelle Drive (cache in sessionStorage)
+        this.rootFolderId    = null;   // "EduBoard"
+        this.lessonsFolderId = null;   // "EduBoard/Lezioni"
+        this.bgFolderId      = null;   // "EduBoard/Sfondi"
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // AUTENTICAZIONE
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /** Apre il popup OAuth2 e acquisisce il token. */
+    async connect() {
+        if (typeof google === 'undefined' || !google.accounts) {
+            toast('Librerie Google non ancora caricate. Riprova tra un secondo.', 'error');
+            return;
+        }
+
+        return new Promise((resolve, reject) => {
+            const client = google.accounts.oauth2.initTokenClient({
+                client_id: this.CLIENT_ID,
+                scope:     this.SCOPE,
+                callback:  async (tokenResponse) => {
+                    if (tokenResponse.error) {
+                        toast('Autorizzazione negata: ' + tokenResponse.error, 'error');
+                        reject(new Error(tokenResponse.error));
+                        return;
+                    }
+                    // Salva token in sessionStorage
+                    this.accessToken = tokenResponse.access_token;
+                    this.tokenExpiry = Date.now() + (tokenResponse.expires_in * 1000);
+                    this._saveSession();
+
+                    try {
+                        // Recupera email utente
+                        const info = await this._apiFetch('https://www.googleapis.com/oauth2/v2/userinfo');
+                        this.userEmail = info.email || '';
+
+                        // Inizializza struttura cartelle
+                        await this._ensureRootFolder();
+                        await this._ensureLessonsFolder();
+                        await this._ensureBgFolder();
+
+                        this.connected = true;
+                        this._saveSession();
+                        resolve();
+                    } catch (err) {
+                        toast('Errore connessione Drive: ' + err.message, 'error');
+                        reject(err);
+                    }
+                }
+            });
+            client.requestAccessToken({ prompt: 'consent' });
+        });
+    }
+
+    /**
+     * Prova rinnovo silenzioso del token (senza popup).
+     * Utile al caricamento della pagina se si era già connessi.
+     */
+    async trySilentConnect(retries = 6) {
+        if (typeof google === 'undefined' || !google.accounts) {
+            if (retries > 0) {
+                setTimeout(() => this.trySilentConnect(retries - 1), 1500);
+            }
+            return false;
+        }
+
+        return new Promise((resolve) => {
+            const client = google.accounts.oauth2.initTokenClient({
+                client_id: this.CLIENT_ID,
+                scope:     this.SCOPE,
+                prompt:    '',
+                callback:  async (tokenResponse) => {
+                    if (tokenResponse.access_token) {
+                        this.accessToken = tokenResponse.access_token;
+                        this.tokenExpiry = Date.now() + (tokenResponse.expires_in * 1000);
+                        this.connected   = true;
+                        this._saveSession();
+
+                        // Assicura che le cartelle esistano ancora
+                        try {
+                            await this._ensureRootFolder();
+                            await this._ensureLessonsFolder();
+                            await this._ensureBgFolder();
+                        } catch (_) {}
+
+                        resolve(true);
+                    } else {
+                        this.connected = false;
+                        resolve(false);
+                    }
+                }
+            });
+            client.requestAccessToken({ prompt: '' });
+        });
+    }
+
+    /** Revoca il token e pulisce lo stato. */
+    async disconnect() {
+        if (this.accessToken && typeof google !== 'undefined' && google.accounts) {
+            google.accounts.oauth2.revoke(this.accessToken);
+        }
+        this.accessToken     = null;
+        this.tokenExpiry     = 0;
+        this.connected       = false;
+        this.userEmail       = '';
+        this.rootFolderId    = null;
+        this.lessonsFolderId = null;
+        this.bgFolderId      = null;
+        sessionStorage.removeItem('eduboard_drive_session');
+    }
+
+    /** Restituisce true se il token è valido. */
+    isConnected() {
+        return this.connected && !!this.accessToken && Date.now() < this.tokenExpiry;
+    }
+
+    /** Controlla se il token sta per scadere (< 5 min) e avvisa. */
+    async _refreshIfNeeded() {
+        if (!this.connected) return;
+        // Se mancano meno di 5 minuti alla scadenza, avvisa l'utente
+        if (Date.now() > this.tokenExpiry - 5 * 60 * 1000) {
+            toast('Sessione Drive in scadenza — riconnetti per continuare a salvare.', 'info');
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // PERSISTENZA SESSIONE (sessionStorage)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    _saveSession() {
+        try {
+            sessionStorage.setItem('eduboard_drive_session', JSON.stringify({
+                accessToken:     this.accessToken,
+                tokenExpiry:     this.tokenExpiry,
+                userEmail:       this.userEmail,
+                rootFolderId:    this.rootFolderId,
+                lessonsFolderId: this.lessonsFolderId,
+                bgFolderId:      this.bgFolderId,
+                connected:       this.connected
+            }));
+        } catch (_) {}
+    }
+
+    _loadSession() {
+        try {
+            const raw = sessionStorage.getItem('eduboard_drive_session');
+            if (!raw) return false;
+            const s = JSON.parse(raw);
+            if (!s.accessToken || Date.now() >= s.tokenExpiry) return false;
+            Object.assign(this, s);
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // CARTELLE
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /** Crea "EduBoard" nella root Drive se non esiste. */
+    async _ensureRootFolder() {
+        if (this.rootFolderId) return this.rootFolderId;
+        this.rootFolderId = await this._findOrCreateFolder('EduBoard', null);
+        this._saveSession();
+        return this.rootFolderId;
+    }
+
+    /** Crea "EduBoard/Lezioni" se non esiste. */
+    async _ensureLessonsFolder() {
+        await this._ensureRootFolder();
+        if (this.lessonsFolderId) return this.lessonsFolderId;
+        this.lessonsFolderId = await this._findOrCreateFolder('Lezioni', this.rootFolderId);
+        this._saveSession();
+        return this.lessonsFolderId;
+    }
+
+    /** Crea "EduBoard/Sfondi" se non esiste. */
+    async _ensureBgFolder() {
+        await this._ensureRootFolder();
+        if (this.bgFolderId) return this.bgFolderId;
+        this.bgFolderId = await this._findOrCreateFolder('Sfondi', this.rootFolderId);
+        this._saveSession();
+        return this.bgFolderId;
+    }
+
+    /**
+     * Trova o crea una cartella in Drive.
+     * @param {string} name       - nome cartella
+     * @param {string|null} parentId - ID cartella padre (null = root Drive)
+     * @returns {string} ID cartella
+     */
+    async createFolder(name, parentId) {
+        return this._findOrCreateFolder(name, parentId);
+    }
+
+    /** Lista sottocartelle in un folder. */
+    async listFolders(parentId) {
+        this._checkConnected();
+        const q = encodeURIComponent(
+            `'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`
+        );
+        const resp = await this._apiFetch(
+            `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&orderBy=name`
+        );
+        return resp.files || [];
+    }
+
+    /** Lista file JSON in un folder. */
+    async listFiles(folderId) {
+        this._checkConnected();
+        const q = encodeURIComponent(
+            `'${folderId}' in parents and mimeType='application/json' and trashed=false`
+        );
+        const resp = await this._apiFetch(
+            `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime%20desc`
+        );
+        return resp.files || [];
+    }
+
+    /** Elimina un file o una cartella. */
+    async deleteItem(fileId) {
+        this._checkConnected();
+        await this._apiFetch(
+            `https://www.googleapis.com/drive/v3/files/${fileId}`,
+            'DELETE'
+        );
+    }
+
+    /** Rinomina un file o una cartella. */
+    async renameItem(fileId, newName) {
+        this._checkConnected();
+        return this._apiFetch(
+            `https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name`,
+            'PATCH',
+            { name: newName }
+        );
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // LEZIONI
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Salva una lezione su Drive.
+     * Se esiste già un file con lo stesso nome nella stessa cartella, sovrascrive.
+     *
+     * @param {Object} lesson
+     *   lesson.name         {string}  - nome lezione
+     *   lesson.folderId     {string}  - ID cartella Drive destinazione
+     *   lesson.drawingDataURL {string} - canvas.toDataURL()
+     *   lesson.bgKey        {string}  - chiave sfondo preset (es. 'lines-5')
+     *   lesson.bgImageBase64 {string} - base64 immagine sfondo custom (opzionale)
+     *   lesson.metadata     {Object}  - dati extra opzionali
+     * @returns {string} ID file creato/aggiornato
+     */
+    async saveLesson(lesson) {
+        this._checkConnected();
+        await this._refreshIfNeeded();
+
+        const now = new Date().toISOString();
+        const payload = {
+            version:    2,
+            name:       lesson.name,
+            createdAt:  now,   // verrà sovrascritto se il file esiste già
+            modifiedAt: now,
+            background: {
+                type:        lesson.bgImageBase64 ? 'image' : 'preset',
+                key:         lesson.bgKey || 'white',
+                imageBase64: lesson.bgImageBase64 || ''
+            },
+            drawing:    lesson.drawingDataURL || '',
+            ...(lesson.metadata || {})
+        };
+
+        const fileName = lesson.name.endsWith('.json')
+            ? lesson.name
+            : lesson.name + '.json';
+        const targetFolderId = lesson.folderId || this.lessonsFolderId;
+
+        // Cerca file esistente con lo stesso nome nella stessa cartella
+        const existingId = await this._findFileInFolder(fileName, targetFolderId);
+
+        if (existingId) {
+            // Carica il createdAt originale per preservarlo
+            try {
+                const old = await this.loadLesson(existingId);
+                payload.createdAt = old.createdAt || now;
+            } catch (_) {}
+            return this._uploadMultipart(fileName, payload, existingId);
+        } else {
+            return this._uploadMultipart(fileName, payload, null, targetFolderId);
+        }
+    }
+
+    /**
+     * Carica una lezione da Drive.
+     * @param {string} fileId
+     * @returns {Object} il JSON della lezione
+     */
+    async loadLesson(fileId) {
+        this._checkConnected();
+        const resp = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+            { headers: { Authorization: 'Bearer ' + this.accessToken } }
+        );
+        if (!resp.ok) throw new Error('Errore lettura lezione (' + resp.status + ')');
+        return resp.json();
+    }
+
+    /**
+     * Lista tutti i file .json in una cartella.
+     * @param {string} folderId
+     * @returns {Array<{id, name, modifiedTime}>}
+     */
+    async listLessons(folderId) {
+        return this.listFiles(folderId);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // SFONDI
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Lista immagini nella cartella "Sfondi".
+     * @returns {Array<{id, name, thumbnailLink, webContentLink}>}
+     */
+    async listBackgrounds() {
+        this._checkConnected();
+        await this._ensureBgFolder();
+        const q = encodeURIComponent(
+            `'${this.bgFolderId}' in parents and mimeType contains 'image/' and trashed=false`
+        );
+        const resp = await this._apiFetch(
+            `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,thumbnailLink,webContentLink)&orderBy=name`
+        );
+        return resp.files || [];
+    }
+
+    /**
+     * Carica un file immagine nella cartella "Sfondi".
+     * @param {File} file - oggetto File dal <input type="file">
+     * @returns {{id, name, webContentLink}}
+     */
+    async uploadBackground(file) {
+        this._checkConnected();
+        await this._ensureBgFolder();
+
+        const boundary = 'eduboard_bg_' + Date.now();
+        const mimeType = file.type || 'image/jpeg';
+
+        // Legge il file come ArrayBuffer
+        const buffer = await file.arrayBuffer();
+        const bytes  = new Uint8Array(buffer);
+
+        // Costruisce body multipart (metadata + binario)
+        const metaJson = JSON.stringify({ name: file.name, parents: [this.bgFolderId] });
+        const metaPart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metaJson}\r\n`;
+        const dataPart = `--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`;
+        const ending   = `\r\n--${boundary}--`;
+
+        // Assembla come Uint8Array per preservare i byte binari
+        const enc       = new TextEncoder();
+        const metaBytes = enc.encode(metaPart);
+        const dataBytes = enc.encode(dataPart);
+        const endBytes  = enc.encode(ending);
+
+        const combined = new Uint8Array(
+            metaBytes.length + dataBytes.length + bytes.length + endBytes.length
+        );
+        let offset = 0;
+        combined.set(metaBytes, offset); offset += metaBytes.length;
+        combined.set(dataBytes, offset); offset += dataBytes.length;
+        combined.set(bytes,     offset); offset += bytes.length;
+        combined.set(endBytes,  offset);
+
+        const resp = await fetch(
+            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webContentLink',
+            {
+                method:  'POST',
+                headers: {
+                    Authorization:  'Bearer ' + this.accessToken,
+                    'Content-Type': `multipart/related; boundary=${boundary}`
+                },
+                body: combined
+            }
+        );
+        if (!resp.ok) throw new Error('Caricamento sfondo fallito (' + resp.status + ')');
+        return resp.json();
+    }
+
+    /**
+     * Scarica un'immagine da Drive e la converte in dataURL.
+     * @param {string} fileId
+     * @returns {string} dataURL (es. "data:image/jpeg;base64,...")
+     */
+    async loadBackgroundAsDataURL(fileId) {
+        this._checkConnected();
+        const resp = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+            { headers: { Authorization: 'Bearer ' + this.accessToken } }
+        );
+        if (!resp.ok) throw new Error('Errore download sfondo (' + resp.status + ')');
+        const blob   = await resp.blob();
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload  = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // HELPER INTERNI
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /** Trova o crea una cartella Drive per nome. */
+    async _findOrCreateFolder(name, parentId) {
+        let q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+        if (parentId) q += ` and '${parentId}' in parents`;
+        const resp = await this._apiFetch(
+            `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`
+        );
+        if (resp.files && resp.files.length > 0) return resp.files[0].id;
+
+        // Crea cartella
+        const body = { name, mimeType: 'application/vnd.google-apps.folder' };
+        if (parentId) body.parents = [parentId];
+        const created = await this._apiFetch(
+            'https://www.googleapis.com/drive/v3/files?fields=id',
+            'POST',
+            body
+        );
+        return created.id;
+    }
+
+    /** Cerca un file per nome in una cartella specifica. Restituisce fileId o null. */
+    async _findFileInFolder(name, folderId) {
+        const q = encodeURIComponent(
+            `name='${name}' and '${folderId}' in parents and trashed=false`
+        );
+        const resp = await this._apiFetch(
+            `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`
+        );
+        return (resp.files && resp.files.length > 0) ? resp.files[0].id : null;
+    }
+
+    /**
+     * Upload multipart su Drive API v3 (per file JSON).
+     * @param {string}      name      - nome file
+     * @param {Object}      data      - oggetto JS da serializzare come JSON
+     * @param {string|null} fileId    - se non null: PATCH (aggiornamento)
+     * @param {string|null} parentId  - solo per nuovi file: cartella destinazione
+     * @returns {string} ID file
+     */
+    async _uploadMultipart(name, data, fileId, parentId) {
+        const boundary  = 'eduboard_' + Date.now();
+        const payload   = JSON.stringify(data, null, 2);
+        const metaObj   = fileId ? {} : { name, parents: parentId ? [parentId] : undefined };
+        const metaJson  = JSON.stringify(metaObj);
+
+        const body =
+            `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metaJson}\r\n` +
+            `--${boundary}\r\nContent-Type: application/json\r\n\r\n${payload}\r\n` +
+            `--${boundary}--`;
+
+        const url    = fileId
+            ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart&fields=id`
+            : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id';
+        const method = fileId ? 'PATCH' : 'POST';
+
+        const resp = await fetch(url, {
+            method,
+            headers: {
+                Authorization:  'Bearer ' + this.accessToken,
+                'Content-Type': `multipart/related; boundary=${boundary}`
+            },
+            body
+        });
+        if (!resp.ok) throw new Error('Salvataggio Drive fallito (' + resp.status + ')');
+        const result = await resp.json();
+        return result.id;
+    }
+
+    /** Helper fetch per Drive/Google API (JSON). Non per download binari. */
+    async _apiFetch(url, method = 'GET', body) {
+        const opts = {
+            method,
+            headers: { Authorization: 'Bearer ' + this.accessToken }
+        };
+        if (body !== undefined) {
+            opts.body                    = JSON.stringify(body);
+            opts.headers['Content-Type'] = 'application/json';
+        }
+        const resp = await fetch(url, opts);
+        if (method === 'DELETE' && resp.status === 204) return null;
+        if (!resp.ok) throw new Error(`Drive API error ${resp.status} — ${url}`);
+        return resp.json();
+    }
+
+    /** Lancia un errore se non connessi. */
+    _checkConnected() {
+        if (!this.isConnected()) throw new Error('Non connesso a Google Drive.');
+    }
+}
+
+
+// =============================================================================
+// SEZIONE 2 — LibraryManager
+// Gestisce il pannello UI della libreria lezioni (struttura ad albero)
+// =============================================================================
+
+class LibraryManager {
+    constructor(driveManager) {
+        this.drive  = driveManager;
+        this.panel  = document.getElementById('library-panel');
+        this.treeEl = document.getElementById('library-tree');
+
+        // Cartella correntemente selezionata per il salvataggio
+        this.currentFolderId = null;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // APERTURA / CHIUSURA
+    // ──────────────────────────────────────────────────────────────────────────
+
+    toggle() {
+        const isOpen = this.panel.classList.contains('open');
+        if (isOpen) {
+            this.panel.classList.remove('open');
+        } else {
+            this.panel.classList.add('open');
+            this.refresh();
+        }
+    }
+
+    close() {
+        this.panel.classList.remove('open');
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // REFRESH — ricarica albero dal Drive
+    // ──────────────────────────────────────────────────────────────────────────
+
+    async refresh() {
+        this._updateDriveStatus();
+        this.treeEl.innerHTML = '<div class="tree-loading">Caricamento...</div>';
+
+        if (!this.drive.isConnected()) {
+            this.treeEl.innerHTML = `
+                <div class="tree-empty">
+                    <p>Connetti Google Drive per usare la libreria.</p>
+                    <button class="tree-connect-btn" id="tree-connect-btn">Connetti Drive</button>
+                </div>`;
+            document.getElementById('tree-connect-btn')?.addEventListener('click', () => this._connectAndRefresh());
+            return;
+        }
+
+        try {
+            await this.drive._ensureLessonsFolder();
+            this.treeEl.innerHTML = '';
+            await this.renderTree(this.drive.lessonsFolderId, this.treeEl, 0);
+            if (!this.treeEl.hasChildNodes()) {
+                this.treeEl.innerHTML = '<div class="tree-empty">Nessuna lezione salvata.</div>';
+            }
+        } catch (err) {
+            this.treeEl.innerHTML = `<div class="tree-empty tree-error">Errore: ${err.message}</div>`;
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // RENDER ALBERO RICORSIVO
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Renderizza la struttura ad albero (cartelle + file) in modo ricorsivo.
+     * @param {string}      parentId  - ID cartella Drive da cui partire
+     * @param {HTMLElement} container - elemento DOM in cui appendere
+     * @param {number}      depth     - profondità corrente (per indentazione)
+     */
+    async renderTree(parentId, container, depth = 0) {
+        const [folders, files] = await Promise.all([
+            this.drive.listFolders(parentId),
+            this.drive.listLessons(parentId)
+        ]);
+
+        const indent = depth * 16;
+
+        // --- Cartelle ---
+        for (const folder of folders) {
+            const item = this._createTreeItem('folder', '📁', folder.name, indent);
+            container.appendChild(item);
+
+            // Click su cartella: seleziona come destinazione corrente
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._selectFolder(folder.id, item);
+            });
+
+            // Pulsanti contestuali cartella
+            this._addContextButtons(item, folder, 'folder');
+
+            // Sottocartella collassabile
+            const subContainer = document.createElement('div');
+            subContainer.className = 'tree-subtree';
+            subContainer.style.display = 'none';
+            container.appendChild(subContainer);
+
+            // Toggle espansione
+            item.querySelector('.tree-icon').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const isOpen = subContainer.style.display !== 'none';
+                if (isOpen) {
+                    subContainer.style.display = 'none';
+                    item.querySelector('.tree-icon').textContent = '📁';
+                } else {
+                    subContainer.innerHTML = '<div class="tree-loading" style="padding-left:' + (indent + 16) + 'px">...</div>';
+                    subContainer.style.display = 'block';
+                    item.querySelector('.tree-icon').textContent = '📂';
+                    subContainer.innerHTML = '';
+                    await this.renderTree(folder.id, subContainer, depth + 1);
+                }
+            });
+        }
+
+        // --- File lezioni ---
+        for (const file of files) {
+            const name = file.name.replace(/\.json$/, '');
+            const item = this._createTreeItem('lesson', '📄', name, indent + 16);
+            container.appendChild(item);
+
+            // Click su file: apre la lezione
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.openLesson(file.id, file.name);
+            });
+
+            this._addContextButtons(item, { id: file.id, name }, 'lesson');
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // AZIONI
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /** Apre dialog per creare nuova cartella nella posizione selezionata. */
+    async createFolder(parentId) {
+        if (!this.drive.isConnected()) {
+            toast('Connetti Drive prima.', 'error'); return;
+        }
+        const name = prompt('Nome nuova cartella:');
+        if (!name || !name.trim()) return;
+        try {
+            await this.drive.createFolder(name.trim(), parentId || this.drive.lessonsFolderId);
+            toast('Cartella creata!', 'success');
+            this.refresh();
+        } catch (err) {
+            toast('Errore creazione cartella: ' + err.message, 'error');
+        }
+    }
+
+    /**
+     * Carica una lezione da Drive e la applica alla lavagna.
+     * @param {string} fileId
+     * @param {string} fileName - usato solo per il nome progetto
+     */
+    async openLesson(fileId, fileName) {
+        if (!this.drive.isConnected()) {
+            toast('Connetti Drive prima.', 'error'); return;
+        }
+        try {
+            toast('Caricamento lezione...', 'info');
+            const lesson = await this.drive.loadLesson(fileId);
+
+            // 1. Ripristina sfondo
+            if (lesson.background) {
+                if (lesson.background.type === 'image' && lesson.background.imageBase64) {
+                    const img = new Image();
+                    img.onload = () => bgMgr.setImage(img);
+                    img.src    = lesson.background.imageBase64;
+                } else {
+                    bgMgr.setBackground(lesson.background.key || 'white');
+                    // Aggiorna pulsante sfondo attivo nella toolbar
+                    document.querySelectorAll('.bg-opt').forEach(b => b.classList.remove('active'));
+                    const activeBtn = document.querySelector(`.bg-opt[data-bg="${lesson.background.key || 'white'}"]`);
+                    if (activeBtn) activeBtn.classList.add('active');
+                }
+            }
+
+            // 2. Ripristina disegno
+            if (lesson.drawing) {
+                const img = new Image();
+                img.onload = () => {
+                    canvasMgr._saveUndo();
+                    canvasMgr.ctx.clearRect(0, 0, canvasMgr.canvas.width, canvasMgr.canvas.height);
+                    canvasMgr.ctx.drawImage(img, 0, 0);
+                };
+                img.src = lesson.drawing;
+            }
+
+            // 3. Aggiorna nome progetto
+            const name = lesson.name || fileName.replace(/\.json$/, '');
+            CONFIG.projectName = name;
+            document.getElementById('project-name').textContent = name;
+
+            toast('Lezione "' + name + '" caricata!', 'success');
+            this.close();
+        } catch (err) {
+            toast('Errore apertura lezione: ' + err.message, 'error');
+        }
+    }
+
+    /**
+     * Salva la lezione corrente nella cartella selezionata.
+     * Se nessuna cartella è selezionata, chiede il nome e salva in "Lezioni".
+     */
+    async saveCurrentLesson(folderId) {
+        if (!this.drive.isConnected()) {
+            toast('Connetti Drive prima di salvare.', 'error'); return;
+        }
+
+        const targetFolder = folderId || this.currentFolderId || this.drive.lessonsFolderId;
+
+        const name = prompt('Nome lezione:', CONFIG.projectName);
+        if (!name || !name.trim()) return;
+
+        try {
+            toast('Salvataggio in corso...', 'info');
+
+            // Raccoglie dati sfondo
+            let bgImageBase64 = '';
+            if (bgMgr.uploadedImage) {
+                // Converti immagine sfondo in base64 usando un canvas temporaneo
+                const tmp    = document.createElement('canvas');
+                tmp.width    = bgMgr.canvas.width;
+                tmp.height   = bgMgr.canvas.height;
+                tmp.getContext('2d').drawImage(bgMgr.canvas, 0, 0);
+                bgImageBase64 = tmp.toDataURL('image/jpeg', 0.85);
+            }
+
+            await this.drive.saveLesson({
+                name:           name.trim(),
+                folderId:       targetFolder,
+                drawingDataURL: canvasMgr.getDataURL(),
+                bgKey:          bgMgr.currentBg,
+                bgImageBase64
+            });
+
+            CONFIG.projectName = name.trim();
+            document.getElementById('project-name').textContent = name.trim();
+            toast('Lezione salvata su Drive!', 'success');
+            this.refresh();
+        } catch (err) {
+            toast('Errore salvataggio: ' + err.message, 'error');
+        }
+    }
+
+    /** Rinomina un elemento (file o cartella). */
+    async rename(fileId, currentName) {
+        if (!this.drive.isConnected()) { toast('Connetti Drive prima.', 'error'); return; }
+        const newName = prompt('Nuovo nome:', currentName);
+        if (!newName || !newName.trim() || newName.trim() === currentName) return;
+        try {
+            await this.drive.renameItem(fileId, newName.trim());
+            toast('Rinominato!', 'success');
+            this.refresh();
+        } catch (err) {
+            toast('Errore rinomina: ' + err.message, 'error');
+        }
+    }
+
+    /** Elimina un elemento con conferma. */
+    async delete(fileId, name) {
+        if (!this.drive.isConnected()) { toast('Connetti Drive prima.', 'error'); return; }
+        if (!confirm(`Eliminare "${name}"? L'operazione non è reversibile.`)) return;
+        try {
+            await this.drive.deleteItem(fileId);
+            toast('"' + name + '" eliminato.', 'success');
+            this.refresh();
+        } catch (err) {
+            toast('Errore eliminazione: ' + err.message, 'error');
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // HELPER UI
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /** Crea un elemento riga dell'albero. */
+    _createTreeItem(type, icon, label, indent) {
+        const item = document.createElement('div');
+        item.className  = `tree-item ${type}`;
+        item.style.paddingLeft = (8 + indent) + 'px';
+        item.dataset.type = type;
+
+        item.innerHTML = `
+            <span class="tree-icon">${icon}</span>
+            <span class="tree-label">${this._esc(label)}</span>
+            <span class="tree-actions"></span>`;
+        return item;
+    }
+
+    /** Aggiunge pulsanti Rinomina/Elimina a un tree-item. */
+    _addContextButtons(item, entry, type) {
+        const actionsEl = item.querySelector('.tree-actions');
+        actionsEl.innerHTML = `
+            <button class="tree-btn" title="Rinomina" data-action="rename">✏️</button>
+            <button class="tree-btn" title="Elimina"  data-action="delete">🗑️</button>`;
+
+        actionsEl.querySelector('[data-action="rename"]').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.rename(entry.id, entry.name);
+        });
+        actionsEl.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.delete(entry.id, entry.name);
+        });
+    }
+
+    /** Seleziona una cartella come destinazione corrente. */
+    _selectFolder(folderId, itemEl) {
+        document.querySelectorAll('.tree-item.selected').forEach(el => el.classList.remove('selected'));
+        itemEl.classList.add('selected');
+        this.currentFolderId = folderId;
+    }
+
+    /** Aggiorna il banner di stato Drive nel pannello. */
+    _updateDriveStatus() {
+        const statusEl = document.getElementById('library-drive-status');
+        if (!statusEl) return;
+        if (this.drive.isConnected()) {
+            statusEl.innerHTML = `<span class="drive-status-ok">☁️ ${this._esc(this.drive.userEmail)}</span>`;
+        } else {
+            statusEl.innerHTML = `<span class="drive-status-off">Drive non connesso</span>`;
+        }
+    }
+
+    async _connectAndRefresh() {
+        try {
+            await this.drive.connect();
+            driveConnectBtn.update();
+            this.refresh();
+        } catch (_) {}
+    }
+
+    _esc(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+}
+
+
+// =============================================================================
+// SEZIONE 3 — DriveConnectButton
+// Gestisce il pulsante Drive nell'header e il mini-pannello di stato
+// =============================================================================
+
+class DriveConnectButton {
+    constructor(driveManager) {
+        this.drive = driveManager;
+        this.btn   = document.getElementById('btn-drive');
+    }
+
+    update(state) {
+        if (!this.btn) return;
+        this.btn.classList.remove('drive-connected', 'drive-error', 'drive-syncing');
+        if (state === 'syncing') {
+            this.btn.classList.add('drive-syncing');
+            this.btn.title = 'Drive — salvataggio...';
+        } else if (state === 'error') {
+            this.btn.classList.add('drive-error');
+            this.btn.title = 'Drive — errore';
+        } else if (this.drive.isConnected()) {
+            this.btn.classList.add('drive-connected');
+            this.btn.title = 'Drive — connesso (' + this.drive.userEmail + ')';
+        } else {
+            this.btn.title = 'Connetti a Google Drive';
+        }
+    }
+
+    async handleClick() {
+        if (this.drive.isConnected()) {
+            // Mostra mini-pannello stato
+            this._showStatusPanel();
+        } else {
+            try {
+                await this.drive.connect();
+                this.update();
+                toast('Google Drive connesso! Benvenuto, ' + this.drive.userEmail, 'success');
+            } catch (_) {}
+        }
+    }
+
+    _showStatusPanel() {
+        // Rimuovi pannello precedente se esiste
+        document.getElementById('drive-status-panel')?.remove();
+
+        const panel = document.createElement('div');
+        panel.id        = 'drive-status-panel';
+        panel.className = 'drive-panel';
+        panel.innerHTML = `
+            <div class="drive-panel-header">
+                <span>☁️ Google Drive</span>
+                <button id="drive-panel-close">×</button>
+            </div>
+            <div class="drive-panel-body">
+                <p class="drive-panel-email">${this._esc(this.drive.userEmail)}</p>
+                <p class="drive-panel-info">Token valido fino alle
+                    ${new Date(this.drive.tokenExpiry).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+            </div>
+            <div class="drive-panel-footer">
+                <button id="drive-panel-disconnect" class="drive-panel-btn drive-panel-btn--danger">
+                    Disconnetti
+                </button>
+            </div>`;
+
+        document.body.appendChild(panel);
+
+        document.getElementById('drive-panel-close').onclick = () => panel.remove();
+        document.getElementById('drive-panel-disconnect').onclick = async () => {
+            if (confirm('Disconnettere Drive? Il token verrà revocato.')) {
+                await this.drive.disconnect();
+                this.update();
+                libraryMgr?.refresh();
+                panel.remove();
+                toast('Drive disconnesso.', 'info');
+            }
+        };
+
+        // Chiudi cliccando fuori
+        setTimeout(() => {
+            document.addEventListener('click', function handler(e) {
+                if (!panel.contains(e.target) && e.target !== document.getElementById('btn-drive')) {
+                    panel.remove();
+                    document.removeEventListener('click', handler);
+                }
+            });
+        }, 50);
+    }
+
+    _esc(str) { return String(str).replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+}
+
+
+// =============================================================================
+// SEZIONE 4 — INIT
+// Collegamento globale: istanziazione e wiring degli event listener
+// =============================================================================
+
+let driveMgr, libraryMgr, driveConnectBtn;
+
+/**
+ * initDrive() — chiamata dal DOMContentLoaded in app.js
+ * (oppure si attiva automaticamente tramite window load listener)
+ */
+function initDrive() {
+    driveMgr        = new DriveManager();
+    libraryMgr      = new LibraryManager(driveMgr);
+    driveConnectBtn = new DriveConnectButton(driveMgr);
+
+    // Ripristina sessione precedente (se il token è ancora valido)
+    const restored = driveMgr._loadSession();
+    if (restored) {
+        driveConnectBtn.update();
+    }
+
+    // ── Pulsante Libreria (header) ─────────────────────────────────────────
+    document.getElementById('btn-library')?.addEventListener('click', () => {
+        libraryMgr.toggle();
+    });
+
+    // ── Pulsante Drive (header) ────────────────────────────────────────────
+    document.getElementById('btn-drive')?.addEventListener('click', () => {
+        driveConnectBtn.handleClick();
+    });
+
+    // ── Pulsante chiudi pannello libreria ──────────────────────────────────
+    document.getElementById('library-close')?.addEventListener('click', () => {
+        libraryMgr.close();
+    });
+
+    // ── Pulsante "Nuova cartella" nel pannello ─────────────────────────────
+    document.getElementById('library-new-folder')?.addEventListener('click', () => {
+        libraryMgr.createFolder(libraryMgr.currentFolderId);
+    });
+
+    // ── Pulsante "Salva qui" nel pannello ──────────────────────────────────
+    document.getElementById('library-save-here')?.addEventListener('click', () => {
+        libraryMgr.saveCurrentLesson(libraryMgr.currentFolderId);
+    });
+
+    // ── Pulsante Salva in header — sovrascrive projectMgr.save con Drive ──
+    // (solo se Drive è connesso, altrimenti usa il salvataggio locale)
+    const btnSave = document.getElementById('btn-save');
+    if (btnSave) {
+        btnSave.addEventListener('click', () => {
+            if (driveMgr.isConnected()) {
+                libraryMgr.saveCurrentLesson(libraryMgr.currentFolderId);
+            }
+            // Se non connesso: il listener originale di app.js gestisce il salvataggio locale
+        }, true); // capture=true → intercetta prima del listener in app.js
+    }
+
+    // ── Rinnovo silenzioso token se sessione ripristinata ──────────────────
+    if (driveMgr.connected && !driveMgr.isConnected()) {
+        // Token scaduto: prova rinnovo silenzioso
+        driveMgr.trySilentConnect().then(ok => {
+            if (ok) {
+                driveConnectBtn.update();
+                libraryMgr._updateDriveStatus();
+            }
+        });
+    }
+
+    console.log('EduBoard Drive — inizializzato.');
+}
+
+// Auto-init se caricato dopo DOMContentLoaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initDrive);
+} else {
+    initDrive();
+}

@@ -36,12 +36,52 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 <span>Esporta</span>
             </button>
+            <!-- Feature 5: Fullscreen -->
+            <button class="hdr-btn" id="btn-fullscreen" title="Schermo intero (F11)">
+                <svg id="fullscreen-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                </svg>
+                <span id="fullscreen-label">Espandi</span>
+            </button>
+            <!-- Libreria lezioni Drive -->
+            <button class="hdr-btn" id="btn-library" title="Libreria lezioni (Google Drive)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
+                <span>Libreria</span>
+            </button>
+            <!-- Connessione Drive -->
+            <button class="hdr-btn" id="btn-drive" title="Connetti a Google Drive">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.44 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.21 6.21l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                </svg>
+                <span>Drive</span>
+            </button>
             <button class="hdr-btn hdr-btn--primary" id="btn-save" title="Salva">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                 <span>Salva</span>
             </button>
         </div>
     </header>
+
+    <!-- ===== PANNELLO LIBRERIA LEZIONI ===== -->
+    <div id="library-panel" class="library-panel">
+        <div class="library-header">
+            <span>📚 Libreria Lezioni</span>
+            <button id="library-close" title="Chiudi">×</button>
+        </div>
+        <div class="library-drive-status" id="library-drive-status">
+            <span class="drive-status-off">Drive non connesso</span>
+        </div>
+        <div class="library-tree" id="library-tree">
+            <!-- Struttura ad albero generata da drive.js -->
+        </div>
+        <div class="library-actions">
+            <button id="library-new-folder">+ Nuova cartella</button>
+            <button id="library-save-here">💾 Salva qui</button>
+        </div>
+    </div>
 
     <!-- Area principale -->
     <main id="canvas-area">
@@ -81,7 +121,8 @@
                     <button class="color-swatch" data-color="#0891b2" style="background:#0891b2" title="Azzurro"></button>
                     <button class="color-swatch" data-color="#854d0e" style="background:#854d0e" title="Marrone"></button>
                     <button class="color-swatch" data-color="#ffffff" style="background:#ffffff;border:2px solid #64748b" title="Bianco"></button>
-                    <button class="color-swatch color-custom" id="color-custom" title="Colore personalizzato">
+                    <!-- Feature 2: pulsante "+" apre tavolozza -->
+                    <button class="color-swatch color-custom" id="color-custom" title="Scegli colore dalla tavolozza">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
                     </button>
                 </div>
@@ -205,6 +246,39 @@
                 <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="20,4 24.9,14.8 37,16.2 28,25 30.2,37 20,31.3 9.8,37 12,25 3,16.2 15.1,14.8"/></svg>
                 <span>Stella</span>
             </button>
+            <!-- Feature 3: nuove forme -->
+            <button class="shape-opt" data-shape="diamond" title="Rombo">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="20,4 36,20 20,36 4,20"/></svg>
+                <span>Rombo</span>
+            </button>
+            <button class="shape-opt" data-shape="pentagon" title="Pentagono">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="20,4 36,15 30,34 10,34 4,15"/></svg>
+                <span>Pentagono</span>
+            </button>
+            <button class="shape-opt" data-shape="hexagon" title="Esagono">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="20,3 34,11.5 34,28.5 20,37 6,28.5 6,11.5"/></svg>
+                <span>Esagono</span>
+            </button>
+            <button class="shape-opt" data-shape="arrow-right" title="Freccia destra">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="4,14 26,14 26,6 36,20 26,34 26,26 4,26"/></svg>
+                <span>Freccia piena</span>
+            </button>
+            <button class="shape-opt" data-shape="double-arrow" title="Freccia doppia">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="4,20 12,8 12,14 28,14 28,8 36,20 28,32 28,26 12,26 12,32"/></svg>
+                <span>Fr. doppia</span>
+            </button>
+            <button class="shape-opt" data-shape="speech" title="Nuvoletta">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="32" height="24" rx="4"/><polyline points="10,28 8,36 18,28"/></svg>
+                <span>Nuvoletta</span>
+            </button>
+            <button class="shape-opt" data-shape="heart" title="Cuore">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 35 C20 35 4 25 4 14 C4 8 9 4 14 4 C17 4 20 6 20 6 C20 6 23 4 26 4 C31 4 36 8 36 14 C36 25 20 35 20 35Z"/></svg>
+                <span>Cuore</span>
+            </button>
+            <button class="shape-opt" data-shape="brace" title="Parentesi graffa">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M30,4 C20,4 22,20 14,20 C22,20 20,36 30,36"/></svg>
+                <span>Parentesi</span>
+            </button>
         </div>
         <div class="shape-fill-row">
             <label class="toggle-label">
@@ -227,6 +301,23 @@
             <button class="bg-opt" data-bg="grid-5" title="Quadretti 5mm"><div class="bg-preview bg-p-grid-5"></div><span>Quadr. 5mm</span></button>
             <button class="bg-opt" data-bg="dots" title="Puntini"><div class="bg-preview bg-p-dots"></div><span>Puntini</span></button>
             <button class="bg-opt" data-bg="staff" title="Pentagramma"><div class="bg-preview bg-p-staff"></div><span>Penta­gramma</span></button>
+            <!-- Feature 4: Righe Primaria -->
+            <div class="bg-section-header">
+                <div class="popup-title-sub">Righe Primaria</div>
+            </div>
+            <button class="bg-opt" data-bg="lines-15-aux" title="Righe 15mm con righino — 1ª elementare"><div class="bg-preview bg-p-lines-15-aux"></div><span>1ª elem.</span></button>
+            <button class="bg-opt" data-bg="lines-12-aux" title="Righe 12mm con righino — 2ª elementare"><div class="bg-preview bg-p-lines-12-aux"></div><span>2ª elem.</span></button>
+            <button class="bg-opt" data-bg="lines-9" title="Righe 9mm — 3ª elementare"><div class="bg-preview bg-p-lines-9"></div><span>3ª elem.</span></button>
+            <button class="bg-opt" data-bg="lines-7" title="Righe 7mm — 4ª elementare"><div class="bg-preview bg-p-lines-7"></div><span>4ª elem.</span></button>
+        </div>
+    </div>
+
+    <!-- Feature 2: Popup tavolozza 80 colori -->
+    <div id="color-palette-popup" class="popup-panel" style="display:none">
+        <div class="popup-title">Scegli colore</div>
+        <div id="color-palette-grid" class="color-palette-grid"></div>
+        <div class="palette-custom-row">
+            <button id="palette-custom-btn">&#127912; Colore personalizzato</button>
         </div>
     </div>
 
@@ -245,5 +336,12 @@
     </div>
 
     <script src="app.js"></script>
+
+    <!-- Google Identity Services — necessario per OAuth2 Drive -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- EduBoard Drive integration -->
+    <script src="drive.js"></script>
+    <!-- EduBoard strumenti geometrici -->
+    <script src="geometry.js"></script>
 </body>
 </html>

@@ -32,6 +32,54 @@ const CONFIG = {
     drawTools: ['pen', 'pencil', 'pastel', 'marker', 'eraser'],
 };
 
+// Colori standard palette toolbar (usati da tutti gli strumenti tranne marker)
+const DEFAULT_COLORS = [
+    { color: '#000000', title: 'Nero' },
+    { color: '#1d4ed8', title: 'Blu' },
+    { color: '#dc2626', title: 'Rosso' },
+    { color: '#16a34a', title: 'Verde' },
+    { color: '#d97706', title: 'Arancio' },
+    { color: '#7c3aed', title: 'Viola' },
+    { color: '#be185d', title: 'Rosa' },
+    { color: '#0891b2', title: 'Azzurro' },
+    { color: '#854d0e', title: 'Marrone' },
+    { color: '#ffffff', title: 'Bianco' },
+];
+
+// Colori evidenziatore (Feature 1)
+const MARKER_COLORS = [
+    { color: '#FFFF00', title: 'Giallo' },
+    { color: '#00FF7F', title: 'Verde' },
+    { color: '#FF69B4', title: 'Rosa' },
+    { color: '#FF8C00', title: 'Arancio' },
+    { color: '#00BFFF', title: 'Azzurro' },
+    { color: '#DA70D6', title: 'Orchidea' },
+    { color: '#7FFFD4', title: 'Acquamarina' },
+    { color: '#FF6347', title: 'Pomodoro' },
+    { color: '#ffffff', title: 'Bianco' },  // placeholder per mantenere layout
+    { color: '#ffffff', title: 'Bianco' },  // placeholder
+];
+
+// Palette 80 colori Material Design (Feature 2)
+const COLOR_PALETTE = [
+    // Rossi
+    '#FFEBEE','#FFCDD2','#EF9A9A','#E57373','#EF5350','#F44336','#E53935','#D32F2F','#C62828','#B71C1C',
+    // Rosa
+    '#FCE4EC','#F8BBD0','#F48FB1','#F06292','#EC407A','#E91E63','#D81B60','#C2185B','#AD1457','#880E4F',
+    // Viola
+    '#F3E5F5','#E1BEE7','#CE93D8','#BA68C8','#AB47BC','#9C27B0','#8E24AA','#7B1FA2','#6A1B9A','#4A148C',
+    // Blu-viola
+    '#EDE7F6','#D1C4E9','#B39DDB','#9575CD','#7E57C2','#673AB7','#5E35B1','#512DA8','#4527A0','#311B92',
+    // Blu
+    '#E3F2FD','#BBDEFB','#90CAF9','#64B5F6','#42A5F5','#2196F3','#1E88E5','#1976D2','#1565C0','#0D47A1',
+    // Ciano/verde
+    '#E0F7FA','#B2EBF2','#80DEEA','#4DD0E1','#26C6DA','#00BCD4','#00ACC1','#0097A7','#00838F','#006064',
+    // Verde
+    '#E8F5E9','#C8E6C9','#A5D6A7','#81C784','#66BB6A','#4CAF50','#43A047','#388E3C','#2E7D32','#1B5E20',
+    // Giallo/ambra/arancio
+    '#FFFDE7','#FFF9C4','#FFF176','#FFF176','#FFEE58','#FFEB3B','#FDD835','#F9A825','#F57F17','#E65100',
+];
+
 // =============================================================================
 // SEZIONE 2 — BackgroundManager
 // Gestisce il canvas di sfondo (#bg-canvas): colori, righe, griglie, immagini
@@ -102,6 +150,19 @@ class BackgroundManager {
             case 'staff': // pentagramma musicale
                 this._drawStaff(ctx, W, H);
                 break;
+            // Feature 4 — Righe Primaria
+            case 'lines-15-aux': // 1a elementare — 15mm con righino ausiliario a 8mm
+                this._drawLinesWithAux(ctx, W, H, 60, 32); // 60px ≈ 15mm, 32px ≈ 8mm
+                break;
+            case 'lines-12-aux': // 2a elementare — 12mm con righino
+                this._drawLinesWithAux(ctx, W, H, 48, 24);
+                break;
+            case 'lines-9': // 3a elementare — 9mm
+                this._drawLines(ctx, W, H, 36);
+                break;
+            case 'lines-7': // 4a elementare — 7mm
+                this._drawLines(ctx, W, H, 28);
+                break;
             // 'white': solo bianco (già fatto sopra)
         }
     }
@@ -157,6 +218,29 @@ class BackgroundManager {
             }
             y += lineSpacing * 4 + groupSpacing;
         }
+    }
+
+    // Feature 4: righino ausiliario per primaria
+    _drawLinesWithAux(ctx, W, H, spacing, auxOffset) {
+        // Riga principale blu
+        ctx.strokeStyle = '#93c5fd';
+        ctx.lineWidth = 1.2;
+        for (let y = spacing; y < H; y += spacing) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+        }
+        // Righino ausiliario rosso (a metà)
+        ctx.strokeStyle = '#fca5a5';
+        ctx.lineWidth = 0.7;
+        for (let y = spacing; y < H; y += spacing) {
+            const auxY = y - spacing + auxOffset;
+            if (auxY > 0) {
+                ctx.beginPath(); ctx.moveTo(0, auxY); ctx.lineTo(W, auxY); ctx.stroke();
+            }
+        }
+        // Margine sinistro rosso
+        ctx.strokeStyle = '#fca5a5';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, 0); ctx.lineTo(60, H); ctx.stroke();
     }
 
     setBackground(bgKey) {
@@ -275,6 +359,17 @@ class BrushEngine {
         ctx.restore();
     }
 
+    // Helper: poligono regolare (Feature 3)
+    _polygon(ctx, cx, cy, r, sides, rotation = 0) {
+        ctx.beginPath();
+        for (let i = 0; i < sides; i++) {
+            const angle = (i * 2 * Math.PI / sides) - Math.PI / 2 + rotation;
+            if (i === 0) ctx.moveTo(cx + r * Math.cos(angle), cy + r * Math.sin(angle));
+            else ctx.lineTo(cx + r * Math.cos(angle), cy + r * Math.sin(angle));
+        }
+        ctx.closePath();
+    }
+
     // Forme geometriche — disegna su ctx passato, con colore e spessore dati
     shape(ctx, type, x0, y0, x1, y1, size, color, fill) {
         ctx.save();
@@ -372,6 +467,153 @@ class BrushEngine {
                     ctx.fill();
                     ctx.globalAlpha = 1;
                 }
+                ctx.stroke();
+                break;
+            }
+
+            // Feature 3 — Forme aggiuntive
+
+            case 'diamond': {
+                const dcx = (x0 + x1) / 2;
+                const dcy = (y0 + y1) / 2;
+                const dw = Math.abs(x1 - x0) / 2;
+                const dh = Math.abs(y1 - y0) / 2;
+                ctx.moveTo(dcx, dcy - dh);
+                ctx.lineTo(dcx + dw, dcy);
+                ctx.lineTo(dcx, dcy + dh);
+                ctx.lineTo(dcx - dw, dcy);
+                ctx.closePath();
+                if (fill) { ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+                ctx.stroke();
+                break;
+            }
+
+            case 'pentagon': {
+                const pcx = (x0 + x1) / 2;
+                const pcy = (y0 + y1) / 2;
+                const pr = Math.min(Math.abs(x1 - x0), Math.abs(y1 - y0)) / 2;
+                this._polygon(ctx, pcx, pcy, pr, 5);
+                if (fill) { ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+                ctx.stroke();
+                break;
+            }
+
+            case 'hexagon': {
+                const hcx = (x0 + x1) / 2;
+                const hcy = (y0 + y1) / 2;
+                const hr = Math.min(Math.abs(x1 - x0), Math.abs(y1 - y0)) / 2;
+                this._polygon(ctx, hcx, hcy, hr, 6, Math.PI / 6);
+                if (fill) { ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+                ctx.stroke();
+                break;
+            }
+
+            case 'arrow-right': {
+                // Freccia destra: corpo rettangolare + testa triangolare
+                const arW = x1 - x0;
+                const arH = y1 - y0;
+                const ary = y0 + arH * 0.3;
+                const arMidY = y0 + arH / 2;
+                const aryB = y0 + arH * 0.7;
+                const arTip = x1;
+                const arBody = x0 + arW * 0.65;
+                ctx.moveTo(x0, ary);
+                ctx.lineTo(arBody, ary);
+                ctx.lineTo(arBody, y0);
+                ctx.lineTo(arTip, arMidY);
+                ctx.lineTo(arBody, y1);
+                ctx.lineTo(arBody, aryB);
+                ctx.lineTo(x0, aryB);
+                ctx.closePath();
+                if (fill) { ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+                ctx.stroke();
+                break;
+            }
+
+            case 'double-arrow': {
+                // Freccia doppia ← →
+                const daW = x1 - x0;
+                const daH = y1 - y0;
+                const day = y0 + daH * 0.3;
+                const daMidY = y0 + daH / 2;
+                const dayB = y0 + daH * 0.7;
+                const daHead = Math.abs(daW) * 0.2;
+                const daBodyL = x0 + daHead;
+                const daBodyR = x1 - daHead;
+                ctx.moveTo(x0, daMidY);
+                ctx.lineTo(daBodyL, y0);
+                ctx.lineTo(daBodyL, day);
+                ctx.lineTo(daBodyR, day);
+                ctx.lineTo(daBodyR, y0);
+                ctx.lineTo(x1, daMidY);
+                ctx.lineTo(daBodyR, y1);
+                ctx.lineTo(daBodyR, dayB);
+                ctx.lineTo(daBodyL, dayB);
+                ctx.lineTo(daBodyL, y1);
+                ctx.closePath();
+                if (fill) { ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+                ctx.stroke();
+                break;
+            }
+
+            case 'speech': {
+                // Nuvoletta: rettangolo arrotondato + codino in basso a sinistra
+                const sw = x1 - x0;
+                const sh = y1 - y0;
+                const sRadius = Math.min(Math.abs(sw), Math.abs(sh)) * 0.12;
+                const tailH = Math.abs(sh) * 0.2;
+                const bodyH = Math.abs(sh) - tailH;
+                const sx0 = Math.min(x0, x1);
+                const sy0 = Math.min(y0, y1);
+                const sx1 = Math.max(x0, x1);
+                const sy1 = Math.max(y0, y1);
+                const sbH = (sy1 - sy0) - tailH;
+                // Corpo arrotondato
+                ctx.moveTo(sx0 + sRadius, sy0);
+                ctx.lineTo(sx1 - sRadius, sy0);
+                ctx.arcTo(sx1, sy0, sx1, sy0 + sRadius, sRadius);
+                ctx.lineTo(sx1, sy0 + sbH - sRadius);
+                ctx.arcTo(sx1, sy0 + sbH, sx1 - sRadius, sy0 + sbH, sRadius);
+                // Codino
+                ctx.lineTo(sx0 + (sx1 - sx0) * 0.35, sy0 + sbH);
+                ctx.lineTo(sx0 + (sx1 - sx0) * 0.15, sy1);
+                ctx.lineTo(sx0 + (sx1 - sx0) * 0.25, sy0 + sbH);
+                ctx.lineTo(sx0 + sRadius, sy0 + sbH);
+                ctx.arcTo(sx0, sy0 + sbH, sx0, sy0 + sbH - sRadius, sRadius);
+                ctx.lineTo(sx0, sy0 + sRadius);
+                ctx.arcTo(sx0, sy0, sx0 + sRadius, sy0, sRadius);
+                ctx.closePath();
+                if (fill) { ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+                ctx.stroke();
+                break;
+            }
+
+            case 'heart': {
+                const hx = (x0 + x1) / 2;
+                const hy = (y0 + y1) / 2;
+                const hr2 = Math.min(Math.abs(x1 - x0), Math.abs(y1 - y0)) / 2;
+                ctx.moveTo(hx, hy + hr2 * 0.3);
+                ctx.bezierCurveTo(hx, hy - hr2 * 0.6, hx - hr2, hy - hr2 * 0.6, hx - hr2, hy);
+                ctx.bezierCurveTo(hx - hr2, hy + hr2 * 0.6, hx, hy + hr2, hx, hy + hr2);
+                ctx.bezierCurveTo(hx, hy + hr2, hx + hr2, hy + hr2 * 0.6, hx + hr2, hy);
+                ctx.bezierCurveTo(hx + hr2, hy - hr2 * 0.6, hx, hy - hr2 * 0.6, hx, hy + hr2 * 0.3);
+                ctx.closePath();
+                if (fill) { ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+                ctx.stroke();
+                break;
+            }
+
+            case 'brace': {
+                // Parentesi graffa aperta { (verticale, orientata a destra)
+                const bcx = (x0 + x1) / 2;
+                const bcy = (y0 + y1) / 2;
+                const bh = Math.abs(y1 - y0) / 2;
+                const bw = Math.abs(x1 - x0) * 0.3;
+                const tip = bcx - Math.abs(x1 - x0) * 0.15;
+                const right = Math.max(x0, x1);
+                ctx.moveTo(right, y0);
+                ctx.bezierCurveTo(right - bw, y0, tip, bcy - bh * 0.3, tip, bcy);
+                ctx.bezierCurveTo(tip, bcy + bh * 0.3, right - bw, y1, right, y1);
                 ctx.stroke();
                 break;
             }
@@ -712,6 +954,7 @@ class ToolbarManager {
         this._setupSizes();
         this._setupShapePanel();
         this._setupBgPanel();
+        this._setupColorPalettePopup(); // Feature 2
     }
 
     show() {
@@ -776,6 +1019,9 @@ class ToolbarManager {
         this._updateActiveBtn(btn);
         this._updateOptionsRow();
         this._updateCursor();
+
+        // Feature 1: aggiorna palette colori in base allo strumento
+        this._updateColorSwatches(tool);
     }
 
     _updateActiveBtn(activeBtn) {
@@ -812,6 +1058,42 @@ class ToolbarManager {
         canvas.style.cursor = cursorMap[CONFIG.currentTool] || 'default';
     }
 
+    // Feature 1: aggiorna i color-swatch in base allo strumento
+    _updateColorSwatches(tool) {
+        const swatches = document.querySelectorAll('.color-swatch:not(#color-custom)');
+        const colors = (tool === 'marker') ? MARKER_COLORS : DEFAULT_COLORS;
+
+        swatches.forEach((btn, i) => {
+            if (i < colors.length) {
+                const c = colors[i];
+                btn.dataset.color = c.color;
+                btn.style.background = c.color;
+                btn.title = c.title;
+                // I placeholder bianchi del marker li rendiamo invisibili
+                if (tool === 'marker' && i >= 8) {
+                    btn.style.opacity = '0';
+                    btn.style.pointerEvents = 'none';
+                } else {
+                    btn.style.opacity = '';
+                    btn.style.pointerEvents = '';
+                }
+                // Bordo speciale per il bianco
+                if (c.color === '#ffffff' && !(tool === 'marker' && i >= 8)) {
+                    btn.style.border = '2px solid #64748b';
+                } else if (tool !== 'marker' || i < 8) {
+                    btn.style.border = '';
+                }
+            }
+        });
+
+        // Rimuovi active da tutti, imposta attivo sul primo
+        document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
+        if (swatches[0]) {
+            swatches[0].classList.add('active');
+            CONFIG.currentColor = colors[0].color;
+        }
+    }
+
     _setupColors() {
         document.querySelectorAll('.color-swatch').forEach(btn => {
             if (btn.id === 'color-custom') return;
@@ -822,8 +1104,9 @@ class ToolbarManager {
             });
         });
 
+        // Feature 2: il pulsante "+" apre la tavolozza invece del picker diretto
         document.getElementById('color-custom').addEventListener('click', () => {
-            document.getElementById('color-picker-input').click();
+            this._togglePopup('color-palette-popup', document.getElementById('color-custom'));
         });
 
         document.getElementById('color-picker-input').addEventListener('input', (e) => {
@@ -832,6 +1115,34 @@ class ToolbarManager {
             customBtn.style.background = e.target.value;
             document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
             customBtn.classList.add('active');
+        });
+    }
+
+    // Feature 2: setup popup tavolozza 80 colori
+    _setupColorPalettePopup() {
+        const grid = document.getElementById('color-palette-grid');
+        if (!grid) return;
+
+        // Genera griglia 80 colori
+        COLOR_PALETTE.forEach(color => {
+            const btn = document.createElement('button');
+            btn.style.background = color;
+            btn.title = color;
+            btn.addEventListener('click', () => {
+                CONFIG.currentColor = color;
+                const customBtn = document.getElementById('color-custom');
+                customBtn.style.background = color;
+                document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
+                customBtn.classList.add('active');
+                this._closeAllPopups();
+            });
+            grid.appendChild(btn);
+        });
+
+        // Pulsante colore personalizzato in fondo alla tavolozza
+        document.getElementById('palette-custom-btn').addEventListener('click', () => {
+            document.getElementById('color-picker-input').click();
+            this._closeAllPopups();
         });
     }
 
@@ -904,6 +1215,7 @@ class ToolbarManager {
     _closeAllPopups() {
         document.getElementById('shape-popup').style.display = 'none';
         document.getElementById('bg-popup').style.display = 'none';
+        document.getElementById('color-palette-popup').style.display = 'none';
     }
 }
 
@@ -1013,7 +1325,7 @@ class ProjectManager {
     }
 
     newBoard() {
-        if (confirm('Nuova lavagna? Il disegno non salvato andra\u0300 perso.')) {
+        if (confirm('Nuova lavagna? Il disegno non salvato andr\u00e0 perso.')) {
             canvasMgr.clear();
             bgMgr.setBackground('white');
             CONFIG.projectName = 'Nuova Lavagna';
@@ -1079,6 +1391,8 @@ function setupKeyboard() {
     document.addEventListener('keydown', (e) => {
         // Non interferire con l'input testo inline
         if (textMgr.active) return;
+        // Non interferire con il project-name in modifica
+        if (document.getElementById('project-name').contentEditable === 'true') return;
 
         if (e.ctrlKey || e.metaKey) {
             if (e.key === 'z') {
@@ -1118,10 +1432,73 @@ function setupKeyboard() {
 }
 
 // =============================================================================
-// SEZIONE 12 — INIT
+// SEZIONE 12 — Feature 5: Fullscreen API
+// =============================================================================
+
+function setupFullscreen() {
+    const btn = document.getElementById('btn-fullscreen');
+    if (!btn) return;
+
+    btn.addEventListener('click', () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+        } else {
+            document.exitFullscreen();
+        }
+    });
+
+    document.addEventListener('fullscreenchange', () => {
+        const isFS = !!document.fullscreenElement;
+        const icon = document.getElementById('fullscreen-icon');
+        const label = document.getElementById('fullscreen-label');
+        if (icon) {
+            icon.innerHTML = isFS
+                ? '<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>'
+                : '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>';
+        }
+        if (label) label.textContent = isFS ? 'Esci' : 'Espandi';
+    });
+
+    // F11 → fullscreen
+    document.addEventListener('keydown', e => {
+        if (e.key === 'F11') { e.preventDefault(); btn.click(); }
+    });
+}
+
+// =============================================================================
+// SEZIONE 13 — Feature 6: Nome lezione modificabile
+// =============================================================================
+
+function setupProjectName() {
+    const badge = document.getElementById('project-name');
+    badge.title = 'Doppio click per rinominare';
+    badge.style.cursor = 'pointer';
+
+    badge.addEventListener('dblclick', () => {
+        badge.contentEditable = 'true';
+        badge.focus();
+        // Seleziona tutto
+        const range = document.createRange();
+        range.selectNodeContents(badge);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+    });
+
+    badge.addEventListener('blur', () => {
+        badge.contentEditable = 'false';
+        CONFIG.projectName = badge.textContent.trim() || 'Nuova Lavagna';
+        badge.textContent = CONFIG.projectName;
+    });
+
+    badge.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); badge.blur(); }
+        if (e.key === 'Escape') { badge.textContent = CONFIG.projectName; badge.blur(); }
+    });
+}
+
+// =============================================================================
+// SEZIONE 14 — INIT
 // Istanziazione globale dei manager e avvio dell'applicazione.
-// Le variabili globali sono dichiarate con let prima del DOMContentLoaded
-// così tutte le classi possono cross-riferirsi dopo l'init completo.
 // =============================================================================
 
 let bgMgr, brush, laserMgr, canvasMgr, toolbarMgr, textMgr, projectMgr;
@@ -1137,11 +1514,24 @@ document.addEventListener('DOMContentLoaded', () => {
     projectMgr = new ProjectManager();
     new PWAManager();
     setupKeyboard();
+    setupFullscreen();    // Feature 5
+    setupProjectName();   // Feature 6
 
     // 2. Pulsanti header
     document.getElementById('btn-save').addEventListener('click',   () => projectMgr.save());
     document.getElementById('btn-export').addEventListener('click', () => canvasMgr.exportPNG());
     document.getElementById('btn-new').addEventListener('click',    () => projectMgr.newBoard());
+
+    // Stub per pulsanti aggiuntivi (Library/Drive) se presenti
+    const btnLibrary = document.getElementById('btn-library');
+    if (btnLibrary) btnLibrary.addEventListener('click', () => toast('Funzione Libreria in arrivo!', 'info'));
+    const btnDrive = document.getElementById('btn-drive');
+    if (btnDrive) btnDrive.addEventListener('click', () => toast('Connessione Drive in arrivo!', 'info'));
+    const btnLibraryClose = document.getElementById('library-close');
+    if (btnLibraryClose) btnLibraryClose.addEventListener('click', () => {
+        const panel = document.getElementById('library-panel');
+        if (panel) panel.style.display = 'none';
+    });
 
     // 3. Posizionamento area canvas (sotto header da 56px)
     document.getElementById('canvas-area').style.top = '56px';
