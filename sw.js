@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v10'; // v10 — auto-save Drive in tempo reale con indicatore FAB + fix dirty check
+const CACHE_NAME = 'eduboard-v11'; // v11 — fix dirty check cambio lezione + reset isDirty asincrono
 const urlsToCache = [
   './',
   './index.html',

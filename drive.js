@@ -920,9 +920,10 @@ class LibraryManager {
             return;
         }
 
-        // Se ci sono modifiche non salvate E non c'è auto-save attivo (nessun fileId),
-        // oppure se il file corrente è diverso da quello che vogliamo aprire,
-        // mostra il dialog SOLO se isDirty E non c'è auto-save (che ha già salvato tutto)
+        // Mostra dialog salvataggio SOLO se:
+        // - c'è un auto-save pending (flush immediato), OPPURE
+        // - isDirty=true E non c'è currentFileId (nessun auto-save attivo, salvataggio manuale)
+        // Se c'è un currentFileId attivo, l'auto-save ha già salvato tutto → procedi senza chiedere
         const hasPendingAutoSave = window.autoSaveMgr?.hasPending();
         if (hasPendingAutoSave) {
             // Flush immediato prima di procedere
@@ -930,9 +931,12 @@ class LibraryManager {
             window.autoSaveMgr._timer = null;
             try { await window.libraryMgr.overwriteCurrentLesson(); } catch (_) {}
             window.autoSaveMgr._setError();
-        } else if (typeof confirmIfDirty === 'function') {
-            const canContinue = await confirmIfDirty();
-            if (!canContinue) return;
+        } else if (typeof CONFIG !== 'undefined' && CONFIG.isDirty && !this.currentFileId) {
+            // Solo se dirty E senza auto-save attivo (nessun file Drive aperto)
+            if (typeof confirmIfDirty === 'function') {
+                const canContinue = await confirmIfDirty();
+                if (!canContinue) return;
+            }
         }
         try {
             window.autoSaveMgr?.beginLoading();
@@ -978,10 +982,13 @@ class LibraryManager {
             toast('Lezione "' + name + '" caricata!', 'success');
             // Memorizza fileId corrente per ripristino posizione
             this.currentFileId = fileId;
-            // MODIFICA 1/5: reset isDirty e indicatore auto-save al caricamento lezione
-            if (typeof CONFIG !== 'undefined') CONFIG.isDirty = false;
             window.autoSaveMgr?.endLoading();
-            window.autoSaveMgr?.reset();
+            // Reset isDirty con delay: le operazioni asincrone di ripristino (img.onload, ecc.)
+            // potrebbero impostare isDirty=true dopo il reset sincrono — lo riesegiamo dopo
+            setTimeout(() => {
+                if (typeof CONFIG !== 'undefined') CONFIG.isDirty = false;
+                window.autoSaveMgr?.reset();
+            }, 500);
             // Memorizza come ultima lezione aperta per auto-open al prossimo avvio
             localStorage.setItem('eduboard_last_lesson', JSON.stringify({ fileId, fileName }));
             // Ripristina posizione (pan+zoom) salvata con la lezione
