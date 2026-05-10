@@ -390,19 +390,50 @@ class DriveManager {
     // ──────────────────────────────────────────────────────────────────────────
 
     /**
-     * Lista immagini nella cartella "Sfondi".
-     * @returns {Array<{id, name, thumbnailLink, webContentLink}>}
+     * Lista immagini in TUTTE le cartelle chiamate "Sfondi" nel Drive dell'utente.
+     * Se non trova nessuna cartella "Sfondi", usa la cartella EduBoard/Sfondi.
+     * @returns {Array<{id, name, mimeType, thumbnailLink, webContentLink}>}
      */
     async listBackgrounds() {
         this._checkConnected();
-        await this._ensureBgFolder();
-        const q = encodeURIComponent(
-            `'${this.bgFolderId}' in parents and (mimeType contains 'image/' or mimeType='application/pdf') and trashed=false`
+        // Cerca tutte le cartelle chiamate "Sfondi" nel Drive (ovunque)
+        const folderQ = encodeURIComponent(
+            `name = 'Sfondi' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
         );
-        const resp = await this._apiFetch(
-            `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType,thumbnailLink,webContentLink)&orderBy=name`
-        );
-        return resp.files || [];
+        let folders = [];
+        try {
+            const folderResp = await this._apiFetch(
+                `https://www.googleapis.com/drive/v3/files?q=${folderQ}&fields=files(id,name)&pageSize=10`
+            );
+            folders = folderResp.files || [];
+        } catch (_) {}
+
+        // Fallback: usa la cartella EduBoard/Sfondi creata dall'app
+        if (!folders.length) {
+            await this._ensureBgFolder();
+            if (this.bgFolderId) folders.push({ id: this.bgFolderId });
+        }
+
+        // Lista file immagine/PDF in TUTTE le cartelle "Sfondi" trovate
+        const allFiles = [];
+        const seenIds = new Set();
+        for (const folder of folders) {
+            const q = encodeURIComponent(
+                `'${folder.id}' in parents and (mimeType contains 'image/' or mimeType='application/pdf') and trashed=false`
+            );
+            try {
+                const resp = await this._apiFetch(
+                    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType,thumbnailLink,webContentLink)&orderBy=name&pageSize=50`
+                );
+                for (const f of (resp.files || [])) {
+                    if (!seenIds.has(f.id)) {
+                        seenIds.add(f.id);
+                        allFiles.push(f);
+                    }
+                }
+            } catch (_) {}
+        }
+        return allFiles;
     }
 
     /**

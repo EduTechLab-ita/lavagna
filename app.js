@@ -781,6 +781,13 @@ class CanvasManager {
         // Nota: bgCanvas non ha stile gestito qui, è gestito da bgMgr
         const bgCvs = document.getElementById('bg-canvas');
         if (bgCvs) { bgCvs.style.width = W + 'px'; bgCvs.style.height = H + 'px'; }
+        // objects-canvas
+        if (typeof objectLayer !== 'undefined' && objectLayer) {
+            objectLayer.resize(W, H);
+        } else {
+            const objCvs = document.getElementById('objects-canvas');
+            if (objCvs) { objCvs.width = W; objCvs.height = H; objCvs.style.width = W + 'px'; objCvs.style.height = H + 'px'; }
+        }
         this.bgMgr.resize(W, H);
         this.laser.resize(W, H);
 
@@ -800,27 +807,47 @@ class CanvasManager {
     }
 
     getCoords(e) {
+        // Con il nuovo sistema CSS transform su canvas-area, le coordinate
+        // devono essere convertite usando panMgr.getCanvasCoords() che divide per scale
+        if (typeof panMgr !== 'undefined' && panMgr) {
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return panMgr.getCanvasCoords(clientX, clientY);
+        }
+        // Fallback: senza panMgr usa il rect direttamente
         const rect = this.canvas.getBoundingClientRect();
         if (e.touches) {
             return {
-                x: e.touches[0].clientX - rect.left,
-                y: e.touches[0].clientY - rect.top
+                x: (e.touches[0].clientX - rect.left) / (rect.width / this.canvas.width),
+                y: (e.touches[0].clientY - rect.top) / (rect.height / this.canvas.height)
             };
         }
-        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        return {
+            x: (e.clientX - rect.left) / (rect.width / this.canvas.width),
+            y: (e.clientY - rect.top) / (rect.height / this.canvas.height)
+        };
     }
 
     _setupEvents() {
-        const el = this.canvas;
+        // Usa overlay-canvas come surface di input (z-index più alto, gestisce tutti gli eventi)
+        // draw-canvas rimane sotto, non intercetta
+        const el = this.overlayCanvas;
+        el.style.pointerEvents = 'auto'; // overlay riceve eventi
+        this.canvas.style.pointerEvents = 'none'; // draw-canvas non riceve eventi diretti
+
         // Mouse
         el.addEventListener('mousedown',  e => this._onStart(e));
         el.addEventListener('mousemove',  e => this._onMove(e));
         el.addEventListener('mouseup',    e => this._onEnd(e));
         el.addEventListener('mouseleave', e => this._onEnd(e));
-        // Touch
-        el.addEventListener('touchstart', e => { e.preventDefault(); this._onStart(e); }, { passive: false });
-        el.addEventListener('touchmove',  e => { e.preventDefault(); this._onMove(e);  }, { passive: false });
-        el.addEventListener('touchend',   e => { e.preventDefault(); this._onEnd(e);   }, { passive: false });
+        // Touch (esclude pinch a 2 dita gestito da PanManager)
+        el.addEventListener('touchstart', e => {
+            if (e.touches.length === 1) { e.preventDefault(); this._onStart(e); }
+        }, { passive: false });
+        el.addEventListener('touchmove',  e => {
+            if (e.touches.length === 1) { e.preventDefault(); this._onMove(e); }
+        }, { passive: false });
+        el.addEventListener('touchend',   e => { e.preventDefault(); this._onEnd(e); }, { passive: false });
     }
 
     _onStart(e) {
@@ -1098,6 +1125,11 @@ class ToolbarManager {
             document.getElementById('file-bg-input').click();
             return;
         }
+        if (tool === 'import-media') {
+            selectMgr?.deactivate();
+            document.getElementById('file-import-input').click();
+            return;
+        }
         if (tool === 'select') {
             CONFIG.currentTool = 'select';
             this._updateActiveBtn(btn);
@@ -1158,7 +1190,8 @@ class ToolbarManager {
     }
 
     _updateCursor() {
-        const canvas = document.getElementById('draw-canvas');
+        // overlay-canvas è ora il layer di input (pointer-events: auto)
+        const canvas = document.getElementById('overlay-canvas');
         const cursorMap = {
             pen:    'crosshair',
             pencil: 'crosshair',
@@ -1170,8 +1203,9 @@ class ToolbarManager {
             shape:  'crosshair',
             select: 'crosshair',
             pan:    'grab',
+            'import-media': 'default',
         };
-        canvas.style.cursor = cursorMap[CONFIG.currentTool] || 'default';
+        if (canvas) canvas.style.cursor = cursorMap[CONFIG.currentTool] || 'default';
     }
 
     // Feature 1: aggiorna i color-swatch in base allo strumento
@@ -1318,6 +1352,42 @@ class ToolbarManager {
             reader.readAsDataURL(file);
             e.target.value = ''; // reset per consentire ri-selezione stessa immagine
         });
+
+        // Import media (immagini/PDF) come oggetti sul canvas
+        const importInput = document.getElementById('file-import-input');
+        if (importInput) {
+            importInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                if (file.type.startsWith('image/')) {
+                    await importImageFile(file);
+                } else if (file.type === 'application/pdf') {
+                    await importPdfFile(file);
+                }
+                e.target.value = '';
+            });
+        }
+
+        // Drag & Drop di file sul canvas-area
+        const area = document.getElementById('canvas-area');
+        if (area) {
+            area.addEventListener('dragover', e => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+            });
+            area.addEventListener('drop', async e => {
+                e.preventDefault();
+                const files = e.dataTransfer.files;
+                if (!files.length) return;
+                for (const file of files) {
+                    if (file.type.startsWith('image/')) {
+                        await importImageFile(file, e.clientX, e.clientY);
+                    } else if (file.type === 'application/pdf') {
+                        await importPdfFile(file, e.clientX, e.clientY);
+                    }
+                }
+            });
+        }
     }
 
     _togglePopup(id, triggerBtn) {
@@ -1337,9 +1407,10 @@ class ToolbarManager {
     }
 
     _closeAllPopups() {
-        document.getElementById('shape-popup').style.display = 'none';
-        document.getElementById('bg-popup').style.display = 'none';
-        document.getElementById('color-palette-popup').style.display = 'none';
+        ['shape-popup', 'bg-popup', 'color-palette-popup', 'geo-popup'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
     }
 }
 
@@ -1475,8 +1546,9 @@ class TextManager {
 
     // ── Listener sul canvas ───────────────────────────────────────────
     _setupCanvasListener() {
-        const drawCanvas = document.getElementById('draw-canvas');
-        drawCanvas.addEventListener('pointerdown', e => {
+        // Usa overlay-canvas come surface di input (è il layer più in alto con pointer-events)
+        const inputCanvas = document.getElementById('overlay-canvas');
+        inputCanvas.addEventListener('pointerdown', e => {
             if (CONFIG.currentTool !== 'text') return;
             if (this.editing) {
                 // Se clicco fuori dall'input → commit
@@ -1819,15 +1891,13 @@ function setupFullscreen() {
         const canvasArea = document.getElementById('canvas-area');
         if (active) {
             document.body.classList.add('fullscreen-mode');
-            if (header)     header.style.display     = 'none';
-            if (canvasArea) canvasArea.style.marginTop = '0';
+            if (header) header.style.display = 'none';
             if (btnExit) btnExit.style.display = 'flex';
             if (icon)    icon.innerHTML = '<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>';
             if (label)   label.textContent = 'Riduci';
         } else {
             document.body.classList.remove('fullscreen-mode');
-            if (header)     header.style.display     = '';
-            if (canvasArea) canvasArea.style.marginTop = '';
+            if (header) header.style.display = '';
             if (btnExit) btnExit.style.display = 'none';
             if (icon)    icon.innerHTML = '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>';
             if (label)   label.textContent = 'Espandi';
@@ -1980,7 +2050,7 @@ function setupProjectName() {
 
 // =============================================================================
 // SEZIONE 13a — PanManager
-// Strumento mano: trascina per scorrere la lavagna
+// Strumento mano: trascina per scorrere la lavagna + zoom con scroll/pinch
 // =============================================================================
 
 class PanManager {
@@ -1988,7 +2058,12 @@ class PanManager {
         this.active = false;
         this.dx = 0;
         this.dy = 0;
+        this.scale = 1;
         this._drag = { on: false, startX: 0, startY: 0, origDx: 0, origDy: 0 };
+        this._pinch = { active: false, initialDist: 0, initialScale: 1 };
+        this._zoomIndicatorTimer = null;
+        this._setupScrollZoom();
+        this._setupPinchZoom();
     }
 
     activate() {
@@ -2021,28 +2096,135 @@ class PanManager {
     resetPan() {
         this.dx = 0;
         this.dy = 0;
+        this.scale = 1;
         this._applyTransform();
-        // Rimuovi eventuale transform su canvas-area (legacy)
-        const area = document.getElementById('canvas-area');
-        if (area) area.style.transform = '';
     }
 
     centerView() {
-        // Il canvas è 3× viewport, partiamo da 0,0 per non perdere i disegni esistenti
-        this.dx = 0;
-        this.dy = 0;
+        // Centra la vista: parte dal centro del canvas 3× viewport
+        // così si può andare in tutte le direzioni ugualmente
+        const area = document.getElementById('canvas-area');
+        if (!area) return;
+        const canvas = document.getElementById('draw-canvas');
+        if (!canvas) return;
+        const canvasW = canvas.width;
+        const canvasH = canvas.height;
+        const vW = window.innerWidth;
+        const headerH = document.body.classList.contains('fullscreen-mode') ? 0 : 56;
+        const vH = window.innerHeight - headerH;
+        // dx negativo: il canvas inizia al centro del viewport
+        this.dx = -(canvasW - vW) / 2;
+        this.dy = -(canvasH - vH) / 2;
         this._applyTransform();
     }
 
-    _applyTransform() {
-        ['bg-canvas', 'draw-canvas', 'overlay-canvas'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.style.transform = `translate(${this.dx}px, ${this.dy}px)`;
+    // Converte coordinate client in coordinate canvas (tenendo conto di pan+zoom)
+    getCanvasCoords(clientX, clientY) {
+        const area = document.getElementById('canvas-area');
+        const rect = area.getBoundingClientRect();
+        return {
+            x: (clientX - rect.left) / this.scale,
+            y: (clientY - rect.top) / this.scale
+        };
+    }
+
+    _setupScrollZoom() {
+        const area = document.getElementById('canvas-area');
+        if (!area) return;
+        area.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const oldScale = this.scale;
+            const factor = e.deltaY < 0 ? 1.08 : 0.92;
+            const newScale = Math.max(0.2, Math.min(4, oldScale * factor));
+
+            // Zoom centrato sul centro del viewport (più stabile del cursore)
+            const vw = window.innerWidth;
+            const headerH = document.body.classList.contains('fullscreen-mode') ? 0 : 56;
+            const vh = window.innerHeight - headerH;
+            const pivotX = vw / 2;
+            const pivotY = vh / 2;
+
+            this.dx = pivotX - (pivotX - this.dx) * (newScale / oldScale);
+            this.dy = pivotY - (pivotY - this.dy) * (newScale / oldScale);
+            this.scale = newScale;
+            this._applyTransform();
+            this._showZoomIndicator();
+        }, { passive: false });
+    }
+
+    _setupPinchZoom() {
+        // Ascolta su document per catturare pinch da qualsiasi elemento
+        document.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                // Controlla che il pinch sia dentro l'area della lavagna
+                const area = document.getElementById('canvas-area');
+                if (!area) return;
+                e.preventDefault();
+                const t1 = e.touches[0], t2 = e.touches[1];
+                this._pinch = {
+                    active: true,
+                    initialDist: Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY),
+                    initialScale: this.scale,
+                    initialDx: this.dx,
+                    initialDy: this.dy,
+                    midX: (t1.clientX + t2.clientX) / 2,
+                    midY: (t1.clientY + t2.clientY) / 2
+                };
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchmove', (e) => {
+            if (this._pinch.active && e.touches.length === 2) {
+                e.preventDefault();
+                const t1 = e.touches[0], t2 = e.touches[1];
+                const newDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+                const newScale = Math.max(0.2, Math.min(4,
+                    this._pinch.initialScale * (newDist / this._pinch.initialDist)));
+
+                // Pivot sul centro del pinch iniziale
+                const pivotX = this._pinch.midX;
+                const pivotY = this._pinch.midY;
+                this.dx = pivotX - (pivotX - this._pinch.initialDx) * (newScale / this._pinch.initialScale);
+                this.dy = pivotY - (pivotY - this._pinch.initialDy) * (newScale / this._pinch.initialScale);
+                this.scale = newScale;
+                this._applyTransform();
+                this._showZoomIndicator();
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) {
+                this._pinch.active = false;
+            }
         });
     }
 
+    _applyTransform() {
+        // Applica la transform CSS a #canvas-area (container di tutti i canvas)
+        const area = document.getElementById('canvas-area');
+        if (area) {
+            area.style.transform = `translate(${this.dx}px, ${this.dy}px) scale(${this.scale})`;
+            area.style.transformOrigin = '0 0';
+        }
+    }
+
+    _showZoomIndicator() {
+        let indicator = document.getElementById('zoom-indicator');
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'zoom-indicator';
+            document.body.appendChild(indicator);
+        }
+        indicator.textContent = Math.round(this.scale * 100) + '%';
+        indicator.classList.add('visible');
+        clearTimeout(this._zoomIndicatorTimer);
+        this._zoomIndicatorTimer = setTimeout(() => {
+            indicator.classList.remove('visible');
+        }, 1500);
+    }
+
     _setCursor(cursor) {
-        const el = document.getElementById('draw-canvas');
+        const el = document.getElementById('overlay-canvas');
         if (el) el.style.cursor = cursor;
     }
 }
@@ -2060,38 +2242,120 @@ class SelectManager {
         this.active     = false;   // strumento attivo
         this.selection  = null;    // { x, y, w, h } rettangolo selezionato
         this.dragData   = null;    // { startX, startY, imgData, selX, selY }
-        this.phase      = 'idle'; // 'idle' | 'selecting' | 'selected' | 'dragging'
+        this.phase      = 'idle'; // 'idle' | 'selecting' | 'selected' | 'dragging' | 'object-selected' | 'object-dragging'
         this.startX     = 0;
         this.startY     = 0;
+        this.selectedObject = null; // oggetto ObjectLayer selezionato
+        this._objDragStart  = null; // {x, y, origObjX, origObjY}
+        this._setupContextPanel();
     }
 
     activate() {
         this.active = true;
         this.phase = 'idle';
         this.selection = null;
-        // Assicura che overlay-canvas non intercetti i click
+        this.selectedObject = null;
+        // Cursore sull'overlay
         const oc = document.getElementById('overlay-canvas');
-        if (oc) oc.style.pointerEvents = 'none';
-        // Cursore
-        const dc = document.getElementById('draw-canvas');
-        if (dc) dc.style.cursor = 'crosshair';
+        if (oc) oc.style.cursor = 'crosshair';
     }
-    deactivate() { this.active = false; this._clearSelection(); }
+    deactivate() {
+        this.active = false;
+        this._clearSelection();
+        this._hideContextPanel();
+    }
+
+    _setupContextPanel() {
+        const panel = document.getElementById('object-context-panel');
+        if (!panel) return;
+
+        document.getElementById('ctx-bring-front')?.addEventListener('click', () => {
+            if (this.selectedObject) {
+                objectLayer.bringToFront(this.selectedObject.id);
+                this._updateSelectionOverlay();
+            }
+        });
+        document.getElementById('ctx-send-back')?.addEventListener('click', () => {
+            if (this.selectedObject) {
+                objectLayer.sendToBack(this.selectedObject.id);
+                this._updateSelectionOverlay();
+            }
+        });
+        document.getElementById('ctx-delete')?.addEventListener('click', () => {
+            if (this.selectedObject) {
+                objectLayer.removeObject(this.selectedObject.id);
+                this.selectedObject = null;
+                this._clearSelection();
+                this._hideContextPanel();
+            }
+        });
+
+        const bInput = document.getElementById('ctx-brightness');
+        const cInput = document.getElementById('ctx-contrast');
+        const sInput = document.getElementById('ctx-saturation');
+        [bInput, cInput, sInput].forEach(input => {
+            if (!input) return;
+            input.addEventListener('input', () => {
+                if (!this.selectedObject) return;
+                objectLayer.updateFilter(
+                    this.selectedObject.id,
+                    parseInt(bInput?.value || 100),
+                    parseInt(cInput?.value || 100),
+                    parseInt(sInput?.value || 100)
+                );
+            });
+        });
+    }
+
+    _showContextPanel(obj) {
+        const panel = document.getElementById('object-context-panel');
+        if (!panel) return;
+        const area = document.getElementById('canvas-area');
+        const rect = area.getBoundingClientRect();
+        const scale = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.scale : 1;
+        const screenX = rect.left + obj.x * scale;
+        const screenY = rect.top + obj.y * scale;
+        panel.style.left = Math.min(screenX + obj.w * scale + 8, window.innerWidth - 180) + 'px';
+        panel.style.top  = Math.max(screenY, 60) + 'px';
+        panel.style.display = 'flex';
+        // Aggiorna valori slider
+        const f = obj.filter || { brightness: 100, contrast: 100, saturation: 100 };
+        const bInput = document.getElementById('ctx-brightness');
+        const cInput = document.getElementById('ctx-contrast');
+        const sInput = document.getElementById('ctx-saturation');
+        if (bInput) bInput.value = f.brightness;
+        if (cInput) cInput.value = f.contrast;
+        if (sInput) sInput.value = f.saturation;
+    }
+
+    _hideContextPanel() {
+        const panel = document.getElementById('object-context-panel');
+        if (panel) panel.style.display = 'none';
+    }
+
+    _updateSelectionOverlay() {
+        if (!this.selectedObject) return;
+        this._drawSelectionRect(
+            this.selectedObject.x, this.selectedObject.y,
+            this.selectedObject.w, this.selectedObject.h, true
+        );
+        this._showContextPanel(this.selectedObject);
+    }
 
     // Disegna il rettangolo di selezione tratteggiato sull'overlay
-    _drawSelectionRect(x, y, w, h) {
+    // isObject=true → colore blu acceso per oggetti ObjectLayer
+    _drawSelectionRect(x, y, w, h, isObject = false) {
         const oc  = document.getElementById('overlay-canvas');
-        oc.style.pointerEvents = 'none'; // assicura che non intercetti i click
         const ctx = oc.getContext('2d');
         ctx.clearRect(0, 0, oc.width, oc.height);
         ctx.save();
-        ctx.strokeStyle = '#3b82f6';
-        ctx.lineWidth   = 1.5;
+        ctx.strokeStyle = isObject ? '#22d3ee' : '#3b82f6';
+        ctx.lineWidth   = isObject ? 2 : 1.5;
         ctx.setLineDash([6, 3]);
         ctx.strokeRect(x, y, w, h);
         // Handle angoli
         ctx.fillStyle   = 'white';
-        ctx.strokeStyle = '#3b82f6';
+        ctx.strokeStyle = isObject ? '#22d3ee' : '#3b82f6';
         ctx.lineWidth   = 1;
         ctx.setLineDash([]);
         [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(([hx, hy]) => {
@@ -2107,12 +2371,49 @@ class SelectManager {
         const oc = document.getElementById('overlay-canvas');
         if (oc) oc.getContext('2d').clearRect(0, 0, oc.width, oc.height);
         this.selection = null;
+        this.selectedObject = null;
         this.phase     = 'idle';
+        this._hideContextPanel();
+    }
+
+    // Deseleziona solo la selezione pixel (non l'oggetto)
+    _clearPixelSelection() {
+        const oc = document.getElementById('overlay-canvas');
+        if (oc) oc.getContext('2d').clearRect(0, 0, oc.width, oc.height);
+        this.selection = null;
     }
 
     onPointerDown(x, y) {
         if (!this.active) return false;
 
+        // 1. Hit test su ObjectLayer (priorità su selezione pixel)
+        if (typeof objectLayer !== 'undefined' && objectLayer) {
+            const hit = objectLayer.hitTest(x, y);
+            if (hit) {
+                // Se avevo un oggetto selezionato e clicco su di lui → drag
+                if (this.phase === 'object-selected' && this.selectedObject?.id === hit.id) {
+                    this.phase = 'object-dragging';
+                    this._objDragStart = { x, y, origX: hit.x, origY: hit.y };
+                    return true;
+                }
+                // Seleziona nuovo oggetto
+                this.selectedObject = hit;
+                this.phase = 'object-selected';
+                this._clearPixelSelection();
+                this._drawSelectionRect(hit.x, hit.y, hit.w, hit.h, true);
+                this._showContextPanel(hit);
+                return true;
+            }
+        }
+
+        // 2. Click fuori da qualsiasi oggetto: deseleziona oggetto se c'era
+        if (this.phase === 'object-selected' || this.phase === 'object-dragging') {
+            this.selectedObject = null;
+            this._clearSelection();
+            this._hideContextPanel();
+        }
+
+        // 3. Selezione pixel rettangolare
         if (this.phase === 'selected' && this.selection) {
             const { x: sx, y: sy, w, h } = this.selection;
             // Dentro la selezione → inizia drag
@@ -2140,12 +2441,25 @@ class SelectManager {
         this.startX = x;
         this.startY = y;
         this._clearSelection();
-        if (typeof toast === 'function') toast('Trascina per selezionare un\'area', 'info');
         return true;
     }
 
     onPointerMove(x, y) {
         if (!this.active) return false;
+
+        // Drag oggetto ObjectLayer
+        if (this.phase === 'object-dragging' && this._objDragStart && this.selectedObject) {
+            const dx = x - this._objDragStart.x;
+            const dy = y - this._objDragStart.y;
+            const newX = this._objDragStart.origX + dx;
+            const newY = this._objDragStart.origY + dy;
+            this.selectedObject.x = newX;
+            this.selectedObject.y = newY;
+            objectLayer.render();
+            this._drawSelectionRect(newX, newY, this.selectedObject.w, this.selectedObject.h, true);
+            this._showContextPanel(this.selectedObject);
+            return true;
+        }
 
         if (this.phase === 'selecting') {
             const rx = Math.min(x, this.startX);
@@ -2183,6 +2497,16 @@ class SelectManager {
 
     onPointerUp(x, y) {
         if (!this.active) return false;
+
+        // Fine drag oggetto ObjectLayer
+        if (this.phase === 'object-dragging' && this.selectedObject) {
+            this.phase = 'object-selected';
+            this._objDragStart = null;
+            this._drawSelectionRect(this.selectedObject.x, this.selectedObject.y,
+                this.selectedObject.w, this.selectedObject.h, true);
+            this._showContextPanel(this.selectedObject);
+            return true;
+        }
 
         if (this.phase === 'selecting') {
             const rx = Math.min(x, this.startX);
@@ -2226,21 +2550,186 @@ class SelectManager {
         return false;
     }
 
-    // Gestisce Escape (deseleziona) e Delete/Backspace (cancella area selezionata)
+    // Gestisce Escape (deseleziona) e Delete/Backspace (cancella area selezionata o oggetto)
     handleKeydown(e) {
         if (!this.active) return;
         if (e.key === 'Escape') {
             this._clearSelection();
         }
-        if ((e.key === 'Delete' || e.key === 'Backspace') && this.phase === 'selected' && this.selection) {
-            const { x, y, w, h } = this.selection;
-            this.ctx.save();
-            this.ctx.globalCompositeOperation = 'destination-out';
-            this.ctx.fillStyle = 'rgba(255,255,255,1)';
-            this.ctx.fillRect(x, y, w, h);
-            this.ctx.restore();
-            this._clearSelection();
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            // Elimina oggetto ObjectLayer selezionato
+            if ((this.phase === 'object-selected') && this.selectedObject) {
+                objectLayer.removeObject(this.selectedObject.id);
+                this._clearSelection();
+                return;
+            }
+            // Cancella selezione pixel
+            if (this.phase === 'selected' && this.selection) {
+                const { x, y, w, h } = this.selection;
+                this.ctx.save();
+                this.ctx.globalCompositeOperation = 'destination-out';
+                this.ctx.fillStyle = 'rgba(255,255,255,1)';
+                this.ctx.fillRect(x, y, w, h);
+                this.ctx.restore();
+                this._clearSelection();
+            }
         }
+    }
+}
+
+// =============================================================================
+// SEZIONE 13b2 — ObjectLayer
+// Gestisce gli oggetti importati (immagini/PDF) su un canvas separato.
+// =============================================================================
+
+class ObjectLayer {
+    constructor() {
+        this.canvas = document.getElementById('objects-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.objects = []; // Array di oggetti: {id, type, img, x, y, w, h, rotation, originalW, originalH, filter}
+        this._nextId = 1;
+    }
+
+    resize(w, h) {
+        this.canvas.width = w;
+        this.canvas.height = h;
+        this.canvas.style.width = w + 'px';
+        this.canvas.style.height = h + 'px';
+        this.render();
+    }
+
+    addObject(type, img, x, y, w, h) {
+        const obj = {
+            id: this._nextId++,
+            type, // 'image' | 'pdf-page'
+            img,  // HTMLImageElement o HTMLCanvasElement
+            x, y, w, h,
+            originalW: img.naturalWidth || img.width || w,
+            originalH: img.naturalHeight || img.height || h,
+            rotation: 0,
+            filter: { brightness: 100, contrast: 100, saturation: 100 }
+        };
+        this.objects.push(obj);
+        this.render();
+        return obj;
+    }
+
+    removeObject(id) {
+        this.objects = this.objects.filter(o => o.id !== id);
+        this.render();
+    }
+
+    bringToFront(id) {
+        const idx = this.objects.findIndex(o => o.id === id);
+        if (idx < 0 || idx === this.objects.length - 1) return;
+        const obj = this.objects.splice(idx, 1)[0];
+        this.objects.push(obj);
+        this.render();
+    }
+
+    sendToBack(id) {
+        const idx = this.objects.findIndex(o => o.id === id);
+        if (idx <= 0) return;
+        const obj = this.objects.splice(idx, 1)[0];
+        this.objects.unshift(obj);
+        this.render();
+    }
+
+    render() {
+        const ctx = this.ctx;
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        for (const obj of this.objects) {
+            ctx.save();
+            // Applica filtri CSS canvas
+            if (obj.filter) {
+                ctx.filter = `brightness(${obj.filter.brightness}%) contrast(${obj.filter.contrast}%) saturate(${obj.filter.saturation}%)`;
+            } else {
+                ctx.filter = 'none';
+            }
+            if (obj.rotation) {
+                const cx = obj.x + obj.w / 2;
+                const cy = obj.y + obj.h / 2;
+                ctx.translate(cx, cy);
+                ctx.rotate(obj.rotation * Math.PI / 180);
+                ctx.drawImage(obj.img, -obj.w / 2, -obj.h / 2, obj.w, obj.h);
+            } else {
+                ctx.drawImage(obj.img, obj.x, obj.y, obj.w, obj.h);
+            }
+            ctx.filter = 'none';
+            ctx.restore();
+        }
+    }
+
+    // Hit test: restituisce l'oggetto sotto (x,y) o null. Cerca dall'alto (ultimo prima)
+    hitTest(x, y) {
+        for (let i = this.objects.length - 1; i >= 0; i--) {
+            const o = this.objects[i];
+            if (x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h) return o;
+        }
+        return null;
+    }
+
+    // Sposta un oggetto (delta assoluto)
+    moveObject(id, dx, dy) {
+        const obj = this.objects.find(o => o.id === id);
+        if (!obj) return;
+        obj.x += dx;
+        obj.y += dy;
+        this.render();
+    }
+
+    // Ridimensiona un oggetto mantenendo le proporzioni
+    resizeObject(id, newW) {
+        const obj = this.objects.find(o => o.id === id);
+        if (!obj) return;
+        const ratio = obj.originalH / obj.originalW;
+        obj.w = newW;
+        obj.h = newW * ratio;
+        this.render();
+    }
+
+    // Aggiorna filtri
+    updateFilter(id, brightness, contrast, saturation) {
+        const obj = this.objects.find(o => o.id === id);
+        if (!obj) return;
+        obj.filter = { brightness, contrast, saturation };
+        this.render();
+    }
+
+    // Serializza per salvataggio
+    serialize() {
+        return this.objects.map(o => {
+            const tmp = document.createElement('canvas');
+            const srcW = o.img.naturalWidth || o.img.width || o.w;
+            const srcH = o.img.naturalHeight || o.img.height || o.h;
+            tmp.width = srcW;
+            tmp.height = srcH;
+            tmp.getContext('2d').drawImage(o.img, 0, 0);
+            return {
+                id: o.id, type: o.type, dataUrl: tmp.toDataURL(),
+                x: o.x, y: o.y, w: o.w, h: o.h,
+                rotation: o.rotation,
+                originalW: o.originalW, originalH: o.originalH,
+                filter: o.filter
+            };
+        });
+    }
+
+    // Carica da serializzato
+    async loadSerialized(arr) {
+        this.objects = [];
+        for (const item of arr) {
+            const img = new Image();
+            await new Promise(r => { img.onload = r; img.src = item.dataUrl; });
+            this.objects.push({ ...item, img });
+        }
+        this._nextId = Math.max(...this.objects.map(o => o.id), 0) + 1;
+        this.render();
+    }
+
+    clear() {
+        this.objects = [];
+        this.render();
     }
 }
 
@@ -2291,24 +2780,31 @@ async function loadDriveBackgrounds() {
             }
             thumb.addEventListener('click', async () => {
                 if (img.mimeType === 'application/pdf') {
-                    toast('I PDF non possono essere usati come sfondo — converti in JPG o PNG', 'error');
+                    toast('I PDF come sfondo non sono supportati — usa Importa per aggiungerli come oggetto', 'info');
                     return;
                 }
-                toast('Caricamento sfondo...', 'info');
+                toast('Caricamento...', 'info');
                 try {
-                    const token = gapi.auth.getToken()?.access_token;
+                    const token = driveMgr.accessToken;
                     if (!token) { toast('Connetti Drive prima', 'error'); return; }
                     const res = await fetch(`https://www.googleapis.com/drive/v3/files/${img.id}?alt=media`, {
                         headers: { Authorization: 'Bearer ' + token }
                     });
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
                     const blob = await res.blob();
                     const url  = URL.createObjectURL(blob);
                     const image = new Image();
                     image.onload = () => {
-                        bgMgr.setImage(image);
+                        // Aggiunge come oggetto sul canvas (non come sfondo)
+                        const center = getViewportCenter();
+                        const x = center.x - image.naturalWidth / 2;
+                        const y = center.y - image.naturalHeight / 2;
+                        objectLayer.addObject('image', image,
+                            Math.max(0, x), Math.max(0, y),
+                            image.naturalWidth, image.naturalHeight);
                         const popup = document.getElementById('bg-popup');
                         if (popup) popup.style.display = 'none';
-                        toast('Sfondo applicato!', 'success');
+                        toast('Immagine aggiunta alla lavagna! Usa Seleziona per spostarla.', 'success');
                         URL.revokeObjectURL(url);
                     };
                     image.onerror = () => toast('Errore caricamento immagine', 'error');
@@ -2325,11 +2821,120 @@ async function loadDriveBackgrounds() {
 }
 
 // =============================================================================
+// SEZIONE 13d — Import Media (immagini e PDF come oggetti sul canvas)
+// =============================================================================
+
+/**
+ * Calcola il centro del viewport visibile in coordinate canvas
+ * (tenendo conto del pan e dello zoom corrente).
+ */
+function getViewportCenter() {
+    const vw = window.innerWidth;
+    const headerH = document.body.classList.contains('fullscreen-mode') ? 0 : 56;
+    const vh = window.innerHeight - headerH;
+    const area = document.getElementById('canvas-area');
+    const rect = area.getBoundingClientRect();
+    const scale = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.scale : 1;
+    const cx = (vw / 2 - rect.left) / scale;
+    const cy = (vh / 2 - rect.top) / scale;
+    return { x: cx, y: cy };
+}
+
+/**
+ * Importa un file immagine come oggetto sul canvas.
+ * @param {File} file
+ * @param {number} [clientX] - posizione X del drop (opzionale, usa centro se omesso)
+ * @param {number} [clientY] - posizione Y del drop (opzionale, usa centro se omesso)
+ */
+async function importImageFile(file, clientX, clientY) {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    return new Promise((resolve) => {
+        img.onload = () => {
+            let x, y;
+            if (clientX !== undefined && clientY !== undefined) {
+                // Drop position
+                const area = document.getElementById('canvas-area');
+                const rect = area.getBoundingClientRect();
+                const scale = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.scale : 1;
+                x = (clientX - rect.left) / scale - img.naturalWidth / 2;
+                y = (clientY - rect.top) / scale - img.naturalHeight / 2;
+            } else {
+                const center = getViewportCenter();
+                x = center.x - img.naturalWidth / 2;
+                y = center.y - img.naturalHeight / 2;
+            }
+            objectLayer.addObject('image', img, Math.max(0, x), Math.max(0, y),
+                img.naturalWidth, img.naturalHeight);
+            URL.revokeObjectURL(url);
+            toast('Immagine importata! Usa Seleziona per spostarla.', 'success');
+            resolve();
+        };
+        img.onerror = () => {
+            toast('Errore nel caricare l\'immagine', 'error');
+            URL.revokeObjectURL(url);
+            resolve();
+        };
+        img.src = url;
+    });
+}
+
+/**
+ * Importa un PDF (prima pagina) come oggetto sul canvas tramite PDF.js.
+ * @param {File} file
+ * @param {number} [clientX]
+ * @param {number} [clientY]
+ */
+async function importPdfFile(file, clientX, clientY) {
+    if (typeof pdfjsLib === 'undefined') {
+        toast('PDF non supportato — converti in immagine (JPG/PNG)', 'error');
+        return;
+    }
+    try {
+        toast('Caricamento PDF...', 'info');
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const tmp = document.createElement('canvas');
+        tmp.width = viewport.width;
+        tmp.height = viewport.height;
+        const tmpCtx = tmp.getContext('2d');
+        await page.render({ canvasContext: tmpCtx, viewport }).promise;
+
+        // Crea Image dal canvas PDF
+        const img = new Image();
+        await new Promise((resolve) => {
+            img.onload = resolve;
+            img.src = tmp.toDataURL();
+        });
+
+        let x, y;
+        if (clientX !== undefined && clientY !== undefined) {
+            const area = document.getElementById('canvas-area');
+            const rect = area.getBoundingClientRect();
+            const scale = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.scale : 1;
+            x = (clientX - rect.left) / scale - img.naturalWidth / 2;
+            y = (clientY - rect.top) / scale - img.naturalHeight / 2;
+        } else {
+            const center = getViewportCenter();
+            x = center.x - img.naturalWidth / 2;
+            y = center.y - img.naturalHeight / 2;
+        }
+        objectLayer.addObject('pdf-page', img, Math.max(0, x), Math.max(0, y),
+            img.naturalWidth, img.naturalHeight);
+        toast('PDF importato (pagina 1)! Usa Seleziona per spostarla.', 'success');
+    } catch (err) {
+        toast('Errore PDF: ' + err.message, 'error');
+    }
+}
+
+// =============================================================================
 // SEZIONE 14 — INIT
 // Istanziazione globale dei manager e avvio dell'applicazione.
 // =============================================================================
 
-let bgMgr, brush, laserMgr, canvasMgr, toolbarMgr, textMgr, projectMgr, selectMgr, panMgr;
+let bgMgr, brush, laserMgr, canvasMgr, toolbarMgr, textMgr, projectMgr, selectMgr, panMgr, objectLayer;
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Inizializza i manager nell'ordine corretto (le dipendenze prima)
@@ -2337,6 +2942,7 @@ document.addEventListener('DOMContentLoaded', () => {
     brush      = new BrushEngine();
     laserMgr   = new LaserManager(document.getElementById('overlay-canvas'));
     canvasMgr  = new CanvasManager(bgMgr, brush, laserMgr);
+    objectLayer = new ObjectLayer();
     selectMgr  = new SelectManager(
         document.getElementById('draw-canvas'),
         document.getElementById('bg-canvas')

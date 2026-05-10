@@ -168,15 +168,18 @@ button {
    CANVAS AREA
    ========================================================================== */
 #canvas-area {
-    position: relative;
-    flex: 1;
-    overflow: hidden;
-    margin-top: 56px; /* compensa l'altezza dell'header fisso */
+    position: absolute;
+    top: 56px; /* compensa l'header fisso */
+    left: 0;
+    /* Il transform CSS (pan+zoom) viene applicato qui da JS */
+    will-change: transform;
+    transform-origin: 0 0;
 }
 
-/* I tre canvas sovrapposti */
+/* I canvas sovrapposti */
 #bg-canvas,
 #draw-canvas,
+#objects-canvas,
 #overlay-canvas {
     position: absolute;
     top: 0;
@@ -193,8 +196,13 @@ button {
     cursor: crosshair;
 }
 
-#overlay-canvas {
+#objects-canvas {
     z-index: 3;
+    pointer-events: none; /* non intercetta: SelectManager usa hitTest via overlay */
+}
+
+#overlay-canvas {
+    z-index: 4;
     /* Non riceve eventi di default; il JS abilita pointer-events per il laser */
     pointer-events: none;
 }
@@ -1466,7 +1474,7 @@ body.fullscreen-mode #app-header {
     pointer-events: none;
 }
 body.fullscreen-mode #canvas-area {
-    margin-top: 0 !important;
+    top: 0 !important;
 }
 
 /* ===== MODAL — Salva prima di continuare ===== */
@@ -1554,4 +1562,68 @@ body.fullscreen-mode #canvas-area {
     padding: 8px 0;
     width: 100%;
     text-align: center;
+}
+
+/* ==========================================================================
+   PANNELLO CONTESTUALE OGGETTI (ObjectLayer)
+   ========================================================================== */
+.object-ctx-panel {
+    position: fixed;
+    background: var(--bg-surface, #1e293b);
+    border: 1px solid var(--border, rgba(148,163,184,0.12));
+    border-radius: 10px;
+    padding: 10px;
+    z-index: 500;
+    min-width: 160px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.ctx-btn {
+    background: var(--bg-elevated, #334155);
+    border: none;
+    color: var(--text, #f1f5f9);
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    text-align: left;
+    font-family: inherit;
+    transition: background 0.15s;
+}
+.ctx-btn:hover { background: rgba(71,85,105,0.8); }
+.ctx-btn--danger { color: #ef4444; }
+.ctx-label {
+    font-size: 0.72rem;
+    color: var(--text-muted, #94a3b8);
+    margin-bottom: -2px;
+}
+.ctx-slider {
+    width: 100%;
+    accent-color: #3b82f6;
+}
+.ctx-divider {
+    border-top: 1px solid var(--border, rgba(148,163,184,0.12));
+    margin: 2px 0;
+}
+
+/* Indicatore zoom — mostra il livello di zoom corrente */
+#zoom-indicator {
+    position: fixed;
+    bottom: 70px;
+    right: 16px;
+    background: rgba(30,41,59,0.85);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    z-index: 200;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+#zoom-indicator.visible {
+    opacity: 1;
 }
