@@ -1230,45 +1230,85 @@ async function _autoOpenLastLesson() {
 
 // =============================================================================
 // SEZIONE 3 — DriveConnectButton
-// Gestisce il pulsante Drive nell'header e il mini-pannello di stato
+// Gestisce il FAB Drive (basso destra) e il testo di stato nell'header
 // =============================================================================
 
 class DriveConnectButton {
-    constructor(driveManager) {
-        this.drive = driveManager;
-        this.btn   = document.getElementById('btn-drive');
-    }
+    constructor(drive) {
+        this.drive = drive;
+        // FAB in basso a destra
+        this.fab      = document.getElementById('drive-fab');
+        this.fabIcon  = document.getElementById('drive-fab-icon');
+        this.fabPhoto = document.getElementById('drive-fab-photo');
+        this.fabBadge = document.getElementById('drive-fab-badge');
+        // Status header
+        this.statusEl   = document.getElementById('drive-status-header');
+        this.statusText = document.getElementById('drive-status-text');
+        this.statusIcon = document.getElementById('drive-status-icon');
 
-    update(state) {
-        if (!this.btn) return;
-        this.btn.classList.remove('drive-connected', 'drive-error', 'drive-syncing');
-        if (state === 'syncing') {
-            this.btn.classList.add('drive-syncing');
-            this.btn.title = 'Drive — salvataggio...';
-        } else if (state === 'error') {
-            this.btn.classList.add('drive-error');
-            this.btn.title = 'Drive — errore';
-        } else if (this.drive.isConnected()) {
-            this.btn.classList.add('drive-connected');
-            this.btn.title = 'Drive — connesso (' + this.drive.userEmail + ')';
-            // Mostra il primo nome dell'utente invece di "Drive"
-            const span = this.btn.querySelector('span');
-            if (span) {
-                const firstName = this.drive.userName
-                    ? this.drive.userName.split(' ')[0]
-                    : this.drive.userEmail.split('@')[0];
-                span.textContent = firstName;
-            }
-        } else {
-            this.btn.title = 'Connetti a Google Drive';
-            const span = this.btn.querySelector('span');
-            if (span) span.textContent = 'Drive';
+        if (this.fab) {
+            this.fab.addEventListener('click', () => this._onClick());
         }
     }
 
+    update(state) {
+        const connected = this.drive.isConnected();
+
+        // --- Aggiorna FAB ---
+        if (this.fab) {
+            this.fab.classList.toggle('drive-fab--connected', connected);
+        }
+        if (this.fabBadge) {
+            this.fabBadge.style.display = connected ? 'block' : 'none';
+        }
+
+        if (connected) {
+            // Prova a caricare foto profilo
+            const photoUrl = this.drive.userPhotoUrl;
+            if (photoUrl && this.fabPhoto) {
+                this.fabIcon.style.display = 'none';
+                this.fabPhoto.src = photoUrl;
+                this.fabPhoto.style.display = 'block';
+            } else {
+                // Nessuna foto: mostra omino con bordo verde (già gestito dal CSS)
+                if (this.fabIcon) this.fabIcon.style.display = 'block';
+                if (this.fabPhoto) this.fabPhoto.style.display = 'none';
+                // Colora l'omino di verde quando connesso
+                if (this.fabIcon) this.fabIcon.style.stroke = '#86efac';
+            }
+            // Status header
+            if (this.statusEl) this.statusEl.classList.add('drive-status--connected');
+            if (this.statusIcon) this.statusIcon.style.display = 'block';
+            const name = this.drive.userName || this.drive.userEmail || 'Drive';
+            if (this.statusText) this.statusText.textContent = name;
+        } else {
+            // Non connesso
+            if (this.fabIcon) { this.fabIcon.style.display = 'block'; this.fabIcon.style.stroke = 'currentColor'; }
+            if (this.fabPhoto) this.fabPhoto.style.display = 'none';
+            if (this.statusEl) this.statusEl.classList.remove('drive-status--connected');
+            if (this.statusIcon) this.statusIcon.style.display = 'none';
+            if (this.statusText) this.statusText.textContent = 'Non connesso';
+        }
+
+        // Gestione stato syncing/errore (mantieni compatibilità)
+        if (state === 'syncing' && this.fab) {
+            this.fab.title = 'Drive — salvataggio in corso...';
+        } else if (state === 'error' && this.fab) {
+            this.fab.title = 'Drive — errore. Clicca per riconnetterti.';
+        } else if (connected && this.fab) {
+            this.fab.title = 'Drive connesso — clicca per opzioni';
+        } else if (this.fab) {
+            this.fab.title = 'Connetti a Google Drive';
+        }
+    }
+
+    // Compatibilità con i listener precedenti
     async handleClick() {
+        return this._onClick();
+    }
+
+    async _onClick() {
         if (this.drive.isConnected()) {
-            // Mostra mini-pannello stato
             this._showStatusPanel();
         } else {
             try {
@@ -1276,61 +1316,84 @@ class DriveConnectButton {
                 this.update();
                 const greeting = this.drive.userName || this.drive.userEmail;
                 toast('Google Drive connesso! Benvenuto, ' + greeting, 'success');
-                // Auto-apri ultima lezione
                 setTimeout(() => _autoOpenLastLesson(), 800);
-            } catch (_) {}
+            } catch (err) {
+                if (err?.message !== 'cancelled') {
+                    toast('Errore connessione Drive: ' + (err?.message || err), 'error');
+                }
+                this.update('error');
+            }
         }
     }
 
     _showStatusPanel() {
-        // Rimuovi pannello precedente se esiste
-        document.getElementById('drive-status-panel')?.remove();
-
-        const panel = document.createElement('div');
-        panel.id        = 'drive-status-panel';
-        panel.className = 'drive-panel';
-        panel.innerHTML = `
-            <div class="drive-panel-header">
-                <span>☁️ Google Drive</span>
-                <button id="drive-panel-close">×</button>
-            </div>
-            <div class="drive-panel-body">
-                <p class="drive-panel-email">${this._esc(this.drive.userEmail)}</p>
-                <p class="drive-panel-info">Token valido fino alle
-                    ${new Date(this.drive.tokenExpiry).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
-                </p>
-            </div>
-            <div class="drive-panel-footer">
-                <button id="drive-panel-disconnect" class="drive-panel-btn drive-panel-btn--danger">
-                    Disconnetti
-                </button>
-            </div>`;
-
-        document.body.appendChild(panel);
-
-        document.getElementById('drive-panel-close').onclick = () => panel.remove();
-        document.getElementById('drive-panel-disconnect').onclick = async () => {
-            if (confirm('Disconnettere Drive? Il token verrà revocato.')) {
+        // Mostra un mini-pannello con opzioni: Libreria, Disconnetti
+        let panel = document.getElementById('drive-fab-panel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'drive-fab-panel';
+            panel.style.cssText = `
+                position: fixed;
+                bottom: 84px;
+                right: 16px;
+                background: rgba(15,23,42,0.95);
+                backdrop-filter: blur(12px);
+                border: 1px solid rgba(148,163,184,0.2);
+                border-radius: 12px;
+                padding: 8px;
+                z-index: 601;
+                min-width: 200px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            `;
+            const email = this.drive.userEmail || '';
+            const name  = this.drive.userName  || '';
+            panel.innerHTML = `
+                <div style="padding:8px 10px;border-bottom:1px solid rgba(148,163,184,0.15);margin-bottom:4px">
+                    <div style="font-size:0.85rem;font-weight:600;color:#e2e8f0">${this._esc(name)}</div>
+                    <div style="font-size:0.72rem;color:#94a3b8">${this._esc(email)}</div>
+                </div>
+                <button id="fab-panel-library" style="background:transparent;border:none;color:#e2e8f0;padding:8px 12px;text-align:left;border-radius:8px;cursor:pointer;font-size:0.85rem;transition:background 0.15s">📚 Apri libreria lezioni</button>
+                <button id="fab-panel-disconnect" style="background:transparent;border:none;color:#f87171;padding:8px 12px;text-align:left;border-radius:8px;cursor:pointer;font-size:0.85rem;transition:background 0.15s">🔌 Disconnetti</button>
+            `;
+            document.body.appendChild(panel);
+            // Hover
+            panel.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('mouseenter', () => btn.style.background = 'rgba(148,163,184,0.1)');
+                btn.addEventListener('mouseleave', () => btn.style.background = 'transparent');
+            });
+            document.getElementById('fab-panel-library')?.addEventListener('click', () => {
+                panel.remove();
+                const libraryPanel = document.getElementById('library-panel');
+                if (libraryPanel) {
+                    libraryPanel.classList.add('open');
+                    if (typeof libraryMgr !== 'undefined' && libraryMgr) libraryMgr.refresh();
+                }
+            });
+            document.getElementById('fab-panel-disconnect')?.addEventListener('click', async () => {
+                panel.remove();
                 await this.drive.disconnect();
                 this.update();
                 libraryMgr?.refresh();
-                panel.remove();
-                toast('Drive disconnesso.', 'info');
-            }
-        };
-
-        // Chiudi cliccando fuori
-        setTimeout(() => {
-            document.addEventListener('click', function handler(e) {
-                if (!panel.contains(e.target) && e.target !== document.getElementById('btn-drive')) {
-                    panel.remove();
-                    document.removeEventListener('click', handler);
-                }
+                toast('Drive disconnesso', 'info');
             });
-        }, 50);
+            // Chiudi cliccando fuori
+            setTimeout(() => {
+                document.addEventListener('click', function closePanel(e) {
+                    if (!panel.contains(e.target) && e.target !== document.getElementById('drive-fab')) {
+                        panel.remove();
+                        document.removeEventListener('click', closePanel);
+                    }
+                });
+            }, 100);
+        } else {
+            panel.remove(); // toggle
+        }
     }
 
-    _esc(str) { return String(str).replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    _esc(str) { return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 }
 
 
@@ -1414,11 +1477,6 @@ function initDrive() {
     if (restored) {
         driveConnectBtn.update();
     }
-
-    // ── Pulsante Drive (header) ────────────────────────────────────────────
-    document.getElementById('btn-drive')?.addEventListener('click', () => {
-        driveConnectBtn.handleClick();
-    });
 
     // ── Pulsante chiudi pannello libreria ──────────────────────────────────
     document.getElementById('library-close')?.addEventListener('click', () => {

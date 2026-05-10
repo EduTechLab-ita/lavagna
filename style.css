@@ -1659,3 +1659,87 @@ body.fullscreen-mode #canvas-area {
 #zoom-indicator.visible {
     opacity: 1;
 }
+
+/* =============================================
+   DRIVE FAB — Floating Action Button
+   ============================================= */
+.drive-fab {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: rgba(15, 23, 42, 0.72);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 2px solid rgba(148, 163, 184, 0.3);
+    cursor: pointer;
+    z-index: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.3s ease, background 0.3s ease;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    user-select: none;
+}
+.drive-fab:hover {
+    transform: scale(1.08);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+}
+.drive-fab:active {
+    transform: scale(0.96);
+}
+
+/* Stato: connesso — bordo verde */
+.drive-fab.drive-fab--connected {
+    border-color: #22c55e;
+    background: rgba(15, 23, 42, 0.85);
+    box-shadow: 0 4px 16px rgba(34, 197, 94, 0.3);
+}
+
+.drive-fab-inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(226, 232, 240, 0.8);
+}
+
+/* Badge puntino verde connessione */
+.drive-fab-badge {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #22c55e;
+    border: 2px solid rgba(15, 23, 42, 0.9);
+    animation: pulse-green 2s infinite;
+}
+@keyframes pulse-green {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+    50% { box-shadow: 0 0 0 5px rgba(34, 197, 94, 0); }
+}
+
+/* Status header */
+.drive-status-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.78rem;
+    color: rgba(148, 163, 184, 0.8);
+    padding: 4px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.drive-status-header.drive-status--connected {
+    color: #86efac;
+}
+.drive-status-header svg {
+    flex-shrink: 0;
+    stroke: #86efac;
+}
