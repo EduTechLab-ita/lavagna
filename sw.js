@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v13'; // v13 — fix auto-save (window.driveMgr/libraryMgr globali), libreria cartelle espanse di default, highlight lezione con timeout aumentato
+const CACHE_NAME = 'eduboard-v14'; // v14 — fix race condition pagine multiple al caricamento (lesson.drawing ignorato se pages[] presente)
 const urlsToCache = [
   './',
   './index.html',

@@ -1029,7 +1029,12 @@ class LibraryManager {
             }
 
             // 2. Ripristina disegno
-            if (lesson.drawing) {
+            // FIX v14: se ci sono pagine multiple, NON caricare lesson.drawing —
+            // createrebbe una race condition asincrona con _restorePage che
+            // sovrappone il contenuto di una pagina sull'altra al caricamento.
+            // lesson.drawing viene usato solo per retrocompatibilità (lezioni senza pages).
+            const hasPages = lesson.pages && Array.isArray(lesson.pages) && lesson.pages.length > 0;
+            if (lesson.drawing && !hasPages) {
                 const img = new Image();
                 img.onload = () => {
                     canvasMgr._saveUndo();
@@ -1045,7 +1050,7 @@ class LibraryManager {
             document.getElementById('project-name').textContent = name;
 
             // 4. Ripristina pagine multiple (se presenti)
-            if (lesson.pages && Array.isArray(lesson.pages) && typeof window.pageManager !== 'undefined' && window.pageManager) {
+            if (hasPages && typeof window.pageManager !== 'undefined' && window.pageManager) {
                 window.pageManager.deserialize(lesson.pages);
             }
 
