@@ -953,6 +953,51 @@ class LibraryManager {
         }
     }
 
+    /**
+     * MODIFICA 5: Sovrascrive la lezione Drive corrente (currentFileId) senza chiedere il nome.
+     * Usato dal dialog "modifiche non salvate" quando c'è già un file aperto.
+     */
+    async overwriteCurrentLesson() {
+        if (!this.drive.isConnected()) { toast('Connetti Drive prima di salvare.', 'error'); return; }
+        if (!this.currentFileId) { return this.saveCurrentLesson(this.currentFolderId); }
+
+        try {
+            toast('Sovrascrittura in corso...', 'info');
+
+            let bgImageBase64 = '';
+            if (bgMgr.uploadedImage) {
+                const tmp = document.createElement('canvas');
+                tmp.width  = bgMgr.canvas.width;
+                tmp.height = bgMgr.canvas.height;
+                tmp.getContext('2d').drawImage(bgMgr.canvas, 0, 0);
+                bgImageBase64 = tmp.toDataURL('image/jpeg', 0.85);
+            }
+
+            // Usa _uploadMultipart direttamente con il fileId corrente (PATCH)
+            await this.drive._uploadMultipart(
+                CONFIG.projectName + '.json',
+                {
+                    version:    2,
+                    name:       CONFIG.projectName,
+                    modifiedAt: new Date().toISOString(),
+                    background: {
+                        type:        bgImageBase64 ? 'image' : 'preset',
+                        key:         bgMgr.currentBg,
+                        imageBase64: bgImageBase64
+                    },
+                    drawing: canvasMgr.getDataURL(),
+                    pages:   window.pageManager ? window.pageManager.serialize() : null
+                },
+                this.currentFileId  // PATCH sul file esistente
+            );
+
+            CONFIG.isDirty = false;
+            toast('Lezione sovrascritta su Drive!', 'success');
+        } catch (err) {
+            toast('Errore sovrascrittura: ' + err.message, 'error');
+        }
+    }
+
     /** Rinomina un elemento (file o cartella). */
     async rename(fileId, currentName) {
         if (!this.drive.isConnected()) { toast('Connetti Drive prima.', 'error'); return; }
@@ -1486,6 +1531,10 @@ function initDrive() {
     const restored = driveMgr._loadSession();
     if (restored) {
         driveConnectBtn.update();
+        // BUG 4 fix: se il token è ancora valido, auto-apri l'ultima lezione subito
+        if (driveMgr.isConnected()) {
+            setTimeout(() => _autoOpenLastLesson(), 1200);
+        }
     }
 
     // ── Pulsante chiudi pannello libreria ──────────────────────────────────

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v8'; // v8 — fix riga opzioni colori/dimensioni sempre visibile
+const CACHE_NAME = 'eduboard-v9'; // v9 — fix toolbar/fullscreen/auto-open/sovrascrittura + pagine
 const urlsToCache = [
   './',
   './index.html',

@@ -480,6 +480,9 @@
       <div class="dirty-modal-box">
         <p class="dirty-modal-msg">Hai modifiche non salvate.<br>Cosa vuoi fare?</p>
         <div class="dirty-modal-btns">
+          <!-- MODIFICA 5: pulsanti extra visibili solo quando c'è un file Drive aperto -->
+          <button id="dirty-btn-overwrite" class="dirty-btn dirty-btn--primary" style="display:none">💾 Sovrascrivi</button>
+          <button id="dirty-btn-saveas" class="dirty-btn" style="display:none">📄 Salva come nuovo</button>
           <button id="dirty-btn-save" class="dirty-btn dirty-btn--primary">💾 Salva</button>
           <button id="dirty-btn-skip" class="dirty-btn">Continua senza salvare</button>
           <button id="dirty-btn-cancel" class="dirty-btn dirty-btn--cancel">Annulla</button>

@@ -1786,9 +1786,42 @@ body.fullscreen-mode #canvas-area {
 .page-btn--add { border-style: dashed; color: var(--accent); font-size: 16px; font-weight: 700; }
 .page-btn--add:hover { background: rgba(59,130,246,0.15); }
 
+/* FIX PAGINE B: container pagina con pulsante X visibile */
+.page-container {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+}
+.page-del-btn {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ef4444;
+    color: white;
+    border: none;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    padding: 0;
+}
+.page-del-btn:hover { background: #dc2626; }
+
 /* Sposta la toolbar-wrapper in alto di 38px quando la page-bar è visibile */
 body.has-page-bar #toolbar-wrapper {
     bottom: 38px;
+}
+
+/* BUG 2 fix: quando il wrapper NON è visible, nascondi completamente il contenuto
+   della toolbar (indipendente da bottom/transform) per evitare la barra nera */
+#toolbar-wrapper:not(.visible) #floating-toolbar {
+    display: none;
 }
 /* Sposta il FAB drive un po' più in alto */
 body.has-page-bar .drive-fab {

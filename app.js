@@ -840,9 +840,17 @@ class CanvasManager {
         const W = vW * 3;   // canvas 3× viewport per simulare area infinita
         const H = vH * 3;
 
+        // BUG 3 fix: salva posizione relativa prima del resize per ripristinarla dopo
+        const prevCanvasW = this.canvas.width;
+        const prevCanvasH = this.canvas.height;
+        const hadPan = typeof panMgr !== 'undefined' && panMgr && prevCanvasW > 0;
+        const prevDx = hadPan ? panMgr.dx : 0;
+        const prevDy = hadPan ? panMgr.dy : 0;
+        // se il canvas era già inizializzato, calcola posizione relativa (0=primo avvio)
+        const isFirstResize = prevCanvasW === 0;
+
         // Salva disegno prima del resize
-        const savedURL = this.canvas.width > 0 ? this.canvas.toDataURL() : null;
-        const prevW = this.canvas.width;
+        const savedURL = prevCanvasW > 0 ? this.canvas.toDataURL() : null;
 
         this.canvas.width = W;
         this.canvas.height = H;
@@ -866,7 +874,7 @@ class CanvasManager {
         this.laser.resize(W, H);
 
         // Ripristina disegno senza distorsione (nessuna scalatura, mantiene proporzioni)
-        if (savedURL && prevW > 0) {
+        if (savedURL && prevCanvasW > 0) {
             const img = new Image();
             img.onload = () => {
                 // Disegna all'origine senza scalare: il canvas è 3× viewport,
@@ -876,8 +884,20 @@ class CanvasManager {
             img.src = savedURL;
         }
 
-        // Ricentra la vista dopo il resize
-        if (typeof panMgr !== 'undefined' && panMgr) panMgr.centerView();
+        // BUG 3 fix: al primo avvio centra la vista; ai resize successivi (es. fullscreen)
+        // mantieni la posizione relativa proporzionale invece di ricentrare da capo.
+        if (typeof panMgr !== 'undefined' && panMgr) {
+            if (isFirstResize) {
+                panMgr.centerView();
+            } else {
+                // Ripristina proporzione: la posizione relativa rispetto al centro del canvas
+                const ratioX = prevCanvasW > 0 ? W / prevCanvasW : 1;
+                const ratioY = prevCanvasH > 0 ? H / prevCanvasH : 1;
+                panMgr.dx = prevDx * ratioX;
+                panMgr.dy = prevDy * ratioY;
+                panMgr._applyTransform();
+            }
+        }
     }
 
     getCoords(e) {
@@ -1818,19 +1838,44 @@ function confirmIfDirty() {
 
         const modal = document.getElementById('dirty-modal');
         if (!modal) { resolve(true); return; }
-        modal.style.display = 'flex';
 
-        const btnSave   = document.getElementById('dirty-btn-save');
-        const btnSkip   = document.getElementById('dirty-btn-skip');
-        const btnCancel = document.getElementById('dirty-btn-cancel');
+        // MODIFICA 5: mostra pulsanti Drive se c'è un file Drive aperto
+        const btnOverwrite = document.getElementById('dirty-btn-overwrite');
+        const btnSaveAs    = document.getElementById('dirty-btn-saveas');
+        const btnSave      = document.getElementById('dirty-btn-save');
+        const btnSkip      = document.getElementById('dirty-btn-skip');
+        const btnCancel    = document.getElementById('dirty-btn-cancel');
+
+        const hasDriveFile = typeof libraryMgr !== 'undefined' && libraryMgr?.currentFileId;
+        if (btnOverwrite) btnOverwrite.style.display = hasDriveFile ? '' : 'none';
+        if (btnSaveAs)    btnSaveAs.style.display    = hasDriveFile ? '' : 'none';
+        if (btnSave)      btnSave.style.display      = hasDriveFile ? 'none' : '';
+
+        modal.style.display = 'flex';
 
         function cleanup() {
             modal.style.display = 'none';
+            if (btnOverwrite) btnOverwrite.removeEventListener('click', onOverwrite);
+            if (btnSaveAs)    btnSaveAs.removeEventListener('click', onSaveAs);
             btnSave.removeEventListener('click', onSave);
             btnSkip.removeEventListener('click', onSkip);
             btnCancel.removeEventListener('click', onCancel);
         }
 
+        async function onOverwrite() {
+            cleanup();
+            if (typeof libraryMgr !== 'undefined' && libraryMgr) {
+                await libraryMgr.overwriteCurrentLesson();
+            }
+            resolve(true);
+        }
+        async function onSaveAs() {
+            cleanup();
+            if (typeof libraryMgr !== 'undefined' && libraryMgr) {
+                await libraryMgr.saveCurrentLesson(libraryMgr.currentFolderId);
+            }
+            resolve(true);
+        }
         function onSave() {
             cleanup();
             projectMgr.saveQuiet();
@@ -1845,6 +1890,8 @@ function confirmIfDirty() {
             resolve(false);
         }
 
+        if (btnOverwrite) btnOverwrite.addEventListener('click', onOverwrite);
+        if (btnSaveAs)    btnSaveAs.addEventListener('click', onSaveAs);
         btnSave.addEventListener('click', onSave);
         btnSkip.addEventListener('click', onSkip);
         btnCancel.addEventListener('click', onCancel);
@@ -3455,13 +3502,15 @@ class PageManager {
 
     addPage() {
         this.pages[this.currentIndex] = this._captureCurrentPage();
+        // FIX PAGINE A: eredita sfondo (tipo, colore, orientamento) dalla pagina corrente
+        const currentBg = this.pages[this.currentIndex].background;
         this.pages.push({
             drawImageData: null,
             objects: [],
             background: {
-                type: 'white',
-                color: '#ffffff',
-                orientation: this.backgroundManager.orientation
+                type: currentBg.type || 'white',
+                color: currentBg.color || '#ffffff',
+                orientation: currentBg.orientation || 'landscape'
             }
         });
         this.currentIndex = this.pages.length - 1;
@@ -3513,13 +3562,27 @@ class PageManager {
         if (!bar) return;
         bar.innerHTML = '';
         this.pages.forEach((p, i) => {
+            // FIX PAGINE B: container con pulsante X visibile (touch-friendly, niente contextmenu)
+            const pageContainer = document.createElement('div');
+            pageContainer.className = 'page-container';
+
             const btn = document.createElement('button');
             btn.className = 'page-btn' + (i === this.currentIndex ? ' page-btn--active' : '');
             btn.textContent = i + 1;
-            btn.title = `Pagina ${i + 1} (tasto destro per eliminare)`;
+            btn.title = `Pagina ${i + 1}`;
             btn.addEventListener('click', () => this.goToPage(i));
-            btn.addEventListener('contextmenu', e => { e.preventDefault(); this.deletePage(i); });
-            bar.appendChild(btn);
+
+            if (this.pages.length > 1) {
+                const delBtn = document.createElement('button');
+                delBtn.className = 'page-del-btn';
+                delBtn.textContent = '×';
+                delBtn.title = `Elimina pagina ${i + 1}`;
+                delBtn.addEventListener('click', (e) => { e.stopPropagation(); this.deletePage(i); });
+                pageContainer.appendChild(delBtn);
+            }
+
+            pageContainer.appendChild(btn);
+            bar.appendChild(pageContainer);
         });
         const addBtn = document.createElement('button');
         addBtn.className = 'page-btn page-btn--add';
