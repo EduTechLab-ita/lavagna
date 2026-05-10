@@ -2469,31 +2469,152 @@ class SelectManager {
             popup.dataset.action = '';
         }
 
+        // Helper: applica filtro pixel-by-pixel su un'area del draw-canvas
+        const _applyPixelFilter = (type, value, sel) => {
+            const { x: sx, y: sy, w: sw, h: sh } = sel;
+            const imgData = this.ctx.getImageData(sx, sy, sw, sh);
+            const data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                if (type === 'brightness') {
+                    const factor = value / 100;
+                    data[i]   = Math.min(255, data[i]   * factor);
+                    data[i+1] = Math.min(255, data[i+1] * factor);
+                    data[i+2] = Math.min(255, data[i+2] * factor);
+                } else if (type === 'contrast') {
+                    const factor = (value - 100) / 100;
+                    const f = (259 * (factor * 255 + 255)) / (255 * (259 - factor * 255));
+                    data[i]   = Math.min(255, Math.max(0, f * (data[i]   - 128) + 128));
+                    data[i+1] = Math.min(255, Math.max(0, f * (data[i+1] - 128) + 128));
+                    data[i+2] = Math.min(255, Math.max(0, f * (data[i+2] - 128) + 128));
+                } else if (type === 'saturation') {
+                    const factor = value / 100;
+                    const avg = (data[i] + data[i+1] + data[i+2]) / 3;
+                    data[i]   = Math.min(255, Math.max(0, avg + factor * (data[i]   - avg)));
+                    data[i+1] = Math.min(255, Math.max(0, avg + factor * (data[i+1] - avg)));
+                    data[i+2] = Math.min(255, Math.max(0, avg + factor * (data[i+2] - avg)));
+                } else if (type === 'opacity') {
+                    data[i+3] = Math.min(255, Math.max(0, Math.round(data[i+3] * value)));
+                }
+            }
+            this.ctx.putImageData(imgData, sx, sy);
+            CONFIG.isDirty = true;
+            window.autoSaveMgr?.onDirty();
+        };
+
+        const isPixelSel = (this.phase === 'selected' && this.selection && !obj);
+
         // Azioni immediate (non aprono popup)
         switch (action) {
             case 'bring-front':
-                if (obj) { objectLayer.bringToFront(obj.id); this._updateSelectionOverlay(); }
+                if (obj) { objectLayer.bringToFront(obj.id); this._updateSelectionOverlay(); CONFIG.isDirty = true; window.autoSaveMgr?.onDirty(); }
                 return;
             case 'send-back':
-                if (obj) { objectLayer.sendToBack(obj.id); this._updateSelectionOverlay(); }
+                if (obj) { objectLayer.sendToBack(obj.id); this._updateSelectionOverlay(); CONFIG.isDirty = true; window.autoSaveMgr?.onDirty(); }
                 return;
             case 'flip-h':
-                if (obj) { obj.flipH = !obj.flipH; objectLayer.render(); }
+                if (obj) {
+                    obj.flipH = !obj.flipH; objectLayer.render();
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                } else if (isPixelSel) {
+                    const { x: sx, y: sy, w: sw, h: sh } = this.selection;
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+                    const imgData = this.ctx.getImageData(sx, sy, sw, sh);
+                    const tmp = document.createElement('canvas');
+                    tmp.width = sw; tmp.height = sh;
+                    const tctx = tmp.getContext('2d');
+                    tctx.putImageData(imgData, 0, 0);
+                    this.ctx.save();
+                    this.ctx.clearRect(sx, sy, sw, sh);
+                    this.ctx.translate(sx + sw, sy);
+                    this.ctx.scale(-1, 1);
+                    this.ctx.drawImage(tmp, 0, 0);
+                    this.ctx.restore();
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                }
                 return;
             case 'flip-v':
-                if (obj) { obj.flipV = !obj.flipV; objectLayer.render(); }
+                if (obj) {
+                    obj.flipV = !obj.flipV; objectLayer.render();
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                } else if (isPixelSel) {
+                    const { x: sx, y: sy, w: sw, h: sh } = this.selection;
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+                    const imgData = this.ctx.getImageData(sx, sy, sw, sh);
+                    const tmp = document.createElement('canvas');
+                    tmp.width = sw; tmp.height = sh;
+                    const tctx = tmp.getContext('2d');
+                    tctx.putImageData(imgData, 0, 0);
+                    this.ctx.save();
+                    this.ctx.clearRect(sx, sy, sw, sh);
+                    this.ctx.translate(sx, sy + sh);
+                    this.ctx.scale(1, -1);
+                    this.ctx.drawImage(tmp, 0, 0);
+                    this.ctx.restore();
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                }
                 return;
             case 'rot-cw':
-                if (obj) { obj.rotation = ((obj.rotation || 0) + 90) % 360; objectLayer.render(); this._drawSelectionRect(obj.x, obj.y, obj.w, obj.h, true); }
+                if (obj) {
+                    obj.rotation = ((obj.rotation || 0) + 90) % 360; objectLayer.render(); this._drawSelectionRect(obj.x, obj.y, obj.w, obj.h, true);
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                } else if (isPixelSel) {
+                    const { x: sx, y: sy, w: sw, h: sh } = this.selection;
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+                    const imgData = this.ctx.getImageData(sx, sy, sw, sh);
+                    const tmp = document.createElement('canvas');
+                    tmp.width = sh; tmp.height = sw;
+                    const tctx = tmp.getContext('2d');
+                    tctx.translate(sh, 0);
+                    tctx.rotate(Math.PI / 2);
+                    tctx.putImageData(imgData, 0, 0);
+                    this.ctx.clearRect(sx, sy, sw, sh);
+                    this.ctx.drawImage(tmp, sx + (sw - sh) / 2, sy + (sh - sw) / 2);
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                }
                 return;
             case 'rot-ccw':
-                if (obj) { obj.rotation = ((obj.rotation || 0) - 90 + 360) % 360; objectLayer.render(); this._drawSelectionRect(obj.x, obj.y, obj.w, obj.h, true); }
+                if (obj) {
+                    obj.rotation = ((obj.rotation || 0) - 90 + 360) % 360; objectLayer.render(); this._drawSelectionRect(obj.x, obj.y, obj.w, obj.h, true);
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                } else if (isPixelSel) {
+                    const { x: sx, y: sy, w: sw, h: sh } = this.selection;
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+                    const imgData = this.ctx.getImageData(sx, sy, sw, sh);
+                    const tmp = document.createElement('canvas');
+                    tmp.width = sh; tmp.height = sw;
+                    const tctx = tmp.getContext('2d');
+                    tctx.translate(0, sw);
+                    tctx.rotate(-Math.PI / 2);
+                    tctx.putImageData(imgData, 0, 0);
+                    this.ctx.clearRect(sx, sy, sw, sh);
+                    this.ctx.drawImage(tmp, sx + (sw - sh) / 2, sy + (sh - sw) / 2);
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                }
                 return;
             case 'rot-180':
-                if (obj) { obj.rotation = ((obj.rotation || 0) + 180) % 360; objectLayer.render(); }
+                if (obj) {
+                    obj.rotation = ((obj.rotation || 0) + 180) % 360; objectLayer.render();
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                } else if (isPixelSel) {
+                    const { x: sx, y: sy, w: sw, h: sh } = this.selection;
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+                    const imgData = this.ctx.getImageData(sx, sy, sw, sh);
+                    const tmp = document.createElement('canvas');
+                    tmp.width = sw; tmp.height = sh;
+                    const tctx = tmp.getContext('2d');
+                    tctx.translate(sw, sh);
+                    tctx.rotate(Math.PI);
+                    tctx.putImageData(imgData, 0, 0);
+                    this.ctx.clearRect(sx, sy, sw, sh);
+                    this.ctx.drawImage(tmp, sx, sy);
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                }
                 return;
             case 'restore':
-                if (obj) { objectLayer.resizeObject(obj.id, obj.originalW); this._drawSelectionRect(obj.x, obj.y, obj.w, obj.h, true); }
+                if (obj) {
+                    objectLayer.resizeObject(obj.id, obj.originalW); this._drawSelectionRect(obj.x, obj.y, obj.w, obj.h, true);
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                }
                 return;
             case 'download':
                 if (obj) {
@@ -2507,6 +2628,23 @@ class SelectManager {
                         const a = document.createElement('a');
                         a.href = url;
                         a.download = obj.type === 'pdf-page' ? 'pagina-pdf.png' : 'immagine.png';
+                        a.click();
+                        setTimeout(() => URL.revokeObjectURL(url), 1000);
+                        toast('Download avviato!', 'success');
+                    }, 'image/png');
+                } else if (isPixelSel) {
+                    // Scarica l'area selezionata come PNG
+                    const { x: sx, y: sy, w: sw, h: sh } = this.selection;
+                    const imgData = this.ctx.getImageData(sx, sy, sw, sh);
+                    const tmp = document.createElement('canvas');
+                    tmp.width = sw; tmp.height = sh;
+                    tmp.getContext('2d').putImageData(imgData, 0, 0);
+                    tmp.toBlob(blob => {
+                        if (!blob) { toast('Errore nel download', 'error'); return; }
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'selezione.png';
                         a.click();
                         setTimeout(() => URL.revokeObjectURL(url), 1000);
                         toast('Download avviato!', 'success');
@@ -2528,6 +2666,7 @@ class SelectManager {
                     this.ctx.fillRect(x, y, w, h);
                     this.ctx.restore();
                     this._clearSelection();
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
                 }
                 return;
             case 'copy':
@@ -2539,10 +2678,12 @@ class SelectManager {
                 return;
             case 'paste':
                 if (this._pixelClipboard) {
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
                     const center = typeof getViewportCenter !== 'undefined' ? getViewportCenter() : { x: 100, y: 100 };
                     const px = Math.round(center.x - this._pixelClipboard.w / 2);
                     const py = Math.round(center.y - this._pixelClipboard.h / 2);
                     this.ctx.putImageData(this._pixelClipboard.data, px, py);
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
                     toast('Incollato!', 'success');
                 }
                 return;
@@ -2563,7 +2704,13 @@ class SelectManager {
                     sp.textContent = inp.value + '%';
                     const el = document.getElementById('ctx-opacity');
                     if (el) el.value = inp.value;
-                    if (obj) { obj.opacity = parseInt(inp.value) / 100; objectLayer.render(); }
+                    if (obj) {
+                        obj.opacity = parseInt(inp.value) / 100; objectLayer.render();
+                        CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                    } else if (isPixelSel) {
+                        if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+                        _applyPixelFilter('opacity', parseInt(inp.value) / 100, this.selection);
+                    }
                 });
                 break;
             }
@@ -2577,10 +2724,19 @@ class SelectManager {
                 const bEl = document.getElementById('ctx-brightness');
                 const cEl = document.getElementById('ctx-contrast');
                 const sEl = document.getElementById('ctx-saturation');
+                // Snapshot per pixel (applica relativamente allo snapshot originale)
+                const _pixSnap = isPixelSel ? this.ctx.getImageData(this.selection.x, this.selection.y, this.selection.w, this.selection.h) : null;
                 inp.addEventListener('input', () => {
                     sp.textContent = inp.value + '%';
                     if (bEl) bEl.value = inp.value;
-                    if (obj) objectLayer.updateFilter(obj.id, parseInt(inp.value), parseInt(cEl?.value || 100), parseInt(sEl?.value || 100));
+                    if (obj) {
+                        objectLayer.updateFilter(obj.id, parseInt(inp.value), parseInt(cEl?.value || 100), parseInt(sEl?.value || 100));
+                        CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                    } else if (isPixelSel && _pixSnap) {
+                        // Ripristina snapshot e applica filtro
+                        this.ctx.putImageData(_pixSnap, this.selection.x, this.selection.y);
+                        _applyPixelFilter('brightness', parseInt(inp.value), this.selection);
+                    }
                 });
                 break;
             }
@@ -2594,10 +2750,17 @@ class SelectManager {
                 const bEl = document.getElementById('ctx-brightness');
                 const cEl = document.getElementById('ctx-contrast');
                 const sEl = document.getElementById('ctx-saturation');
+                const _pixSnap = isPixelSel ? this.ctx.getImageData(this.selection.x, this.selection.y, this.selection.w, this.selection.h) : null;
                 inp.addEventListener('input', () => {
                     sp.textContent = inp.value + '%';
                     if (cEl) cEl.value = inp.value;
-                    if (obj) objectLayer.updateFilter(obj.id, parseInt(bEl?.value || 100), parseInt(inp.value), parseInt(sEl?.value || 100));
+                    if (obj) {
+                        objectLayer.updateFilter(obj.id, parseInt(bEl?.value || 100), parseInt(inp.value), parseInt(sEl?.value || 100));
+                        CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                    } else if (isPixelSel && _pixSnap) {
+                        this.ctx.putImageData(_pixSnap, this.selection.x, this.selection.y);
+                        _applyPixelFilter('contrast', parseInt(inp.value), this.selection);
+                    }
                 });
                 break;
             }
@@ -2611,10 +2774,17 @@ class SelectManager {
                 const bEl = document.getElementById('ctx-brightness');
                 const cEl = document.getElementById('ctx-contrast');
                 const sEl = document.getElementById('ctx-saturation');
+                const _pixSnap = isPixelSel ? this.ctx.getImageData(this.selection.x, this.selection.y, this.selection.w, this.selection.h) : null;
                 inp.addEventListener('input', () => {
                     sp.textContent = inp.value + '%';
                     if (sEl) sEl.value = inp.value;
-                    if (obj) objectLayer.updateFilter(obj.id, parseInt(bEl?.value || 100), parseInt(cEl?.value || 100), parseInt(inp.value));
+                    if (obj) {
+                        objectLayer.updateFilter(obj.id, parseInt(bEl?.value || 100), parseInt(cEl?.value || 100), parseInt(inp.value));
+                        CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                    } else if (isPixelSel && _pixSnap) {
+                        this.ctx.putImageData(_pixSnap, this.selection.x, this.selection.y);
+                        _applyPixelFilter('saturation', parseInt(inp.value), this.selection);
+                    }
                 });
                 break;
             }
@@ -2628,13 +2798,13 @@ class SelectManager {
                 colorInp.addEventListener('input', () => {
                     const bcEl = document.getElementById('ctx-border-color');
                     if (bcEl) bcEl.value = colorInp.value;
-                    if (obj) { obj.borderColor = colorInp.value; objectLayer.render(); }
+                    if (obj) { obj.borderColor = colorInp.value; objectLayer.render(); CONFIG.isDirty = true; window.autoSaveMgr?.onDirty(); }
                 });
                 widthInp.addEventListener('input', () => {
                     sp.textContent = widthInp.value + 'px';
                     const bwEl = document.getElementById('ctx-border-width');
                     if (bwEl) bwEl.value = widthInp.value;
-                    if (obj) { obj.borderWidth = parseInt(widthInp.value); objectLayer.render(); }
+                    if (obj) { obj.borderWidth = parseInt(widthInp.value); objectLayer.render(); CONFIG.isDirty = true; window.autoSaveMgr?.onDirty(); }
                 });
                 break;
             }
@@ -2650,6 +2820,7 @@ class SelectManager {
                     if (wiEl) wiEl.value = newW;
                     objectLayer.resizeObject(obj.id, newW);
                     this._drawSelectionRect(obj.x, obj.y, obj.w, obj.h, true);
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
                 });
                 break;
             }
@@ -2660,13 +2831,46 @@ class SelectManager {
         const panel = document.getElementById('object-context-panel');
         if (!panel) return;
 
-        // Mostra/nascondi pulsanti in base al tipo di selezione
-        panel.querySelectorAll('.ctx-obj-only').forEach(el => {
-            el.style.display = isPixelSelection ? 'none' : '';
-        });
-        panel.querySelectorAll('.ctx-pixel-only').forEach(el => {
-            el.style.display = isPixelSelection ? '' : 'none';
-        });
+        if (isPixelSelection) {
+            // Per selezione pixel: mostra tutte le azioni tratte da ctx-pixel-only
+            // + flip/ruota/filtri/opacità/elimina/download — nascondi solo bordo, larghezza, ripristina, bring-front/send-back
+            const pixelHidden = new Set(['bring-front', 'send-back', 'border-color', 'width', 'restore']);
+            panel.querySelectorAll('.ctx-icon-btn[data-action]').forEach(el => {
+                const act = el.dataset.action;
+                if (el.classList.contains('ctx-obj-only') || el.classList.contains('ctx-pixel-only')) {
+                    // Gestito sotto
+                } else {
+                    el.style.display = pixelHidden.has(act) ? 'none' : '';
+                }
+            });
+            // ctx-obj-only: mostra solo quelli utili per pixel
+            panel.querySelectorAll('.ctx-obj-only').forEach(el => {
+                const act = el.dataset?.action;
+                const isHidden = !act || pixelHidden.has(act);
+                el.style.display = isHidden ? 'none' : '';
+            });
+            // Separatori ctx-obj-only: nascondi quelli vicini a bottoni tutti nascosti
+            // Gestione semplificata: mostra tutti i sep non ctx-pixel-only, nascondi solo quelli tra pulsanti tutti nascosti
+            panel.querySelectorAll('.ctx-sep.ctx-obj-only').forEach((sep, i) => {
+                // Nascondi solo il sep dei pulsanti bring-front/send-back e border-color/width/restore
+                // Tieni gli altri (flip/rot, filtri)
+                // Identifica per posizione: 1=ordine(nascosto), 2=flip-rot(visibile), 3=stile-bordo(nascosto), 4=filtri(visibile), 5=dim(nascosto)
+                // Contiamo i sep tra i pulsanti ctx-obj-only
+                sep.style.display = (i === 0 || i === 2 || i === 4) ? 'none' : '';
+            });
+            // ctx-pixel-only: mostra copia/incolla
+            panel.querySelectorAll('.ctx-pixel-only').forEach(el => {
+                el.style.display = '';
+            });
+        } else {
+            // Per oggetti ObjectLayer: comportamento originale
+            panel.querySelectorAll('.ctx-obj-only').forEach(el => {
+                el.style.display = '';
+            });
+            panel.querySelectorAll('.ctx-pixel-only').forEach(el => {
+                el.style.display = 'none';
+            });
+        }
 
         // Posizionamento
         const area = document.getElementById('canvas-area');
@@ -2692,7 +2896,11 @@ class SelectManager {
         const popup = document.getElementById('ctx-popup');
         if (popup) { popup.style.display = 'none'; popup.dataset.action = ''; }
 
-        if (!isPixelSelection && obj) {
+        if (isPixelSelection) {
+            // Per selezione pixel: mostra il pulsante download sempre
+            const dlBtn = document.getElementById('ctx-download-pdf');
+            if (dlBtn) dlBtn.style.display = 'flex';
+        } else if (obj) {
             // Aggiorna valori slider nascosti (compatibilità)
             const f = obj.filter || { brightness: 100, contrast: 100, saturation: 100 };
             const bInput = document.getElementById('ctx-brightness');
@@ -2992,6 +3200,8 @@ class SelectManager {
         if (this.phase === 'object-resizing') {
             this.phase = 'object-selected';
             this._resizeHandle = null;
+            CONFIG.isDirty = true;
+            window.autoSaveMgr?.onDirty();
             // Aggiorna il campo larghezza nel pannello
             const wi = document.getElementById('ctx-width-input');
             if (wi && this.selectedObject) wi.value = Math.round(this.selectedObject.w);
@@ -3005,6 +3215,8 @@ class SelectManager {
         if (this.phase === 'object-dragging' && this.selectedObject) {
             this.phase = 'object-selected';
             this._objDragStart = null;
+            CONFIG.isDirty = true;
+            window.autoSaveMgr?.onDirty();
             this._drawSelectionRect(this.selectedObject.x, this.selectedObject.y,
                 this.selectedObject.w, this.selectedObject.h, true);
             this._showContextPanel(this.selectedObject);
@@ -3048,6 +3260,8 @@ class SelectManager {
             oc.getContext('2d').clearRect(0, 0, oc.width, oc.height);
             this._drawSelectionRect(newX, newY, w, h);
             this.dragData = null;
+            CONFIG.isDirty = true;
+            window.autoSaveMgr?.onDirty();
             return true;
         }
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v15'; // v15 — stampa multi-pagina con selezione pagine + footer pubblicitario
+const CACHE_NAME = 'eduboard-v16'; // v16 — auto-save su tutte le azioni + menu contestuale completo per selezione pixel
 const urlsToCache = [
   './',
   './index.html',
