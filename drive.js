@@ -777,7 +777,9 @@ class LibraryManager {
             // Il delay serve per attendere l'espansione asincrona delle cartelle aperte
             // (le cartelle in _expandedFolders si espandono con expandFolder() non-awaited).
             if (this.currentFileId) {
-                setTimeout(() => this._highlightCurrentLesson(), 600);
+                // 1500ms: le cartelle di primo livello si espandono con fetch asincrono,
+                // serve tempo sufficiente per avere il DOM dei sotto-alberi disponibile.
+                setTimeout(() => this._highlightCurrentLesson(), 1500);
             } else {
                 this.treeEl.scrollTop = savedScroll;
             }
@@ -902,7 +904,11 @@ class LibraryManager {
             });
 
             // Auto-espandi se era aperta prima del refresh
-            if (this._expandedFolders.has(folder.id)) {
+            // oppure se è una cartella di primo livello (depth === 0) — aperta di default
+            if (this._expandedFolders.has(folder.id) || depth === 0) {
+                if (!this._expandedFolders.has(folder.id)) {
+                    this._expandedFolders.add(folder.id);
+                }
                 expandFolder(); // non awaita per non bloccare il render iniziale
             }
 
@@ -1727,6 +1733,10 @@ function initDrive() {
     driveMgr        = new DriveManager();
     libraryMgr      = new LibraryManager(driveMgr);
     driveConnectBtn = new DriveConnectButton(driveMgr);
+
+    // Esponi come globali window.* — necessario per AutoSaveManager (onDirty usa window.libraryMgr e window.driveMgr)
+    window.driveMgr   = driveMgr;
+    window.libraryMgr = libraryMgr;
 
     // Ripristina sessione precedente (se il token è ancora valido)
     const restored = driveMgr._loadSession();

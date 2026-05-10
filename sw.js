@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v12'; // v12 — salvataggio pre-cambio lezione, badge autosave, libreria evidenzia lezione, drag selezione con preview
+const CACHE_NAME = 'eduboard-v13'; // v13 — fix auto-save (window.driveMgr/libraryMgr globali), libreria cartelle espanse di default, highlight lezione con timeout aumentato
 const urlsToCache = [
   './',
   './index.html',
