@@ -608,6 +608,107 @@ class DriveManager {
 
 
 // =============================================================================
+// SEZIONE 1b — AutoSaveManager
+// Gestisce il salvataggio automatico in tempo reale con debounce.
+// Si attiva solo quando Drive è connesso E c'è un file aperto (currentFileId).
+// =============================================================================
+
+class AutoSaveManager {
+    constructor() {
+        this._timer   = null;
+        this._saving  = false;
+        this._loading = false; // true durante il caricamento lezione (blocca onDirty)
+        this.DEBOUNCE_MS = 3000; // 3 secondi dopo l'ultima modifica
+    }
+
+    /**
+     * Chiamato ad ogni modifica sulla lavagna (dopo isDirty = true).
+     * Avvia il timer di debounce per il salvataggio automatico.
+     */
+    onDirty() {
+        // Non avviare auto-save durante il caricamento di una lezione
+        if (this._loading) return;
+        // Auto-save solo se connesso Drive E c'è un file aperto
+        if (!window.libraryMgr?.currentFileId) return;
+        if (!window.driveMgr?.isConnected()) return;
+
+        clearTimeout(this._timer);
+        this._setPending();
+        this._timer = setTimeout(() => this._doSave(), this.DEBOUNCE_MS);
+    }
+
+    /** Blocca onDirty durante il caricamento lezione. */
+    beginLoading() { this._loading = true; }
+    endLoading()   { this._loading = false; }
+
+    async _doSave() {
+        if (this._saving) return;
+        this._saving = true;
+        this._timer  = null;
+        this._setSaving();
+        try {
+            await window.libraryMgr.overwriteCurrentLesson(true); // silent = true
+            this._setSaved();
+        } catch (e) {
+            console.warn('Auto-save fallito:', e);
+            this._setError();
+        } finally {
+            this._saving = false;
+        }
+    }
+
+    /** True se un salvataggio è in corso (blocca la chiusura). */
+    isSaving() { return this._saving; }
+
+    /** True se ci sono modifiche in attesa di salvataggio. */
+    hasPending() { return this._timer !== null; }
+
+    /** Cancella il timer e resetta lo stato (usato dopo caricamento lezione). */
+    reset() {
+        clearTimeout(this._timer);
+        this._timer  = null;
+        this._saving = false;
+        this._setError(); // rimuove tutti i badge
+    }
+
+    _getWrapper() {
+        return document.getElementById('drive-fab-wrapper') ||
+               document.getElementById('drive-fab')?.parentElement;
+    }
+
+    _setPending() {
+        const w = this._getWrapper();
+        if (!w) return;
+        w.classList.remove('autosave-saving', 'autosave-saved');
+        w.classList.add('autosave-pending');
+    }
+    _setSaving() {
+        const w = this._getWrapper();
+        if (!w) return;
+        w.classList.remove('autosave-pending', 'autosave-saved');
+        w.classList.add('autosave-saving');
+    }
+    _setSaved() {
+        const w = this._getWrapper();
+        if (!w) return;
+        w.classList.remove('autosave-saving', 'autosave-pending');
+        w.classList.add('autosave-saved');
+        // Rimuovi il checkmark dopo 4 secondi
+        clearTimeout(this._savedTimer);
+        this._savedTimer = setTimeout(() => w.classList.remove('autosave-saved'), 4000);
+    }
+    _setError() {
+        const w = this._getWrapper();
+        if (!w) return;
+        w.classList.remove('autosave-saving', 'autosave-pending', 'autosave-saved');
+    }
+}
+
+// Istanza globale (disponibile anche in app.js)
+window.autoSaveMgr = new AutoSaveManager();
+
+
+// =============================================================================
 // SEZIONE 2 — LibraryManager
 // Gestisce il pannello UI della libreria lezioni (struttura ad albero)
 // =============================================================================
@@ -812,12 +913,29 @@ class LibraryManager {
         if (!this.drive.isConnected()) {
             toast('Connetti Drive prima.', 'error'); return;
         }
-        // Controlla modifiche non salvate
-        if (typeof confirmIfDirty === 'function') {
+
+        // Se auto-save in corso, blocca e avvisa
+        if (window.autoSaveMgr?.isSaving()) {
+            toast('Salvataggio automatico in corso — attendi un momento.', 'info');
+            return;
+        }
+
+        // Se ci sono modifiche non salvate E non c'è auto-save attivo (nessun fileId),
+        // oppure se il file corrente è diverso da quello che vogliamo aprire,
+        // mostra il dialog SOLO se isDirty E non c'è auto-save (che ha già salvato tutto)
+        const hasPendingAutoSave = window.autoSaveMgr?.hasPending();
+        if (hasPendingAutoSave) {
+            // Flush immediato prima di procedere
+            clearTimeout(window.autoSaveMgr._timer);
+            window.autoSaveMgr._timer = null;
+            try { await window.libraryMgr.overwriteCurrentLesson(); } catch (_) {}
+            window.autoSaveMgr._setError();
+        } else if (typeof confirmIfDirty === 'function') {
             const canContinue = await confirmIfDirty();
             if (!canContinue) return;
         }
         try {
+            window.autoSaveMgr?.beginLoading();
             toast('Caricamento lezione...', 'info');
             const lesson = await this.drive.loadLesson(fileId);
 
@@ -860,6 +978,10 @@ class LibraryManager {
             toast('Lezione "' + name + '" caricata!', 'success');
             // Memorizza fileId corrente per ripristino posizione
             this.currentFileId = fileId;
+            // MODIFICA 1/5: reset isDirty e indicatore auto-save al caricamento lezione
+            if (typeof CONFIG !== 'undefined') CONFIG.isDirty = false;
+            window.autoSaveMgr?.endLoading();
+            window.autoSaveMgr?.reset();
             // Memorizza come ultima lezione aperta per auto-open al prossimo avvio
             localStorage.setItem('eduboard_last_lesson', JSON.stringify({ fileId, fileName }));
             // Ripristina posizione (pan+zoom) salvata con la lezione
@@ -881,6 +1003,7 @@ class LibraryManager {
             }
             this.close();
         } catch (err) {
+            window.autoSaveMgr?.endLoading();
             toast('Errore apertura lezione: ' + err.message, 'error');
         }
     }
@@ -946,6 +1069,8 @@ class LibraryManager {
 
             CONFIG.projectName = name.trim();
             document.getElementById('project-name').textContent = name.trim();
+            CONFIG.isDirty = false;
+            window.autoSaveMgr?.reset();
             toast('Lezione salvata su Drive!', 'success');
             this.refresh();
         } catch (err) {
@@ -955,14 +1080,15 @@ class LibraryManager {
 
     /**
      * MODIFICA 5: Sovrascrive la lezione Drive corrente (currentFileId) senza chiedere il nome.
-     * Usato dal dialog "modifiche non salvate" quando c'è già un file aperto.
+     * Usato dal dialog "modifiche non salvate" e dall'auto-save.
+     * @param {boolean} [silent=false] - se true, non mostra toast (usato dall'auto-save)
      */
-    async overwriteCurrentLesson() {
-        if (!this.drive.isConnected()) { toast('Connetti Drive prima di salvare.', 'error'); return; }
+    async overwriteCurrentLesson(silent = false) {
+        if (!this.drive.isConnected()) { if (!silent) toast('Connetti Drive prima di salvare.', 'error'); return; }
         if (!this.currentFileId) { return this.saveCurrentLesson(this.currentFolderId); }
 
         try {
-            toast('Sovrascrittura in corso...', 'info');
+            if (!silent) toast('Sovrascrittura in corso...', 'info');
 
             let bgImageBase64 = '';
             if (bgMgr.uploadedImage) {
@@ -992,9 +1118,13 @@ class LibraryManager {
             );
 
             CONFIG.isDirty = false;
-            toast('Lezione sovrascritta su Drive!', 'success');
+            if (!silent) {
+                window.autoSaveMgr?.reset();
+                toast('Lezione sovrascritta su Drive!', 'success');
+            }
         } catch (err) {
-            toast('Errore sovrascrittura: ' + err.message, 'error');
+            if (!silent) toast('Errore sovrascrittura: ' + err.message, 'error');
+            throw err; // rilancia per auto-save error handling
         }
     }
 

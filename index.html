@@ -490,18 +490,22 @@
       </div>
     </div>
 
-    <!-- FAB Drive — basso destra -->
-    <div id="drive-fab" class="drive-fab" title="Connetti / disconnetti Google Drive">
-        <!-- Stato: non connesso — mostra silhouette omino -->
-        <div id="drive-fab-inner" class="drive-fab-inner">
-            <svg id="drive-fab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="28" height="28">
-                <circle cx="12" cy="8" r="4"/>
-                <path d="M6 20c0-3.314 2.686-6 6-6s6 2.686 6 6"/>
-            </svg>
-            <img id="drive-fab-photo" src="" alt="" style="display:none; width:36px; height:36px; border-radius:50%; object-fit:cover;">
+    <!-- FAB Drive — basso destra (wrapper per indicatore auto-save) -->
+    <div id="drive-fab-wrapper">
+        <!-- Badge auto-save (checkmark verde) -->
+        <div class="autosave-badge" title="Salvato su Drive">✓</div>
+        <div id="drive-fab" class="drive-fab" title="Connetti / disconnetti Google Drive">
+            <!-- Stato: non connesso — mostra silhouette omino -->
+            <div id="drive-fab-inner" class="drive-fab-inner">
+                <svg id="drive-fab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="28" height="28">
+                    <circle cx="12" cy="8" r="4"/>
+                    <path d="M6 20c0-3.314 2.686-6 6-6s6 2.686 6 6"/>
+                </svg>
+                <img id="drive-fab-photo" src="" alt="" style="display:none; width:36px; height:36px; border-radius:50%; object-fit:cover;">
+            </div>
+            <!-- Badge connessione verde -->
+            <div id="drive-fab-badge" class="drive-fab-badge" style="display:none"></div>
         </div>
-        <!-- Badge connessione verde -->
-        <div id="drive-fab-badge" class="drive-fab-badge" style="display:none"></div>
     </div>
 
     <!-- PDF.js per importazione PDF -->

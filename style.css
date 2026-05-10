@@ -1824,7 +1824,7 @@ body.has-page-bar #toolbar-wrapper {
     display: none;
 }
 /* Sposta il FAB drive un po' più in alto */
-body.has-page-bar .drive-fab {
+body.has-page-bar #drive-fab-wrapper {
     bottom: 62px;
 }
 /* Sposta l'indicatore zoom */
@@ -1855,10 +1855,65 @@ body.has-page-bar #zoom-indicator {
 /* =============================================
    DRIVE FAB — Floating Action Button
    ============================================= */
-.drive-fab {
+
+/* Wrapper fisso per il FAB + badge auto-save */
+#drive-fab-wrapper {
     position: fixed;
     bottom: 24px;
     right: 24px;
+    z-index: 600;
+    /* Necessario per posizionare il badge ::before e il ring */
+}
+
+/* Anello rotante (stato saving) */
+#drive-fab-wrapper.autosave-saving #drive-fab::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    border-top-color: #22c55e;
+    animation: spin 1s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Badge checkmark salvato */
+#drive-fab-wrapper .autosave-badge {
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #22c55e;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(15, 23, 42, 0.9);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 2;
+}
+#drive-fab-wrapper.autosave-saved .autosave-badge {
+    opacity: 1;
+}
+
+/* Stato pending: box-shadow gialla pulsante */
+#drive-fab-wrapper.autosave-pending #drive-fab {
+    box-shadow: 0 0 0 3px #f59e0b, 0 4px 16px rgba(0,0,0,0.4);
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.drive-fab {
+    position: relative;
     width: 52px;
     height: 52px;
     border-radius: 50%;
@@ -1867,7 +1922,6 @@ body.has-page-bar #zoom-indicator {
     -webkit-backdrop-filter: blur(8px);
     border: 2px solid rgba(148, 163, 184, 0.3);
     cursor: pointer;
-    z-index: 600;
     display: flex;
     align-items: center;
     justify-content: center;

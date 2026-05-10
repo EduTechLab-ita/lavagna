@@ -331,12 +331,16 @@ class BackgroundManager {
         this.uploadedImage = null;
         this.render();
         CONFIG.currentBg = bgKey;
+        CONFIG.isDirty = true;
+        window.autoSaveMgr?.onDirty();
     }
 
     setImage(imgElement) {
         this.uploadedImage = imgElement;
         this.currentBg = 'image';
         this.render();
+        CONFIG.isDirty = true;
+        window.autoSaveMgr?.onDirty();
     }
 
     // Alias per compatibilità con PageManager e drive.js
@@ -1073,6 +1077,7 @@ class CanvasManager {
 
     _saveUndo() {
         CONFIG.isDirty = true;
+        window.autoSaveMgr?.onDirty();
         this.undoStack.push(this.canvas.toDataURL());
         if (this.undoStack.length > CONFIG.maxUndo) this.undoStack.shift();
         this.redoStack = [];
@@ -1795,6 +1800,7 @@ class ProjectManager {
         projects[name + '_' + Date.now()] = data;
         localStorage.setItem('eduboard-v2', JSON.stringify(projects));
         CONFIG.isDirty = false;
+        window.autoSaveMgr?.reset();
         toast('Progetto salvato!', 'success');
     }
 
@@ -1809,11 +1815,23 @@ class ProjectManager {
         projects[CONFIG.projectName + '_' + Date.now()] = data;
         localStorage.setItem('eduboard-v2', JSON.stringify(projects));
         CONFIG.isDirty = false;
+        window.autoSaveMgr?.reset();
         toast('Progetto salvato!', 'success');
     }
 
     async newBoard() {
-        if (CONFIG.isDirty) {
+        // Se auto-save in corso, blocca
+        if (window.autoSaveMgr?.isSaving()) {
+            toast('Salvataggio automatico in corso — attendi un momento.', 'info');
+            return;
+        }
+        // Se pending, flush immediato prima di procedere
+        if (window.autoSaveMgr?.hasPending()) {
+            clearTimeout(window.autoSaveMgr._timer);
+            window.autoSaveMgr._timer = null;
+            try { await window.libraryMgr?.overwriteCurrentLesson(); } catch (_) {}
+            window.autoSaveMgr?._setError();
+        } else if (CONFIG.isDirty) {
             const ok = await confirmIfDirty();
             if (!ok) return;
         }
@@ -1821,6 +1839,8 @@ class ProjectManager {
         bgMgr.setBackground('white');
         CONFIG.projectName = 'Nuova Lavagna';
         CONFIG.isDirty = false;
+        window.autoSaveMgr?.reset();
+        if (typeof libraryMgr !== 'undefined' && libraryMgr) libraryMgr.currentFileId = null;
         document.getElementById('project-name').textContent = CONFIG.projectName;
         document.querySelectorAll('.bg-opt').forEach(b => b.classList.remove('active'));
         const whiteBtn = document.querySelector('.bg-opt[data-bg="white"]');
@@ -3075,12 +3095,16 @@ class ObjectLayer {
         };
         this.objects.push(obj);
         this.render();
+        CONFIG.isDirty = true;
+        window.autoSaveMgr?.onDirty();
         return obj;
     }
 
     removeObject(id) {
         this.objects = this.objects.filter(o => o.id !== id);
         this.render();
+        CONFIG.isDirty = true;
+        window.autoSaveMgr?.onDirty();
     }
 
     bringToFront(id) {
@@ -3516,6 +3540,8 @@ class PageManager {
         this.currentIndex = this.pages.length - 1;
         this._restorePage(this.pages[this.currentIndex]);
         this._updatePageBar();
+        CONFIG.isDirty = true;
+        window.autoSaveMgr?.onDirty();
     }
 
     deletePage(index) {
@@ -3526,6 +3552,8 @@ class PageManager {
         this.currentIndex = newIndex;
         this._restorePage(this.pages[this.currentIndex]);
         this._updatePageBar();
+        CONFIG.isDirty = true;
+        window.autoSaveMgr?.onDirty();
     }
 
     serialize() {
@@ -3642,7 +3670,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 scale: panMgr.scale
             }));
         }
-        if (CONFIG.isDirty) {
+        // Blocca chiusura se auto-save in corso o in attesa
+        if (window.autoSaveMgr?.isSaving() || window.autoSaveMgr?.hasPending()) {
+            e.preventDefault();
+            e.returnValue = 'Salvataggio automatico in corso. Attendere qualche secondo prima di chiudere.';
+            return e.returnValue;
+        }
+        // Blocca chiusura solo se dirty E non connessi al Drive (nessun auto-save possibile)
+        if (CONFIG.isDirty && !libraryMgr?.currentFileId) {
             e.preventDefault();
             e.returnValue = 'Hai modifiche non salvate. Vuoi davvero uscire?';
         }

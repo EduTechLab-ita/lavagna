@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v9'; // v9 — fix toolbar/fullscreen/auto-open/sovrascrittura + pagine
+const CACHE_NAME = 'eduboard-v10'; // v10 — auto-save Drive in tempo reale con indicatore FAB + fix dirty check
 const urlsToCache = [
   './',
   './index.html',
