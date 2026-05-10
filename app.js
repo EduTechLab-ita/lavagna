@@ -1137,6 +1137,7 @@ class ToolbarManager {
         this.visible = true;
         this.wrapper.classList.add('visible');
         this.toggleBtn.querySelector('#toggle-arrow').style.transform = 'rotate(180deg)';
+        this._updateOptionsRow();
     }
 
     hide() {
@@ -1144,6 +1145,7 @@ class ToolbarManager {
         this.wrapper.classList.remove('visible');
         this.toggleBtn.querySelector('#toggle-arrow').style.transform = 'rotate(0deg)';
         this._closeAllPopups();
+        this.optionsRow.style.display = 'none'; // nasconde esplicitamente la riga opzioni
     }
 
     toggle() {

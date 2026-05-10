@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v7'; // v7 — sfondo bianco, A4 orientamento, colore pagina, menu icone, pagine multiple
+const CACHE_NAME = 'eduboard-v8'; // v8 — fix riga opzioni colori/dimensioni sempre visibile
 const urlsToCache = [
   './',
   './index.html',
