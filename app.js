@@ -2305,6 +2305,82 @@ class SelectManager {
                 );
             });
         });
+
+        // Specchia orizzontale
+        document.getElementById('ctx-flip-h')?.addEventListener('click', () => {
+            if (!this.selectedObject) return;
+            this.selectedObject.flipH = !this.selectedObject.flipH;
+            objectLayer.render();
+        });
+
+        // Specchia verticale
+        document.getElementById('ctx-flip-v')?.addEventListener('click', () => {
+            if (!this.selectedObject) return;
+            this.selectedObject.flipV = !this.selectedObject.flipV;
+            objectLayer.render();
+        });
+
+        // Ruota +90°
+        document.getElementById('ctx-rotate-90')?.addEventListener('click', () => {
+            if (!this.selectedObject) return;
+            this.selectedObject.rotation = ((this.selectedObject.rotation || 0) + 90) % 360;
+            objectLayer.render();
+            this._drawSelectionRect(this.selectedObject.x, this.selectedObject.y, this.selectedObject.w, this.selectedObject.h, true);
+        });
+
+        // Ruota 180°
+        document.getElementById('ctx-rotate-180')?.addEventListener('click', () => {
+            if (!this.selectedObject) return;
+            this.selectedObject.rotation = ((this.selectedObject.rotation || 0) + 180) % 360;
+            objectLayer.render();
+        });
+
+        // Ruota -90°
+        document.getElementById('ctx-rotate-ccw')?.addEventListener('click', () => {
+            if (!this.selectedObject) return;
+            this.selectedObject.rotation = ((this.selectedObject.rotation || 0) - 90 + 360) % 360;
+            objectLayer.render();
+        });
+
+        // Bordo — spessore
+        document.getElementById('ctx-border-width')?.addEventListener('input', (e) => {
+            if (!this.selectedObject) return;
+            this.selectedObject.borderWidth = parseInt(e.target.value);
+            const valEl = document.getElementById('ctx-border-width-val');
+            if (valEl) valEl.textContent = e.target.value + 'px';
+            objectLayer.render();
+        });
+
+        // Bordo — colore
+        document.getElementById('ctx-border-color')?.addEventListener('input', (e) => {
+            if (!this.selectedObject) return;
+            this.selectedObject.borderColor = e.target.value;
+            objectLayer.render();
+        });
+
+        // Opacità
+        document.getElementById('ctx-opacity')?.addEventListener('input', (e) => {
+            if (!this.selectedObject) return;
+            this.selectedObject.opacity = parseInt(e.target.value) / 100;
+            objectLayer.render();
+        });
+
+        // Larghezza
+        document.getElementById('ctx-width-input')?.addEventListener('change', (e) => {
+            const newW = parseInt(e.target.value);
+            if (!this.selectedObject || isNaN(newW) || newW < 10) return;
+            objectLayer.resizeObject(this.selectedObject.id, newW);
+            this._drawSelectionRect(this.selectedObject.x, this.selectedObject.y, this.selectedObject.w, this.selectedObject.h, true);
+        });
+
+        // Ripristina dimensione originale
+        document.getElementById('ctx-reset-size')?.addEventListener('click', () => {
+            if (!this.selectedObject) return;
+            objectLayer.resizeObject(this.selectedObject.id, this.selectedObject.originalW);
+            const wi = document.getElementById('ctx-width-input');
+            if (wi) wi.value = this.selectedObject.originalW;
+            this._drawSelectionRect(this.selectedObject.x, this.selectedObject.y, this.selectedObject.w, this.selectedObject.h, true);
+        });
     }
 
     _showContextPanel(obj) {
@@ -2315,10 +2391,11 @@ class SelectManager {
         const scale = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.scale : 1;
         const screenX = rect.left + obj.x * scale;
         const screenY = rect.top + obj.y * scale;
-        panel.style.left = Math.min(screenX + obj.w * scale + 8, window.innerWidth - 180) + 'px';
+        panel.style.left = Math.min(screenX + obj.w * scale + 8, window.innerWidth - 200) + 'px';
         panel.style.top  = Math.max(screenY, 60) + 'px';
         panel.style.display = 'flex';
-        // Aggiorna valori slider
+        panel.style.flexDirection = 'column';
+        // Aggiorna valori slider filtri
         const f = obj.filter || { brightness: 100, contrast: 100, saturation: 100 };
         const bInput = document.getElementById('ctx-brightness');
         const cInput = document.getElementById('ctx-contrast');
@@ -2326,6 +2403,22 @@ class SelectManager {
         if (bInput) bInput.value = f.brightness;
         if (cInput) cInput.value = f.contrast;
         if (sInput) sInput.value = f.saturation;
+        // Bordo
+        const bw = document.getElementById('ctx-border-width');
+        const bc = document.getElementById('ctx-border-color');
+        const bwVal = document.getElementById('ctx-border-width-val');
+        if (bw) bw.value = obj.borderWidth || 0;
+        if (bwVal) bwVal.textContent = (obj.borderWidth || 0) + 'px';
+        if (bc) bc.value = obj.borderColor || '#3b82f6';
+        // Opacità
+        const op = document.getElementById('ctx-opacity');
+        if (op) op.value = Math.round((obj.opacity !== undefined ? obj.opacity : 1) * 100);
+        // Larghezza
+        const wi = document.getElementById('ctx-width-input');
+        if (wi) wi.value = Math.round(obj.w);
+        // Mostra/nascondi pulsante download PDF
+        const dlBtn = document.getElementById('ctx-download-pdf');
+        if (dlBtn) dlBtn.style.display = (obj.type === 'pdf-page') ? 'flex' : 'none';
     }
 
     _hideContextPanel() {
@@ -2441,6 +2534,7 @@ class SelectManager {
         this.startX = x;
         this.startY = y;
         this._clearSelection();
+        if (typeof toast === 'function') toast('Trascina per selezionare — poi sposta, Canc per cancellare', 'info');
         return true;
     }
 
@@ -2517,6 +2611,7 @@ class SelectManager {
                 this.selection = { x: rx, y: ry, w: rw, h: rh };
                 this.phase     = 'selected';
                 this._drawSelectionRect(rx, ry, rw, rh);
+                if (typeof toast === 'function') toast('Area selezionata! Trascina per spostarla, Canc per eliminarla', 'success');
             } else {
                 this._clearSelection();
             }
@@ -2640,22 +2735,27 @@ class ObjectLayer {
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         for (const obj of this.objects) {
             ctx.save();
+            // Opacità
+            ctx.globalAlpha = obj.opacity !== undefined ? obj.opacity : 1;
             // Applica filtri CSS canvas
             if (obj.filter) {
-                ctx.filter = `brightness(${obj.filter.brightness}%) contrast(${obj.filter.contrast}%) saturate(${obj.filter.saturation}%)`;
+                ctx.filter = `brightness(${obj.filter.brightness || 100}%) contrast(${obj.filter.contrast || 100}%) saturate(${obj.filter.saturation || 100}%)`;
             } else {
                 ctx.filter = 'none';
             }
-            if (obj.rotation) {
-                const cx = obj.x + obj.w / 2;
-                const cy = obj.y + obj.h / 2;
-                ctx.translate(cx, cy);
-                ctx.rotate(obj.rotation * Math.PI / 180);
-                ctx.drawImage(obj.img, -obj.w / 2, -obj.h / 2, obj.w, obj.h);
-            } else {
-                ctx.drawImage(obj.img, obj.x, obj.y, obj.w, obj.h);
+            const cx = obj.x + obj.w / 2;
+            const cy = obj.y + obj.h / 2;
+            ctx.translate(cx, cy);
+            if (obj.rotation) ctx.rotate(obj.rotation * Math.PI / 180);
+            if (obj.flipH || obj.flipV) ctx.scale(obj.flipH ? -1 : 1, obj.flipV ? -1 : 1);
+            ctx.drawImage(obj.img, -obj.w / 2, -obj.h / 2, obj.w, obj.h);
+            // Bordo
+            if (obj.borderWidth > 0) {
+                ctx.filter = 'none';
+                ctx.strokeStyle = obj.borderColor || '#3b82f6';
+                ctx.lineWidth = obj.borderWidth;
+                ctx.strokeRect(-obj.w / 2, -obj.h / 2, obj.w, obj.h);
             }
-            ctx.filter = 'none';
             ctx.restore();
         }
     }
@@ -2880,52 +2980,58 @@ async function importImageFile(file, clientX, clientY) {
 }
 
 /**
- * Importa un PDF (prima pagina) come oggetto sul canvas tramite PDF.js.
+ * Importa un PDF (tutte le pagine) come oggetti sul canvas tramite PDF.js.
  * @param {File} file
  * @param {number} [clientX]
  * @param {number} [clientY]
  */
 async function importPdfFile(file, clientX, clientY) {
     if (typeof pdfjsLib === 'undefined') {
-        toast('PDF non supportato — converti in immagine (JPG/PNG)', 'error');
+        toast('PDF.js non disponibile — riprova tra un momento', 'error');
         return;
     }
+    toast('Conversione PDF in corso...', 'info');
     try {
-        toast('Caricamento PDF...', 'info');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 1.5 });
-        const tmp = document.createElement('canvas');
-        tmp.width = viewport.width;
-        tmp.height = viewport.height;
-        const tmpCtx = tmp.getContext('2d');
-        await page.render({ canvasContext: tmpCtx, viewport }).promise;
+        const numPages = pdf.numPages;
 
-        // Crea Image dal canvas PDF
-        const img = new Image();
-        await new Promise((resolve) => {
-            img.onload = resolve;
-            img.src = tmp.toDataURL();
-        });
+        // Scala: fattore per renderizzare a buona risoluzione (1.5 = 150% DPI)
+        const scale = 1.5;
 
-        let x, y;
-        if (clientX !== undefined && clientY !== undefined) {
-            const area = document.getElementById('canvas-area');
-            const rect = area.getBoundingClientRect();
-            const scale = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.scale : 1;
-            x = (clientX - rect.left) / scale - img.naturalWidth / 2;
-            y = (clientY - rect.top) / scale - img.naturalHeight / 2;
-        } else {
-            const center = getViewportCenter();
-            x = center.x - img.naturalWidth / 2;
-            y = center.y - img.naturalHeight / 2;
+        // Calcola posizione iniziale
+        const area = document.getElementById('canvas-area');
+        const rect = area.getBoundingClientRect();
+        const pScale = panMgr?.scale || 1;
+        let baseX = clientX !== undefined ? (clientX - rect.left) / pScale : 50;
+        let baseY = clientY !== undefined ? (clientY - rect.top) / pScale : 50;
+
+        // Renderizza tutte le pagine come immagini separate
+        for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const viewport = page.getViewport({ scale });
+
+            const tmpCanvas = document.createElement('canvas');
+            tmpCanvas.width  = viewport.width;
+            tmpCanvas.height = viewport.height;
+            const tmpCtx = tmpCanvas.getContext('2d');
+
+            await page.render({ canvasContext: tmpCtx, viewport }).promise;
+
+            // Converti in Image per ObjectLayer
+            const imgEl = new Image();
+            await new Promise(r => { imgEl.onload = r; imgEl.src = tmpCanvas.toDataURL('image/png'); });
+
+            // Aggiungi come oggetto (una pagina sotto l'altra, offset di 20px)
+            const offsetY = baseY + (pageNum - 1) * (viewport.height / scale + 20);
+            objectLayer.addObject('pdf-page', imgEl, Math.max(0, baseX), Math.max(0, offsetY), viewport.width / scale, viewport.height / scale);
         }
-        objectLayer.addObject('pdf-page', img, Math.max(0, x), Math.max(0, y),
-            img.naturalWidth, img.naturalHeight);
-        toast('PDF importato (pagina 1)! Usa Seleziona per spostarla.', 'success');
+
+        toast(`PDF importato! ${numPages} pagina${numPages > 1 ? 'e' : ''} — usa Seleziona per spostarle`, 'success');
     } catch (err) {
-        toast('Errore PDF: ' + err.message, 'error');
+        console.error('PDF import error:', err);
+        toast('Errore importazione PDF: ' + err.message, 'error');
     }
 }
 

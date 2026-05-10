@@ -36,16 +36,17 @@ class DriveManager {
     constructor() {
         // OAuth2 — stesso CLIENT_ID usato da CAArtella, ValPrimaria, ComportamentoScuola
         this.CLIENT_ID  = '374342529488-c123a5j5v8hnfs241udbl55fos5thfq6.apps.googleusercontent.com';
-        this.SCOPE      = 'https://www.googleapis.com/auth/drive.file email profile';
+        this.SCOPE      = 'https://www.googleapis.com/auth/drive email profile';
 
         // Token OAuth2 — letto da sessionStorage all'avvio
         this.accessToken = null;
         this.tokenExpiry = 0;
 
         // Stato connessione
-        this.connected   = false;
-        this.userEmail   = '';
-        this.userName    = '';   // nome visualizzato (da userinfo API)
+        this.connected    = false;
+        this.userEmail    = '';
+        this.userName     = '';   // nome visualizzato (da userinfo API)
+        this.userPhotoUrl = null; // URL foto profilo Google
 
         // ID cartelle Drive (cache in sessionStorage)
         this.rootFolderId    = null;   // "EduBoard"
@@ -80,10 +81,11 @@ class DriveManager {
                     this._saveSession();
 
                     try {
-                        // Recupera email utente
+                        // Recupera email utente + foto profilo
                         const info = await this._apiFetch('https://www.googleapis.com/oauth2/v2/userinfo');
-                        this.userEmail = info.email || '';
-                        this.userName  = info.given_name || info.name || '';
+                        this.userEmail    = info.email || '';
+                        this.userName     = info.given_name || info.name || '';
+                        this.userPhotoUrl = info.picture || null;
 
                         // Inizializza struttura cartelle
                         await this._ensureRootFolder();
@@ -185,6 +187,7 @@ class DriveManager {
                 tokenExpiry:     this.tokenExpiry,
                 userEmail:       this.userEmail,
                 userName:        this.userName,
+                userPhotoUrl:    this.userPhotoUrl,
                 rootFolderId:    this.rootFolderId,
                 lessonsFolderId: this.lessonsFolderId,
                 bgFolderId:      this.bgFolderId,
@@ -618,6 +621,9 @@ class LibraryManager {
         // Cartella correntemente selezionata per il salvataggio
         this.currentFolderId = null;
 
+        // FileId dell'ultima lezione aperta/salvata (per ripristino posizione)
+        this.currentFileId = null;
+
         // Stato cartelle espanse: sopravvive al refresh
         this._expandedFolders = new Set();
     }
@@ -847,8 +853,23 @@ class LibraryManager {
             document.getElementById('project-name').textContent = name;
 
             toast('Lezione "' + name + '" caricata!', 'success');
+            // Memorizza fileId corrente per ripristino posizione
+            this.currentFileId = fileId;
             // Memorizza come ultima lezione aperta per auto-open al prossimo avvio
             localStorage.setItem('eduboard_last_lesson', JSON.stringify({ fileId, fileName }));
+            // Ripristina posizione (pan+zoom) salvata con la lezione
+            const savedPos = localStorage.getItem('eduboard_view_' + fileId);
+            if (savedPos) {
+                try {
+                    const pos = JSON.parse(savedPos);
+                    if (typeof panMgr !== 'undefined' && panMgr && pos.dx !== undefined) {
+                        panMgr.dx = pos.dx;
+                        panMgr.dy = pos.dy;
+                        panMgr.scale = pos.scale || 1;
+                        panMgr._applyTransform();
+                    }
+                } catch (_) {}
+            }
             this.close();
         } catch (err) {
             toast('Errore apertura lezione: ' + err.message, 'error');
@@ -872,6 +893,15 @@ class LibraryManager {
         try {
             toast('Salvataggio in corso...', 'info');
 
+            // Salva posizione (pan+zoom) associata a questa lezione (se abbiamo un fileId corrente)
+            if (typeof panMgr !== 'undefined' && panMgr && this.currentFileId) {
+                localStorage.setItem('eduboard_view_' + this.currentFileId, JSON.stringify({
+                    dx: panMgr.dx,
+                    dy: panMgr.dy,
+                    scale: panMgr.scale
+                }));
+            }
+
             // Raccoglie dati sfondo
             let bgImageBase64 = '';
             if (bgMgr.uploadedImage) {
@@ -883,13 +913,26 @@ class LibraryManager {
                 bgImageBase64 = tmp.toDataURL('image/jpeg', 0.85);
             }
 
-            await this.drive.saveLesson({
+            const savedFileId = await this.drive.saveLesson({
                 name:           name.trim(),
                 folderId:       targetFolder,
                 drawingDataURL: canvasMgr.getDataURL(),
                 bgKey:          bgMgr.currentBg,
                 bgImageBase64
             });
+
+            // Traccia fileId corrente e salva posizione associata al nuovo fileId
+            if (savedFileId) {
+                this.currentFileId = savedFileId;
+                if (typeof panMgr !== 'undefined' && panMgr) {
+                    localStorage.setItem('eduboard_view_' + savedFileId, JSON.stringify({
+                        dx: panMgr.dx,
+                        dy: panMgr.dy,
+                        scale: panMgr.scale
+                    }));
+                }
+                localStorage.setItem('eduboard_last_lesson', JSON.stringify({ fileId: savedFileId, fileName: name.trim() + '.json' }));
+            }
 
             CONFIG.projectName = name.trim();
             document.getElementById('project-name').textContent = name.trim();

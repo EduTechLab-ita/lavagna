@@ -43,13 +43,13 @@
                 </svg>
                 <span id="fullscreen-label">Espandi</span>
             </button>
-            <!-- Connessione Drive -->
-            <button class="hdr-btn" id="btn-drive" title="Connetti a Google Drive">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <!-- Stato Drive testuale -->
+            <div id="drive-status-header" class="drive-status-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" id="drive-status-icon" style="display:none">
                     <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
                 </svg>
-                <span>Drive</span>
-            </button>
+                <span id="drive-status-text">Non connesso</span>
+            </div>
             <button class="hdr-btn hdr-btn--primary" id="btn-save" title="Salva la lavagna nel browser (localmente). Se Drive è connesso, salva anche sul tuo Google Drive.">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                 <span>Salva</span>
@@ -420,17 +420,50 @@
 
     <!-- Pannello contestuale oggetti selezionati -->
     <div id="object-context-panel" style="display:none" class="object-ctx-panel">
-        <button class="ctx-btn" id="ctx-bring-front" title="Porta in primo piano">&#11014; In primo piano</button>
-        <button class="ctx-btn" id="ctx-send-back" title="Manda indietro">&#11015; Manda indietro</button>
+        <!-- Azioni rapide -->
+        <div class="ctx-row">
+            <button class="ctx-btn" id="ctx-bring-front" title="Porta in primo piano">⬆ Primo piano</button>
+            <button class="ctx-btn" id="ctx-send-back" title="Manda indietro">⬇ Indietro</button>
+        </div>
         <div class="ctx-divider"></div>
-        <label class="ctx-label">Luminosita'</label>
-        <input type="range" id="ctx-brightness" min="50" max="200" value="100" class="ctx-slider">
-        <label class="ctx-label">Contrasto</label>
-        <input type="range" id="ctx-contrast" min="50" max="200" value="100" class="ctx-slider">
-        <label class="ctx-label">Saturazione</label>
-        <input type="range" id="ctx-saturation" min="0" max="200" value="100" class="ctx-slider">
+        <!-- Trasformazioni -->
+        <div class="ctx-row">
+            <button class="ctx-btn" id="ctx-flip-h" title="Specchia orizzontale">↔ Specchia H</button>
+            <button class="ctx-btn" id="ctx-flip-v" title="Specchia verticale">↕ Specchia V</button>
+        </div>
+        <div class="ctx-row">
+            <button class="ctx-btn" id="ctx-rotate-90" title="Ruota 90° senso orario">↻ +90°</button>
+            <button class="ctx-btn" id="ctx-rotate-180" title="Ruota 180°">↻ 180°</button>
+            <button class="ctx-btn" id="ctx-rotate-ccw" title="Ruota 90° antiorario">↺ -90°</button>
+        </div>
         <div class="ctx-divider"></div>
-        <button class="ctx-btn ctx-btn--danger" id="ctx-delete" title="Elimina oggetto">&#128465; Elimina</button>
+        <!-- Colori bordo -->
+        <div class="ctx-label">Bordo oggetto</div>
+        <div class="ctx-row">
+            <input type="color" id="ctx-border-color" value="#3b82f6" class="ctx-color-input" title="Colore bordo">
+            <input type="range" id="ctx-border-width" min="0" max="20" value="0" class="ctx-slider" title="Spessore bordo">
+            <span id="ctx-border-width-val" style="font-size:0.72rem;color:#94a3b8;min-width:20px">0px</span>
+        </div>
+        <div class="ctx-divider"></div>
+        <!-- Filtri immagine -->
+        <div class="ctx-label">Luminosità</div>
+        <input type="range" id="ctx-brightness" min="10" max="300" value="100" class="ctx-slider">
+        <div class="ctx-label">Contrasto</div>
+        <input type="range" id="ctx-contrast" min="10" max="300" value="100" class="ctx-slider">
+        <div class="ctx-label">Saturazione</div>
+        <input type="range" id="ctx-saturation" min="0" max="300" value="100" class="ctx-slider">
+        <div class="ctx-label">Opacità</div>
+        <input type="range" id="ctx-opacity" min="10" max="100" value="100" class="ctx-slider">
+        <div class="ctx-divider"></div>
+        <!-- Dimensione -->
+        <div class="ctx-label">Larghezza (px)</div>
+        <div class="ctx-row">
+            <input type="number" id="ctx-width-input" min="10" max="5000" class="ctx-number-input" placeholder="px">
+            <button class="ctx-btn ctx-btn--small" id="ctx-reset-size" title="Ripristina dimensione originale">↺ Originale</button>
+        </div>
+        <div class="ctx-divider"></div>
+        <button class="ctx-btn" id="ctx-download-pdf" style="display:none" title="Scarica il PDF originale da Drive">⬇ Scarica PDF</button>
+        <button class="ctx-btn ctx-btn--danger" id="ctx-delete" title="Elimina oggetto">🗑 Elimina</button>
     </div>
 
     <!-- Modal: salva prima di continuare -->
@@ -445,6 +478,22 @@
       </div>
     </div>
 
+    <!-- FAB Drive — basso destra -->
+    <div id="drive-fab" class="drive-fab" title="Connetti / disconnetti Google Drive">
+        <!-- Stato: non connesso — mostra silhouette omino -->
+        <div id="drive-fab-inner" class="drive-fab-inner">
+            <svg id="drive-fab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="28" height="28">
+                <circle cx="12" cy="8" r="4"/>
+                <path d="M6 20c0-3.314 2.686-6 6-6s6 2.686 6 6"/>
+            </svg>
+            <img id="drive-fab-photo" src="" alt="" style="display:none; width:36px; height:36px; border-radius:50%; object-fit:cover;">
+        </div>
+        <!-- Badge connessione verde -->
+        <div id="drive-fab-badge" class="drive-fab-badge" style="display:none"></div>
+    </div>
+
+    <!-- PDF.js per importazione PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="app.js"></script>
 
     <!-- Google Identity Services — necessario per OAuth2 Drive -->

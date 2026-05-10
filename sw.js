@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v4'; // v4 — riscrittura completa EduBoard v2
+const CACHE_NAME = 'eduboard-v5'; // v5 — scope drive, PDF.js, menu esteso, canvas bg
 const urlsToCache = [
   './',
   './index.html',
