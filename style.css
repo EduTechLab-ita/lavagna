@@ -1587,6 +1587,74 @@ body.fullscreen-mode #canvas-area {
 .dirty-btn--cancel { color: rgba(255,255,255,0.45); }
 
 
+/* ===== MODAL — Selezione pagine stampa ===== */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+.modal-box {
+    background: var(--bg-elevated, #334155);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 16px;
+    padding: 28px 32px;
+    min-width: 320px;
+    max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.modal-box h3 {
+    margin: 0 0 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text, #f1f5f9);
+}
+.print-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text, #f1f5f9);
+}
+.print-option input[type="radio"] { cursor: pointer; }
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: flex-end;
+}
+.btn-primary {
+    padding: 9px 20px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent, #3b82f6);
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.btn-primary:hover { background: #2563eb; }
+.btn-secondary {
+    padding: 9px 20px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: transparent;
+    color: var(--text-muted, #94a3b8);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.btn-secondary:hover { background: rgba(255,255,255,0.08); }
+
+
 /* ===== Sfondi da Drive ===== */
 .bg-drive-grid {
     display: flex;

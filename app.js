@@ -3678,7 +3678,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2. Pulsanti header
     document.getElementById('btn-save').addEventListener('click',   () => projectMgr.save());
-    document.getElementById('btn-export').addEventListener('click', () => _printBoard());
+    document.getElementById('btn-export').addEventListener('click', () => handlePrint());
     document.getElementById('btn-new').addEventListener('click',    () => projectMgr.newBoard());
 
     // 3. Avviso modifiche non salvate alla chiusura finestra/tab
@@ -3710,31 +3710,185 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // =============================================================================
 // SEZIONE 14 — STAMPA PDF
-// Apre finestra di stampa con l'intera lavagna (come OneNote)
+// Apre finestra di stampa con l'intera lavagna (come OneNote).
+// v15: supporto multi-pagina con selezione pagine + footer pubblicitario.
 // =============================================================================
 
-function _printBoard() {
-    // Componi bg + draw in un canvas temporaneo
-    const tmp    = document.createElement('canvas');
-    tmp.width    = canvasMgr.canvas.width;
-    tmp.height   = canvasMgr.canvas.height;
-    const ctx    = tmp.getContext('2d');
-    const bgCvs  = document.getElementById('bg-canvas');
-    if (bgCvs) ctx.drawImage(bgCvs, 0, 0);
-    ctx.drawImage(canvasMgr.canvas, 0, 0);
-    const dataURL = tmp.toDataURL('image/png');
+function handlePrint() {
+    // Se c'è solo 1 pagina (o niente pageManager), stampa direttamente
+    if (!window.pageManager || window.pageManager.pages.length <= 1) {
+        _doPrint([0]);
+        return;
+    }
+
+    // Mostra modal selezione pagine
+    const modal = document.getElementById('print-modal');
+    document.getElementById('print-current-num').textContent = window.pageManager.currentIndex + 1;
+    document.getElementById('print-total-num').textContent   = window.pageManager.pages.length;
+    modal.style.display = 'flex';
+
+    // Gestisci conferma
+    document.getElementById('print-confirm-btn').onclick = () => {
+        modal.style.display = 'none';
+        const range = document.querySelector('input[name="print-range"]:checked').value;
+        let pagesToPrint = [];
+
+        if (range === 'current') {
+            pagesToPrint = [window.pageManager.currentIndex];
+        } else if (range === 'all') {
+            pagesToPrint = Array.from({ length: window.pageManager.pages.length }, (_, i) => i);
+        } else {
+            const input = document.getElementById('print-range-input').value;
+            pagesToPrint = parsePageRange(input, window.pageManager.pages.length);
+            if (pagesToPrint.length === 0) {
+                toast('Nessuna pagina valida selezionata.', 'error');
+                return;
+            }
+        }
+
+        if (pagesToPrint.length > 0) _doPrint(pagesToPrint);
+    };
+
+    document.getElementById('print-cancel-btn').onclick = () => {
+        modal.style.display = 'none';
+    };
+}
+
+function parsePageRange(input, totalPages) {
+    const pages = new Set();
+    const parts = input.split(',');
+    parts.forEach(part => {
+        part = part.trim();
+        if (part.includes('-')) {
+            const [start, end] = part.split('-').map(n => parseInt(n.trim()) - 1);
+            for (let i = start; i <= Math.min(end, totalPages - 1); i++) {
+                if (i >= 0) pages.add(i);
+            }
+        } else {
+            const n = parseInt(part) - 1;
+            if (n >= 0 && n < totalPages) pages.add(n);
+        }
+    });
+    return [...pages].sort((a, b) => a - b);
+}
+
+function _buildPageDataURL(pageIndex) {
+    // Componi bg + draw + objects per la pagina indicata
+    const pm = window.pageManager;
+
+    // Accedi ai dati della pagina (già catturati dal PageManager)
+    const pageData = pm ? pm.pages[pageIndex] : null;
+
+    // Dimensioni del canvas principale
+    const W = canvasMgr.canvas.width;
+    const H = canvasMgr.canvas.height;
+
+    const tmp = document.createElement('canvas');
+    tmp.width  = W;
+    tmp.height = H;
+    const ctx  = tmp.getContext('2d');
+
+    if (pageIndex === (pm ? pm.currentIndex : 0)) {
+        // Pagina corrente: usa i canvas live
+        const bgCvs = document.getElementById('bg-canvas');
+        if (bgCvs) ctx.drawImage(bgCvs, 0, 0);
+        ctx.drawImage(canvasMgr.canvas, 0, 0);
+        // Disegna anche gli oggetti (objects-canvas)
+        const objCvs = document.getElementById('objects-canvas');
+        if (objCvs) ctx.drawImage(objCvs, 0, 0);
+    } else if (pageData) {
+        // Altra pagina: ricostruiamo da drawImageData (il bg non è salvato come canvas,
+        // ma come tipo/colore — lo ricostruiamo con sfondo bianco come fallback)
+        ctx.fillStyle = pageData.background ? (pageData.background.color || '#ffffff') : '#ffffff';
+        ctx.fillRect(0, 0, W, H);
+        if (pageData.drawImageData) {
+            // Disegno asincrono: la funzione ritorna una Promise
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0);
+                    resolve(tmp.toDataURL('image/png'));
+                };
+                img.onerror = () => resolve(tmp.toDataURL('image/png'));
+                img.src = pageData.drawImageData;
+            });
+        }
+    } else {
+        // Nessun dato: pagina bianca
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, W, H);
+    }
+
+    return Promise.resolve(tmp.toDataURL('image/png'));
+}
+
+async function _doPrint(pageIndices) {
+    // Salva la pagina corrente prima di raccogliere i dataURL
+    if (window.pageManager) {
+        window.pageManager.pages[window.pageManager.currentIndex] =
+            window.pageManager._captureCurrentPage();
+    }
+
+    // Raccoglie dataURL per tutte le pagine richieste
+    const dataURLs = await Promise.all(pageIndices.map(i => _buildPageDataURL(i)));
 
     const win = window.open('', '_blank');
     if (!win) { toast('Popup bloccato — abilita i popup per stampare.', 'error'); return; }
+
+    const totalStampa  = pageIndices.length;
+    const showPageNums = totalStampa > 1;
+    const footerText   = 'EduBoard \u00A9 EduTechLab di Rizzotto Fabio \u2014 edutechlab-ita.github.io/lavagna';
+
+    // Costruisci pagine HTML
+    const pagesHTML = dataURLs.map((url, idx) => {
+        const pageLabel = showPageNums ? `Pagina ${idx + 1} di ${totalStampa}` : '';
+        return `
+<div class="print-page">
+    <img src="${url}" class="board-img">
+    <div class="page-footer">
+        <span class="footer-pub">${footerText}</span>
+        ${showPageNums ? `<span class="footer-pagenum">${pageLabel}</span>` : ''}
+    </div>
+</div>`;
+    }).join('');
+
     win.document.write(`<!DOCTYPE html><html><head><title>EduBoard \u2014 Stampa</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh}
-img{max-width:100%;max-height:100vh;object-fit:contain}
-@media print{body{margin:0}img{width:100%;height:100vh;object-fit:contain;page-break-after:avoid}}
+body{background:#fff}
+.print-page{
+    position:relative;
+    width:100%;
+    height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    page-break-after:always;
+}
+.print-page:last-child{page-break-after:avoid}
+.board-img{max-width:100%;max-height:calc(100vh - 28px);object-fit:contain}
+.page-footer{
+    position:absolute;
+    bottom:6mm;
+    left:10mm;
+    right:10mm;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    font-size:7pt;
+    color:#94a3b8;
+    font-family:Arial,sans-serif;
+}
+.footer-pub{flex:1;text-align:center}
+.footer-pagenum{flex-shrink:0;margin-left:8px;white-space:nowrap}
+@media print{
+    body{margin:0}
+    .print-page{height:100vh}
+    .board-img{width:100%;height:calc(100vh - 28px);object-fit:contain}
+}
 </style></head><body>
-<img src="${dataURL}">
-<script>window.onload=function(){window.print();setTimeout(function(){window.close();},1000)}<\/script>
+${pagesHTML}
+<script>window.onload=function(){window.print();setTimeout(function(){window.close();},1500)}<\/script>
 </body></html>`);
     win.document.close();
 }

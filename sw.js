@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v14'; // v14 — fix race condition pagine multiple al caricamento (lesson.drawing ignorato se pages[] presente)
+const CACHE_NAME = 'eduboard-v15'; // v15 — stampa multi-pagina con selezione pagine + footer pubblicitario
 const urlsToCache = [
   './',
   './index.html',
