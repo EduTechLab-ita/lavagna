@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v11'; // v11 — fix dirty check cambio lezione + reset isDirty asincrono
+const CACHE_NAME = 'eduboard-v12'; // v12 — salvataggio pre-cambio lezione, badge autosave, libreria evidenzia lezione, drag selezione con preview
 const urlsToCache = [
   './',
   './index.html',

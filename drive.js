@@ -773,11 +773,60 @@ class LibraryManager {
             if (!this.treeEl.hasChildNodes()) {
                 this.treeEl.innerHTML = '<div class="tree-empty">Nessuna lezione salvata.</div>';
             }
-            // Ripristina posizione scroll
-            this.treeEl.scrollTop = savedScroll;
+            // Evidenzia la lezione corrente (se esiste) e apri le cartelle genitrici.
+            // Il delay serve per attendere l'espansione asincrona delle cartelle aperte
+            // (le cartelle in _expandedFolders si espandono con expandFolder() non-awaited).
+            if (this.currentFileId) {
+                setTimeout(() => this._highlightCurrentLesson(), 600);
+            } else {
+                this.treeEl.scrollTop = savedScroll;
+            }
         } catch (err) {
             this.treeEl.innerHTML = `<div class="tree-empty tree-error">Errore: ${err.message}</div>`;
         }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // EVIDENZIA LEZIONE CORRENTE
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Dopo il render dell'albero, cerca il file con currentFileId,
+     * lo evidenzia con la classe lesson-item--active, espande le cartelle
+     * genitrici e fa scroll fino all'elemento.
+     */
+    _highlightCurrentLesson() {
+        if (!this.currentFileId) return;
+        const panel = this.treeEl;
+        if (!panel) return;
+        // Rimuovi eventuali highlight precedenti
+        panel.querySelectorAll('.lesson-item--active').forEach(el => el.classList.remove('lesson-item--active'));
+        // Cerca l'elemento con data-file-id corrispondente
+        const items = panel.querySelectorAll('[data-file-id]');
+        items.forEach(item => {
+            if (item.dataset.fileId === this.currentFileId) {
+                item.classList.add('lesson-item--active');
+                // Apri tutti i folder genitori fino alla radice del tree
+                let parent = item.parentElement;
+                while (parent && parent !== panel) {
+                    if (parent.classList.contains('tree-subtree')) {
+                        parent.style.display = 'block';
+                        parent.dataset.loaded = parent.dataset.loaded || 'true';
+                        // Aggiorna icona del folder genitore (la riga item precedente al subContainer)
+                        const folderItem = parent.previousElementSibling;
+                        if (folderItem && folderItem.classList.contains('tree-item')) {
+                            const iconEl = folderItem.querySelector('.tree-icon');
+                            if (iconEl) iconEl.textContent = '📂';
+                            // Recupera folderId dall'event listener non è possibile direttamente;
+                            // usiamo il dataset se disponibile
+                        }
+                    }
+                    parent = parent.parentElement;
+                }
+                // Scroll verso l'elemento
+                setTimeout(() => item.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 150);
+            }
+        });
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -869,6 +918,7 @@ class LibraryManager {
         for (const file of files) {
             const name = file.name.replace(/\.json$/, '');
             const item = this._createTreeItem('lesson', '📄', name, indent + 16);
+            item.dataset.fileId = file.id; // necessario per _highlightCurrentLesson()
             container.appendChild(item);
 
             // Click su file: apre la lezione
@@ -920,12 +970,26 @@ class LibraryManager {
             return;
         }
 
+        // BUG 1 FIX: Se dirty E c'è un file Drive aperto → salva sempre prima di cambiare lezione,
+        // indipendentemente dallo stato del timer debounce (già scaduto o ancora pending).
+        if (typeof CONFIG !== 'undefined' && CONFIG.isDirty && this.currentFileId) {
+            // Cancella timer pending se esiste (evita doppio salvataggio)
+            if (window.autoSaveMgr?._timer) {
+                clearTimeout(window.autoSaveMgr._timer);
+                window.autoSaveMgr._timer = null;
+            }
+            try {
+                await this.overwriteCurrentLesson(false); // false = mostra toast
+            } catch(e) {
+                console.warn('Salvataggio pre-cambio lezione fallito:', e);
+            }
+        }
+
         // Mostra dialog salvataggio SOLO se:
-        // - c'è un auto-save pending (flush immediato), OPPURE
+        // - c'è un auto-save pending senza currentFileId (flush immediato), OPPURE
         // - isDirty=true E non c'è currentFileId (nessun auto-save attivo, salvataggio manuale)
-        // Se c'è un currentFileId attivo, l'auto-save ha già salvato tutto → procedi senza chiedere
         const hasPendingAutoSave = window.autoSaveMgr?.hasPending();
-        if (hasPendingAutoSave) {
+        if (hasPendingAutoSave && !this.currentFileId) {
             // Flush immediato prima di procedere
             clearTimeout(window.autoSaveMgr._timer);
             window.autoSaveMgr._timer = null;

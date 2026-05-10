@@ -2946,18 +2946,39 @@ class SelectManager {
             const newY = this.dragData.selY + dy;
             const { w, h } = this.selection;
 
-            // Preview su overlay
+            // Preview su overlay: contenuto + rettangolo tratteggiato
+            // NOTA: non chiamare _drawSelectionRect() separatamente perché fa clearRect()
+            // e cancellerebbe il contenuto appena disegnato.
             const oc  = document.getElementById('overlay-canvas');
             const ctx = oc.getContext('2d');
             ctx.clearRect(0, 0, oc.width, oc.height);
 
+            // 1. Disegna il contenuto nella nuova posizione
             const tmp = document.createElement('canvas');
             tmp.width  = w;
             tmp.height = h;
             tmp.getContext('2d').putImageData(this.dragData.imgData, 0, 0);
             ctx.drawImage(tmp, newX, newY);
 
-            this._drawSelectionRect(newX, newY, w, h);
+            // 2. Disegna il rettangolo tratteggiato sopra il contenuto (senza clearRect)
+            ctx.save();
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth   = 1.5;
+            ctx.setLineDash([6, 3]);
+            ctx.strokeRect(newX, newY, w, h);
+            // Handle angoli
+            const handleR = 5;
+            ctx.fillStyle   = 'white';
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth   = 2;
+            ctx.setLineDash([]);
+            [[newX, newY], [newX + w, newY], [newX, newY + h], [newX + w, newY + h]].forEach(([hx, hy]) => {
+                ctx.beginPath();
+                ctx.arc(hx, hy, handleR, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            });
+            ctx.restore();
             return true;
         }
 

@@ -2004,3 +2004,11 @@ body.has-page-bar #zoom-indicator {
     flex-shrink: 0;
     stroke: #86efac;
 }
+
+/* ===== LIBRERIA — lezione corrente evidenziata ===== */
+.lesson-item--active {
+    background: rgba(59, 130, 246, 0.15) !important;
+    border-left: 3px solid #3b82f6;
+    color: var(--accent) !important;
+    font-weight: 600;
+}
