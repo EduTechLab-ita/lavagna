@@ -43,7 +43,11 @@ html {
 
 body {
     font-family: 'Inter', sans-serif;
-    background: var(--bg-app);
+    background-color: #f8fafc !important;
+    background-image:
+        linear-gradient(rgba(148,163,184,0.25) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148,163,184,0.25) 1px, transparent 1px) !important;
+    background-size: 24px 24px !important;
     color: var(--text);
     display: flex;
     flex-direction: column;
@@ -174,12 +178,7 @@ button {
     /* Il transform CSS (pan+zoom) viene applicato qui da JS */
     will-change: transform;
     transform-origin: 0 0;
-    /* Pattern quadretti visibile oltre i bordi del canvas */
-    background-color: #f8fafc;
-    background-image:
-        linear-gradient(rgba(148,163,184,0.3) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(148,163,184,0.3) 1px, transparent 1px);
-    background-size: 20px 20px;
+    /* Lo sfondo (pattern quadretti) è ora sul body per effetto infinito */
 }
 
 /* I canvas sovrapposti */

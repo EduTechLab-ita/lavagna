@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v5'; // v5 — scope drive, PDF.js, menu esteso, canvas bg
+const CACHE_NAME = 'eduboard-v6'; // v6 — fix selezione pixel, sfondo infinito, resize handles, scarica PDF
 const urlsToCache = [
   './',
   './index.html',

@@ -863,10 +863,14 @@ class LibraryManager {
                 try {
                     const pos = JSON.parse(savedPos);
                     if (typeof panMgr !== 'undefined' && panMgr && pos.dx !== undefined) {
-                        panMgr.dx = pos.dx;
-                        panMgr.dy = pos.dy;
-                        panMgr.scale = pos.scale || 1;
-                        panMgr._applyTransform();
+                        // Piccolo delay per assicurarsi che il canvas sia renderizzato
+                        // e che eventuali centerView() successivi non sovrascrivano
+                        setTimeout(() => {
+                            panMgr.dx = pos.dx;
+                            panMgr.dy = pos.dy;
+                            panMgr.scale = pos.scale || 1;
+                            panMgr._applyTransform();
+                        }, 100);
                     }
                 } catch (_) {}
             }

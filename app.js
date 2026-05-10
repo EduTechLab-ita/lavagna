@@ -2242,7 +2242,7 @@ class SelectManager {
         this.active     = false;   // strumento attivo
         this.selection  = null;    // { x, y, w, h } rettangolo selezionato
         this.dragData   = null;    // { startX, startY, imgData, selX, selY }
-        this.phase      = 'idle'; // 'idle' | 'selecting' | 'selected' | 'dragging' | 'object-selected' | 'object-dragging'
+        this.phase      = 'idle'; // 'idle' | 'selecting' | 'selected' | 'dragging' | 'object-selected' | 'object-dragging' | 'object-resizing'
         this.startX     = 0;
         this.startY     = 0;
         this.selectedObject = null; // oggetto ObjectLayer selezionato
@@ -2381,6 +2381,26 @@ class SelectManager {
             if (wi) wi.value = this.selectedObject.originalW;
             this._drawSelectionRect(this.selectedObject.x, this.selectedObject.y, this.selectedObject.w, this.selectedObject.h, true);
         });
+
+        // Scarica immagine/pagina PDF come file PNG
+        document.getElementById('ctx-download-pdf')?.addEventListener('click', async () => {
+            if (!this.selectedObject) return;
+            const obj = this.selectedObject;
+            const tmpCanvas = document.createElement('canvas');
+            tmpCanvas.width  = obj.originalW || obj.w;
+            tmpCanvas.height = obj.originalH || obj.h;
+            tmpCanvas.getContext('2d').drawImage(obj.img, 0, 0, tmpCanvas.width, tmpCanvas.height);
+            tmpCanvas.toBlob(blob => {
+                if (!blob) { toast('Errore nel download', 'error'); return; }
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = obj.type === 'pdf-page' ? 'pagina-pdf.png' : 'immagine.png';
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                toast('Download avviato!', 'success');
+            }, 'image/png');
+        });
     }
 
     _showContextPanel(obj) {
@@ -2436,7 +2456,7 @@ class SelectManager {
     }
 
     // Disegna il rettangolo di selezione tratteggiato sull'overlay
-    // isObject=true → colore blu acceso per oggetti ObjectLayer
+    // isObject=true → colore blu acceso per oggetti ObjectLayer + handle resize più grandi
     _drawSelectionRect(x, y, w, h, isObject = false) {
         const oc  = document.getElementById('overlay-canvas');
         const ctx = oc.getContext('2d');
@@ -2446,15 +2466,17 @@ class SelectManager {
         ctx.lineWidth   = isObject ? 2 : 1.5;
         ctx.setLineDash([6, 3]);
         ctx.strokeRect(x, y, w, h);
-        // Handle angoli
+        // Handle angoli — più grandi per oggetti (facilitano il resize su LIM)
+        const handleR = isObject ? 6 : 5;
         ctx.fillStyle   = 'white';
-        ctx.strokeStyle = isObject ? '#22d3ee' : '#3b82f6';
-        ctx.lineWidth   = 1;
+        ctx.strokeStyle = isObject ? '#3b82f6' : '#3b82f6';
+        ctx.lineWidth   = 2;
         ctx.setLineDash([]);
         [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(([hx, hy]) => {
             ctx.beginPath();
-            ctx.arc(hx, hy, 5, 0, Math.PI * 2);
+            ctx.arc(hx, hy, handleR, 0, Math.PI * 2);
             ctx.fill();
+            ctx.strokeStyle = isObject ? '#3b82f6' : '#3b82f6';
             ctx.stroke();
         });
         ctx.restore();
@@ -2478,6 +2500,30 @@ class SelectManager {
 
     onPointerDown(x, y) {
         if (!this.active) return false;
+
+        // 0. Se c'è un oggetto selezionato, controlla handle resize
+        if (this.phase === 'object-selected' && this.selectedObject) {
+            const obj = this.selectedObject;
+            const handles = [
+                { corner: 'tl', hx: obj.x,       hy: obj.y },
+                { corner: 'tr', hx: obj.x + obj.w, hy: obj.y },
+                { corner: 'bl', hx: obj.x,       hy: obj.y + obj.h },
+                { corner: 'br', hx: obj.x + obj.w, hy: obj.y + obj.h },
+            ];
+            const HIT_RADIUS = 12; // px leggermente più grande dei cerchi visibili (6px) per facilità su LIM
+            for (const h of handles) {
+                if (Math.abs(x - h.hx) < HIT_RADIUS && Math.abs(y - h.hy) < HIT_RADIUS) {
+                    this.phase = 'object-resizing';
+                    this._resizeHandle = {
+                        corner: h.corner,
+                        startX: x, startY: y,
+                        origX: obj.x, origY: obj.y,
+                        origW: obj.w, origH: obj.h,
+                    };
+                    return true;
+                }
+            }
+        }
 
         // 1. Hit test su ObjectLayer (priorità su selezione pixel)
         if (typeof objectLayer !== 'undefined' && objectLayer) {
@@ -2530,16 +2576,70 @@ class SelectManager {
         }
 
         // Nuova selezione rettangolare
+        this._clearPixelSelection(); // solo pulizia visuale, NON resetta phase
         this.phase  = 'selecting';
         this.startX = x;
         this.startY = y;
-        this._clearSelection();
         if (typeof toast === 'function') toast('Trascina per selezionare — poi sposta, Canc per cancellare', 'info');
         return true;
     }
 
     onPointerMove(x, y) {
         if (!this.active) return false;
+
+        // Resize oggetto ObjectLayer (drag handle angolo)
+        if (this.phase === 'object-resizing' && this._resizeHandle && this.selectedObject) {
+            const obj = this.selectedObject;
+            const rh = this._resizeHandle;
+            const ratio = rh.origH / rh.origW; // mantieni proporzioni
+
+            let newW = rh.origW, newX = rh.origX, newY = rh.origY;
+
+            if (rh.corner === 'br') {
+                newW = Math.max(20, rh.origW + (x - rh.startX));
+            } else if (rh.corner === 'bl') {
+                newW = Math.max(20, rh.origW - (x - rh.startX));
+                newX = rh.origX + rh.origW - newW;
+            } else if (rh.corner === 'tr') {
+                newW = Math.max(20, rh.origW + (x - rh.startX));
+                newY = rh.origY + rh.origH - newW * ratio;
+            } else { // tl
+                newW = Math.max(20, rh.origW - (x - rh.startX));
+                newX = rh.origX + rh.origW - newW;
+                newY = rh.origY + rh.origH - newW * ratio;
+            }
+
+            obj.x = newX;
+            obj.y = newY;
+            obj.w = newW;
+            obj.h = newW * ratio;
+            objectLayer.render();
+            this._drawSelectionRect(obj.x, obj.y, obj.w, obj.h, true);
+            return true;
+        }
+
+        // Cursore: cambia quando si passa vicino a un handle (phase object-selected)
+        if (this.phase === 'object-selected' && this.selectedObject) {
+            const obj = this.selectedObject;
+            const HIT_RADIUS = 12;
+            const handles = [
+                { corner: 'tl', hx: obj.x,       hy: obj.y },
+                { corner: 'tr', hx: obj.x + obj.w, hy: obj.y },
+                { corner: 'bl', hx: obj.x,       hy: obj.y + obj.h },
+                { corner: 'br', hx: obj.x + obj.w, hy: obj.y + obj.h },
+            ];
+            const oc = document.getElementById('overlay-canvas');
+            let onHandle = false;
+            for (const h of handles) {
+                if (Math.abs(x - h.hx) < HIT_RADIUS && Math.abs(y - h.hy) < HIT_RADIUS) {
+                    const diagCursors = { tl: 'nwse-resize', br: 'nwse-resize', tr: 'nesw-resize', bl: 'nesw-resize' };
+                    if (oc) oc.style.cursor = diagCursors[h.corner];
+                    onHandle = true;
+                    break;
+                }
+            }
+            if (!onHandle && oc) oc.style.cursor = 'move';
+        }
 
         // Drag oggetto ObjectLayer
         if (this.phase === 'object-dragging' && this._objDragStart && this.selectedObject) {
@@ -2591,6 +2691,19 @@ class SelectManager {
 
     onPointerUp(x, y) {
         if (!this.active) return false;
+
+        // Fine resize oggetto ObjectLayer
+        if (this.phase === 'object-resizing') {
+            this.phase = 'object-selected';
+            this._resizeHandle = null;
+            // Aggiorna il campo larghezza nel pannello
+            const wi = document.getElementById('ctx-width-input');
+            if (wi && this.selectedObject) wi.value = Math.round(this.selectedObject.w);
+            // Ripristina cursore
+            const oc = document.getElementById('overlay-canvas');
+            if (oc) oc.style.cursor = 'crosshair';
+            return true;
+        }
 
         // Fine drag oggetto ObjectLayer
         if (this.phase === 'object-dragging' && this.selectedObject) {
@@ -3071,6 +3184,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 3. Avviso modifiche non salvate alla chiusura finestra/tab
     window.addEventListener('beforeunload', (e) => {
+        // Salva posizione corrente prima di chiudere
+        if (typeof panMgr !== 'undefined' && panMgr && typeof libraryMgr !== 'undefined' && libraryMgr?.currentFileId) {
+            localStorage.setItem('eduboard_view_' + libraryMgr.currentFileId, JSON.stringify({
+                dx: panMgr.dx,
+                dy: panMgr.dy,
+                scale: panMgr.scale
+            }));
+        }
         if (CONFIG.isDirty) {
             e.preventDefault();
             e.returnValue = 'Hai modifiche non salvate. Vuoi davvero uscire?';
