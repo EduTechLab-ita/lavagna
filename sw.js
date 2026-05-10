@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v6'; // v6 — fix selezione pixel, sfondo infinito, resize handles, scarica PDF
+const CACHE_NAME = 'eduboard-v7'; // v7 — sfondo bianco, A4 orientamento, colore pagina, menu icone, pagine multiple
 const urlsToCache = [
   './',
   './index.html',

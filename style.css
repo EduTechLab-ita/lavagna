@@ -43,11 +43,7 @@ html {
 
 body {
     font-family: 'Inter', sans-serif;
-    background-color: #f8fafc !important;
-    background-image:
-        linear-gradient(rgba(148,163,184,0.25) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(148,163,184,0.25) 1px, transparent 1px) !important;
-    background-size: 24px 24px !important;
+    background-color: #f8fafc;
     color: var(--text);
     display: flex;
     flex-direction: column;
@@ -682,6 +678,46 @@ button {
 /* --------------------------------------------------------------------------
    Popup selezione sfondo (#bg-popup)
    -------------------------------------------------------------------------- */
+
+/* Riga orientamento + colore pagina */
+.bg-orient-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+.bg-orient-btn {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-elevated);
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    font-family: inherit;
+}
+.bg-orient-btn:hover { background: var(--bg-elevated); color: var(--text); }
+.bg-orient-btn.active { background: rgba(59,130,246,0.2); color: var(--accent); border-color: var(--accent); }
+.bg-color-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    margin-left: auto;
+}
+.bg-color-label input[type="color"] {
+    width: 28px;
+    height: 24px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0;
+    cursor: pointer;
+}
+
 .bg-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -1570,21 +1606,89 @@ body.fullscreen-mode #canvas-area {
 }
 
 /* ==========================================================================
-   PANNELLO CONTESTUALE OGGETTI (ObjectLayer)
+   PANNELLO CONTESTUALE OGGETTI (compatto con icone)
    ========================================================================== */
-.object-ctx-panel {
+.ctx-panel {
     position: fixed;
-    background: var(--bg-surface, #1e293b);
-    border: 1px solid var(--border, rgba(148,163,184,0.12));
-    border-radius: 10px;
-    padding: 10px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
     z-index: 500;
-    min-width: 160px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+    overflow: visible;
 }
+.ctx-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 5px 6px;
+    flex-wrap: wrap;
+}
+.ctx-icon-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+    color: #475569;
+    flex-shrink: 0;
+    padding: 0;
+    font-family: inherit;
+}
+.ctx-icon-btn:hover { background: #e0f2fe; color: #0369a1; }
+.ctx-icon-btn--danger:hover { background: #fee2e2; color: #dc2626; }
+.ctx-sep {
+    width: 1px;
+    height: 20px;
+    background: #e2e8f0;
+    margin: 0 2px;
+    flex-shrink: 0;
+}
+.ctx-pixel-only { display: none; }
+.ctx-popup {
+    padding: 8px 10px;
+    border-top: 1px solid #e2e8f0;
+    min-width: 180px;
+    background: #ffffff;
+    border-radius: 0 0 8px 8px;
+}
+.ctx-popup label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    color: #475569;
+    white-space: nowrap;
+}
+.ctx-popup input[type="range"] {
+    flex: 1;
+    accent-color: #3b82f6;
+    min-width: 80px;
+}
+.ctx-popup input[type="color"] {
+    width: 28px;
+    height: 24px;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 0;
+    cursor: pointer;
+}
+.ctx-popup input[type="number"] {
+    width: 70px;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 3px 5px;
+    font-size: 0.82rem;
+    color: #1e293b;
+}
+
+/* Mantieni retrocompatibilità per ctx-btn usati altrove */
 .ctx-btn {
     background: var(--bg-elevated, #334155);
     border: none;
@@ -1637,6 +1741,62 @@ body.fullscreen-mode #canvas-area {
 .ctx-divider {
     border-top: 1px solid var(--border, rgba(148,163,184,0.12));
     margin: 2px 0;
+}
+
+/* ==========================================================================
+   BARRA PAGINE (#page-bar)
+   ========================================================================== */
+#page-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 12px;
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+    z-index: 190;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+#page-bar::-webkit-scrollbar { height: 4px; }
+#page-bar::-webkit-scrollbar-track { background: transparent; }
+#page-bar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.page-btn {
+    min-width: 28px;
+    height: 28px;
+    border: 1px solid rgba(148,163,184,0.3);
+    border-radius: 6px;
+    background: rgba(30,41,59,0.8);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    color: #94a3b8;
+    padding: 0 6px;
+    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    font-family: inherit;
+}
+.page-btn:hover { background: rgba(51,65,85,0.9); color: #e2e8f0; }
+.page-btn--active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.page-btn--add { border-style: dashed; color: var(--accent); font-size: 16px; font-weight: 700; }
+.page-btn--add:hover { background: rgba(59,130,246,0.15); }
+
+/* Sposta la toolbar-wrapper in alto di 38px quando la page-bar è visibile */
+body.has-page-bar #toolbar-wrapper {
+    bottom: 38px;
+}
+/* Sposta il FAB drive un po' più in alto */
+body.has-page-bar .drive-fab {
+    bottom: 62px;
+}
+/* Sposta l'indicatore zoom */
+body.has-page-bar #zoom-indicator {
+    bottom: 108px;
 }
 
 /* Indicatore zoom — mostra il livello di zoom corrente */

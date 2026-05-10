@@ -92,6 +92,8 @@ class BackgroundManager {
         this.ctx = this.canvas.getContext('2d');
         this.currentBg = 'white';
         this.uploadedImage = null; // HTMLImageElement se caricata foto
+        this.orientation = 'landscape'; // 'landscape' | 'portrait'
+        this.bgColor = '#ffffff';       // colore pagina (bianco di default)
     }
 
     resize(w, h) {
@@ -100,104 +102,159 @@ class BackgroundManager {
         this.render();
     }
 
+    // Restituisce dimensioni del "foglio A4" in pixel, centrato sul canvas
+    _getPageRect(W, H) {
+        // A4: 297x210mm landscape, 210x297mm portrait
+        // Usiamo il 90% dell'area disponibile come riferimento
+        let ratio = this.orientation === 'portrait' ? (210 / 297) : (297 / 210);
+        let pw, ph;
+        if (this.orientation === 'landscape') {
+            // Larghezza = 90% di W, altezza proporzionale
+            pw = W * 0.9;
+            ph = pw / ratio;
+            if (ph > H * 0.9) { ph = H * 0.9; pw = ph * ratio; }
+        } else {
+            // Altezza = 90% di H, larghezza proporzionale
+            ph = H * 0.9;
+            pw = ph * ratio;
+            if (pw > W * 0.9) { pw = W * 0.9; ph = pw / ratio; }
+        }
+        const px = (W - pw) / 2;
+        const py = (H - ph) / 2;
+        return { px, py, pw, ph };
+    }
+
     render() {
         const ctx = this.ctx;
         const W = this.canvas.width;
         const H = this.canvas.height;
 
-        // Sfondo bianco base sempre presente
-        ctx.fillStyle = '#ffffff';
+        // Area esterna al foglio: grigio chiarissimo
+        ctx.fillStyle = '#f8fafc';
         ctx.fillRect(0, 0, W, H);
 
         if (this.uploadedImage) {
-            // Cover: scala per coprire tutto mantenendo proporzioni
+            // Disegna il foglio con ombra e l'immagine come cover
+            const { px, py, pw, ph } = this._getPageRect(W, H);
+            ctx.save();
+            ctx.shadowColor = 'rgba(0,0,0,0.18)';
+            ctx.shadowBlur = 18;
+            ctx.shadowOffsetX = 3;
+            ctx.shadowOffsetY = 3;
+            ctx.fillStyle = this.bgColor;
+            ctx.fillRect(px, py, pw, ph);
+            ctx.restore();
+
             const img = this.uploadedImage;
-            const scaleX = W / img.width;
-            const scaleY = H / img.height;
+            const scaleX = pw / img.width;
+            const scaleY = ph / img.height;
             const scale = Math.max(scaleX, scaleY);
             const w = img.width * scale;
             const h = img.height * scale;
-            const x = (W - w) / 2;
-            const y = (H - h) / 2;
+            const x = px + (pw - w) / 2;
+            const y = py + (ph - h) / 2;
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(px, py, pw, ph);
+            ctx.clip();
             ctx.globalAlpha = 0.9;
             ctx.drawImage(img, x, y, w, h);
             ctx.globalAlpha = 1;
+            ctx.restore();
             return;
         }
 
-        // Sfondi predefiniti
+        // Disegna il foglio A4 centrato con ombra
+        const { px, py, pw, ph } = this._getPageRect(W, H);
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.18)';
+        ctx.shadowBlur = 18;
+        ctx.shadowOffsetX = 3;
+        ctx.shadowOffsetY = 3;
+        ctx.fillStyle = this.bgColor;
+        ctx.fillRect(px, py, pw, ph);
+        ctx.restore();
+
+        // Sfondi predefiniti disegnati dentro il foglio
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(px, py, pw, ph);
+        ctx.clip();
+
         ctx.strokeStyle = '#94a3b8'; // slate-400 — visibile ma non invadente
         ctx.lineWidth = 1;
 
         switch (this.currentBg) {
             case 'lines-8': // 8mm ≈ 30px a 96dpi
-                this._drawLines(ctx, W, H, 30);
+                this._drawLines(ctx, px, py, pw, ph, 30);
                 break;
             case 'lines-5': // 5mm ≈ 19px
-                this._drawLines(ctx, W, H, 19);
+                this._drawLines(ctx, px, py, pw, ph, 19);
                 break;
             case 'lines-3': // 3mm ≈ 11px
-                this._drawLines(ctx, W, H, 11);
+                this._drawLines(ctx, px, py, pw, ph, 11);
                 break;
             case 'grid-10': // quadretti 10mm ≈ 38px
-                this._drawGrid(ctx, W, H, 38);
+                this._drawGrid(ctx, px, py, pw, ph, 38);
                 break;
             case 'grid-5': // quadretti 5mm ≈ 19px
-                this._drawGrid(ctx, W, H, 19);
+                this._drawGrid(ctx, px, py, pw, ph, 19);
                 break;
             case 'dots':
-                this._drawDots(ctx, W, H, 20);
+                this._drawDots(ctx, px, py, pw, ph, 20);
                 break;
             case 'staff': // pentagramma musicale
-                this._drawStaff(ctx, W, H);
+                this._drawStaff(ctx, px, py, pw, ph);
                 break;
             // Feature 4 — Righe Primaria
             case 'lines-15-aux': // 1a elementare — 3 zone grande-piccola-grande
-                this._drawLinesThreeZone(ctx, W, H, 36, 20); // 36px grande, 20px piccola (x-height)
+                this._drawLinesThreeZone(ctx, px, py, pw, ph, 36, 20);
                 break;
             case 'lines-12-aux': // 2a elementare — 12mm con righino
-                this._drawLinesWithAux(ctx, W, H, 48, 24);
+                this._drawLinesWithAux(ctx, px, py, pw, ph, 48, 24);
                 break;
             case 'lines-9': // 3a elementare — 9mm
-                this._drawLines(ctx, W, H, 36);
+                this._drawLines(ctx, px, py, pw, ph, 36);
                 break;
             case 'lines-7': // 4a elementare — 7mm
-                this._drawLines(ctx, W, H, 28);
+                this._drawLines(ctx, px, py, pw, ph, 28);
                 break;
             // 'white': solo bianco (già fatto sopra)
         }
+
+        ctx.restore(); // chiude il clip del foglio
     }
 
-    _drawLines(ctx, W, H, spacing) {
-        for (let y = spacing; y < H; y += spacing) {
+    _drawLines(ctx, px, py, pw, ph, spacing) {
+        for (let y = py + spacing; y < py + ph; y += spacing) {
             ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(W, y);
+            ctx.moveTo(px, y);
+            ctx.lineTo(px + pw, y);
             ctx.stroke();
         }
     }
 
-    _drawGrid(ctx, W, H, spacing) {
+    _drawGrid(ctx, px, py, pw, ph, spacing) {
         ctx.strokeStyle = '#dbeafe'; // più leggero per le colonne
-        for (let x = spacing; x < W; x += spacing) {
+        for (let x = px + spacing; x < px + pw; x += spacing) {
             ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, H);
+            ctx.moveTo(x, py);
+            ctx.lineTo(x, py + ph);
             ctx.stroke();
         }
         ctx.strokeStyle = '#bfdbfe';
-        for (let y = spacing; y < H; y += spacing) {
+        for (let y = py + spacing; y < py + ph; y += spacing) {
             ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(W, y);
+            ctx.moveTo(px, y);
+            ctx.lineTo(px + pw, y);
             ctx.stroke();
         }
     }
 
-    _drawDots(ctx, W, H, spacing) {
+    _drawDots(ctx, px, py, pw, ph, spacing) {
         ctx.fillStyle = '#94a3b8';
-        for (let x = spacing; x < W; x += spacing) {
-            for (let y = spacing; y < H; y += spacing) {
+        for (let x = px + spacing; x < px + pw; x += spacing) {
+            for (let y = py + spacing; y < py + ph; y += spacing) {
                 ctx.beginPath();
                 ctx.arc(x, y, 1.5, 0, Math.PI * 2);
                 ctx.fill();
@@ -205,16 +262,16 @@ class BackgroundManager {
         }
     }
 
-    _drawStaff(ctx, W, H) {
+    _drawStaff(ctx, px, py, pw, ph) {
         // Gruppi da 5 righe con spazio più grande tra i gruppi
         const lineSpacing = 12;  // tra le righe del pentagramma
         const groupSpacing = 60; // tra un pentagramma e il successivo
-        let y = groupSpacing;
-        while (y + lineSpacing * 4 < H) {
+        let y = py + groupSpacing;
+        while (y + lineSpacing * 4 < py + ph) {
             for (let i = 0; i < 5; i++) {
                 ctx.beginPath();
-                ctx.moveTo(0, y + i * lineSpacing);
-                ctx.lineTo(W, y + i * lineSpacing);
+                ctx.moveTo(px, y + i * lineSpacing);
+                ctx.lineTo(px + pw, y + i * lineSpacing);
                 ctx.stroke();
             }
             y += lineSpacing * 4 + groupSpacing;
@@ -222,51 +279,51 @@ class BackgroundManager {
     }
 
     // Feature 4a: righino ausiliario per 2a elementare (2 zone)
-    _drawLinesWithAux(ctx, W, H, spacing, auxOffset) {
+    _drawLinesWithAux(ctx, px, py, pw, ph, spacing, auxOffset) {
         // Riga principale blu
         ctx.strokeStyle = '#60a5fa';
         ctx.lineWidth = 1.2;
-        for (let y = spacing; y < H; y += spacing) {
-            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+        for (let y = py + spacing; y < py + ph; y += spacing) {
+            ctx.beginPath(); ctx.moveTo(px, y); ctx.lineTo(px + pw, y); ctx.stroke();
         }
         // Righino ausiliario rosso
         ctx.strokeStyle = '#f87171';
         ctx.lineWidth = 0.9;
-        for (let y = spacing; y < H; y += spacing) {
+        for (let y = py + spacing; y < py + ph; y += spacing) {
             const auxY = y - spacing + auxOffset;
-            if (auxY > 0) {
-                ctx.beginPath(); ctx.moveTo(0, auxY); ctx.lineTo(W, auxY); ctx.stroke();
+            if (auxY > py) {
+                ctx.beginPath(); ctx.moveTo(px, auxY); ctx.lineTo(px + pw, auxY); ctx.stroke();
             }
         }
         // Margine sinistro rosso
         ctx.strokeStyle = '#f87171';
         ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(60, 0); ctx.lineTo(60, H); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(px + 60, py); ctx.lineTo(px + 60, py + ph); ctx.stroke();
     }
 
     // Feature 4b: righe a 3 zone per 1a elementare (grande-piccola-grande)
-    _drawLinesThreeZone(ctx, W, H, large, small) {
+    _drawLinesThreeZone(ctx, px, py, pw, ph, large, small) {
         const period = large + small + large;
-        for (let y = large; y < H; y += period) {
+        for (let y = py + large; y < py + ph; y += period) {
             // Rigo superiore (leggero, grigio-blu) — tetto lettere alte
             ctx.strokeStyle = '#93c5fd';
             ctx.lineWidth = 0.8;
-            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(px, y); ctx.lineTo(px + pw, y); ctx.stroke();
             // Rigo x-height (rosso) — tetto lettere piccole, dove si scrive
             const xhY = y + large;
             ctx.strokeStyle = '#f87171';
             ctx.lineWidth = 1.0;
-            ctx.beginPath(); ctx.moveTo(0, xhY); ctx.lineTo(W, xhY); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(px, xhY); ctx.lineTo(px + pw, xhY); ctx.stroke();
             // Baseline (blu, più spessa) — riga di base
             const baseY = y + large + small;
             ctx.strokeStyle = '#60a5fa';
             ctx.lineWidth = 1.4;
-            ctx.beginPath(); ctx.moveTo(0, baseY); ctx.lineTo(W, baseY); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(px, baseY); ctx.lineTo(px + pw, baseY); ctx.stroke();
         }
         // Margine sinistro rosso
         ctx.strokeStyle = '#f87171';
         ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(60, 0); ctx.lineTo(60, H); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(px + 60, py); ctx.lineTo(px + 60, py + ph); ctx.stroke();
     }
 
     setBackground(bgKey) {
@@ -279,6 +336,23 @@ class BackgroundManager {
     setImage(imgElement) {
         this.uploadedImage = imgElement;
         this.currentBg = 'image';
+        this.render();
+    }
+
+    // Alias per compatibilità con PageManager e drive.js
+    get currentType() { return this.currentBg; }
+    set currentType(v) { this.currentBg = v; }
+
+    // Alias di render() usato da PageManager
+    draw() { this.render(); }
+
+    setOrientation(orientation) {
+        this.orientation = orientation;
+        this.render();
+    }
+
+    setBgColor(color) {
+        this.bgColor = color;
         this.render();
     }
 }
@@ -1322,6 +1396,23 @@ class ToolbarManager {
     }
 
     _setupBgPanel() {
+        // Orientamento A4
+        document.getElementById('bg-orient-landscape')?.addEventListener('click', () => {
+            bgMgr.setOrientation('landscape');
+            document.getElementById('bg-orient-landscape')?.classList.add('active');
+            document.getElementById('bg-orient-portrait')?.classList.remove('active');
+        });
+        document.getElementById('bg-orient-portrait')?.addEventListener('click', () => {
+            bgMgr.setOrientation('portrait');
+            document.getElementById('bg-orient-portrait')?.classList.add('active');
+            document.getElementById('bg-orient-landscape')?.classList.remove('active');
+        });
+
+        // Colore pagina
+        document.getElementById('bg-page-color')?.addEventListener('input', (e) => {
+            bgMgr.setBgColor(e.target.value);
+        });
+
         document.querySelectorAll('.bg-opt').forEach(btn => {
             btn.addEventListener('click', () => {
                 bgMgr.setBackground(btn.dataset.bg);
@@ -2269,176 +2360,290 @@ class SelectManager {
         const panel = document.getElementById('object-context-panel');
         if (!panel) return;
 
-        document.getElementById('ctx-bring-front')?.addEventListener('click', () => {
-            if (this.selectedObject) {
-                objectLayer.bringToFront(this.selectedObject.id);
-                this._updateSelectionOverlay();
-            }
-        });
-        document.getElementById('ctx-send-back')?.addEventListener('click', () => {
-            if (this.selectedObject) {
-                objectLayer.sendToBack(this.selectedObject.id);
-                this._updateSelectionOverlay();
-            }
-        });
-        document.getElementById('ctx-delete')?.addEventListener('click', () => {
-            if (this.selectedObject) {
-                objectLayer.removeObject(this.selectedObject.id);
-                this.selectedObject = null;
-                this._clearSelection();
-                this._hideContextPanel();
-            }
-        });
+        // Clipboard interna per copia/incolla selezione pixel
+        this._pixelClipboard = null;
 
-        const bInput = document.getElementById('ctx-brightness');
-        const cInput = document.getElementById('ctx-contrast');
-        const sInput = document.getElementById('ctx-saturation');
-        [bInput, cInput, sInput].forEach(input => {
-            if (!input) return;
-            input.addEventListener('input', () => {
-                if (!this.selectedObject) return;
-                objectLayer.updateFilter(
-                    this.selectedObject.id,
-                    parseInt(bInput?.value || 100),
-                    parseInt(cInput?.value || 100),
-                    parseInt(sInput?.value || 100)
-                );
+        // Chiudi popup quando si clicca fuori dal pannello
+        document.addEventListener('pointerdown', (e) => {
+            const popup = document.getElementById('ctx-popup');
+            if (!popup) return;
+            if (!panel.contains(e.target)) {
+                popup.style.display = 'none';
+            }
+        }, true);
+
+        // Event delegation sulla toolbar icone
+        const toolbar = panel.querySelector('.ctx-toolbar');
+        if (toolbar) {
+            toolbar.addEventListener('click', (e) => {
+                const btn = e.target.closest('.ctx-icon-btn');
+                if (!btn) return;
+                const action = btn.dataset.action;
+                this._handleCtxAction(action, btn);
             });
-        });
-
-        // Specchia orizzontale
-        document.getElementById('ctx-flip-h')?.addEventListener('click', () => {
-            if (!this.selectedObject) return;
-            this.selectedObject.flipH = !this.selectedObject.flipH;
-            objectLayer.render();
-        });
-
-        // Specchia verticale
-        document.getElementById('ctx-flip-v')?.addEventListener('click', () => {
-            if (!this.selectedObject) return;
-            this.selectedObject.flipV = !this.selectedObject.flipV;
-            objectLayer.render();
-        });
-
-        // Ruota +90°
-        document.getElementById('ctx-rotate-90')?.addEventListener('click', () => {
-            if (!this.selectedObject) return;
-            this.selectedObject.rotation = ((this.selectedObject.rotation || 0) + 90) % 360;
-            objectLayer.render();
-            this._drawSelectionRect(this.selectedObject.x, this.selectedObject.y, this.selectedObject.w, this.selectedObject.h, true);
-        });
-
-        // Ruota 180°
-        document.getElementById('ctx-rotate-180')?.addEventListener('click', () => {
-            if (!this.selectedObject) return;
-            this.selectedObject.rotation = ((this.selectedObject.rotation || 0) + 180) % 360;
-            objectLayer.render();
-        });
-
-        // Ruota -90°
-        document.getElementById('ctx-rotate-ccw')?.addEventListener('click', () => {
-            if (!this.selectedObject) return;
-            this.selectedObject.rotation = ((this.selectedObject.rotation || 0) - 90 + 360) % 360;
-            objectLayer.render();
-        });
-
-        // Bordo — spessore
-        document.getElementById('ctx-border-width')?.addEventListener('input', (e) => {
-            if (!this.selectedObject) return;
-            this.selectedObject.borderWidth = parseInt(e.target.value);
-            const valEl = document.getElementById('ctx-border-width-val');
-            if (valEl) valEl.textContent = e.target.value + 'px';
-            objectLayer.render();
-        });
-
-        // Bordo — colore
-        document.getElementById('ctx-border-color')?.addEventListener('input', (e) => {
-            if (!this.selectedObject) return;
-            this.selectedObject.borderColor = e.target.value;
-            objectLayer.render();
-        });
-
-        // Opacità
-        document.getElementById('ctx-opacity')?.addEventListener('input', (e) => {
-            if (!this.selectedObject) return;
-            this.selectedObject.opacity = parseInt(e.target.value) / 100;
-            objectLayer.render();
-        });
-
-        // Larghezza
-        document.getElementById('ctx-width-input')?.addEventListener('change', (e) => {
-            const newW = parseInt(e.target.value);
-            if (!this.selectedObject || isNaN(newW) || newW < 10) return;
-            objectLayer.resizeObject(this.selectedObject.id, newW);
-            this._drawSelectionRect(this.selectedObject.x, this.selectedObject.y, this.selectedObject.w, this.selectedObject.h, true);
-        });
-
-        // Ripristina dimensione originale
-        document.getElementById('ctx-reset-size')?.addEventListener('click', () => {
-            if (!this.selectedObject) return;
-            objectLayer.resizeObject(this.selectedObject.id, this.selectedObject.originalW);
-            const wi = document.getElementById('ctx-width-input');
-            if (wi) wi.value = this.selectedObject.originalW;
-            this._drawSelectionRect(this.selectedObject.x, this.selectedObject.y, this.selectedObject.w, this.selectedObject.h, true);
-        });
-
-        // Scarica immagine/pagina PDF come file PNG
-        document.getElementById('ctx-download-pdf')?.addEventListener('click', async () => {
-            if (!this.selectedObject) return;
-            const obj = this.selectedObject;
-            const tmpCanvas = document.createElement('canvas');
-            tmpCanvas.width  = obj.originalW || obj.w;
-            tmpCanvas.height = obj.originalH || obj.h;
-            tmpCanvas.getContext('2d').drawImage(obj.img, 0, 0, tmpCanvas.width, tmpCanvas.height);
-            tmpCanvas.toBlob(blob => {
-                if (!blob) { toast('Errore nel download', 'error'); return; }
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = obj.type === 'pdf-page' ? 'pagina-pdf.png' : 'immagine.png';
-                a.click();
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-                toast('Download avviato!', 'success');
-            }, 'image/png');
-        });
+        }
     }
 
-    _showContextPanel(obj) {
+    _handleCtxAction(action, btn) {
+        const popup = document.getElementById('ctx-popup');
+        const obj = this.selectedObject;
+
+        // Chiudi popup corrente se clicco su pulsante diverso
+        if (popup) {
+            const currentAction = popup.dataset.action;
+            if (currentAction === action && popup.style.display !== 'none') {
+                popup.style.display = 'none';
+                popup.dataset.action = '';
+                return;
+            }
+            popup.style.display = 'none';
+            popup.dataset.action = '';
+        }
+
+        // Azioni immediate (non aprono popup)
+        switch (action) {
+            case 'bring-front':
+                if (obj) { objectLayer.bringToFront(obj.id); this._updateSelectionOverlay(); }
+                return;
+            case 'send-back':
+                if (obj) { objectLayer.sendToBack(obj.id); this._updateSelectionOverlay(); }
+                return;
+            case 'flip-h':
+                if (obj) { obj.flipH = !obj.flipH; objectLayer.render(); }
+                return;
+            case 'flip-v':
+                if (obj) { obj.flipV = !obj.flipV; objectLayer.render(); }
+                return;
+            case 'rot-cw':
+                if (obj) { obj.rotation = ((obj.rotation || 0) + 90) % 360; objectLayer.render(); this._drawSelectionRect(obj.x, obj.y, obj.w, obj.h, true); }
+                return;
+            case 'rot-ccw':
+                if (obj) { obj.rotation = ((obj.rotation || 0) - 90 + 360) % 360; objectLayer.render(); this._drawSelectionRect(obj.x, obj.y, obj.w, obj.h, true); }
+                return;
+            case 'rot-180':
+                if (obj) { obj.rotation = ((obj.rotation || 0) + 180) % 360; objectLayer.render(); }
+                return;
+            case 'restore':
+                if (obj) { objectLayer.resizeObject(obj.id, obj.originalW); this._drawSelectionRect(obj.x, obj.y, obj.w, obj.h, true); }
+                return;
+            case 'download':
+                if (obj) {
+                    const tmpCanvas = document.createElement('canvas');
+                    tmpCanvas.width  = obj.originalW || obj.w;
+                    tmpCanvas.height = obj.originalH || obj.h;
+                    tmpCanvas.getContext('2d').drawImage(obj.img, 0, 0, tmpCanvas.width, tmpCanvas.height);
+                    tmpCanvas.toBlob(blob => {
+                        if (!blob) { toast('Errore nel download', 'error'); return; }
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = obj.type === 'pdf-page' ? 'pagina-pdf.png' : 'immagine.png';
+                        a.click();
+                        setTimeout(() => URL.revokeObjectURL(url), 1000);
+                        toast('Download avviato!', 'success');
+                    }, 'image/png');
+                }
+                return;
+            case 'delete':
+                if (obj) {
+                    objectLayer.removeObject(obj.id);
+                    this.selectedObject = null;
+                    this._clearSelection();
+                    this._hideContextPanel();
+                } else if (this.phase === 'selected' && this.selection) {
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+                    const { x, y, w, h } = this.selection;
+                    this.ctx.save();
+                    this.ctx.globalCompositeOperation = 'destination-out';
+                    this.ctx.fillStyle = 'rgba(255,255,255,1)';
+                    this.ctx.fillRect(x, y, w, h);
+                    this.ctx.restore();
+                    this._clearSelection();
+                }
+                return;
+            case 'copy':
+                if (this.phase === 'selected' && this.selection) {
+                    const { x, y, w, h } = this.selection;
+                    this._pixelClipboard = { data: this.ctx.getImageData(x, y, w, h), w, h };
+                    toast('Area copiata!', 'success');
+                }
+                return;
+            case 'paste':
+                if (this._pixelClipboard) {
+                    const center = typeof getViewportCenter !== 'undefined' ? getViewportCenter() : { x: 100, y: 100 };
+                    const px = Math.round(center.x - this._pixelClipboard.w / 2);
+                    const py = Math.round(center.y - this._pixelClipboard.h / 2);
+                    this.ctx.putImageData(this._pixelClipboard.data, px, py);
+                    toast('Incollato!', 'success');
+                }
+                return;
+        }
+
+        // Azioni con popup
+        if (!popup) return;
+        popup.dataset.action = action;
+
+        switch (action) {
+            case 'opacity': {
+                const val = obj ? Math.round((obj.opacity !== undefined ? obj.opacity : 1) * 100) : 100;
+                popup.innerHTML = `<label>Opacit&agrave; <input type="range" min="10" max="100" step="5" value="${val}"> <span>${val}%</span></label>`;
+                popup.style.display = 'block';
+                const inp = popup.querySelector('input');
+                const sp = popup.querySelector('span');
+                inp.addEventListener('input', () => {
+                    sp.textContent = inp.value + '%';
+                    const el = document.getElementById('ctx-opacity');
+                    if (el) el.value = inp.value;
+                    if (obj) { obj.opacity = parseInt(inp.value) / 100; objectLayer.render(); }
+                });
+                break;
+            }
+            case 'brightness': {
+                const f = obj?.filter || {};
+                const val = f.brightness !== undefined ? f.brightness : 100;
+                popup.innerHTML = `<label>Luminosit&agrave; <input type="range" min="10" max="300" step="10" value="${val}"> <span>${val}%</span></label>`;
+                popup.style.display = 'block';
+                const inp = popup.querySelector('input');
+                const sp = popup.querySelector('span');
+                const bEl = document.getElementById('ctx-brightness');
+                const cEl = document.getElementById('ctx-contrast');
+                const sEl = document.getElementById('ctx-saturation');
+                inp.addEventListener('input', () => {
+                    sp.textContent = inp.value + '%';
+                    if (bEl) bEl.value = inp.value;
+                    if (obj) objectLayer.updateFilter(obj.id, parseInt(inp.value), parseInt(cEl?.value || 100), parseInt(sEl?.value || 100));
+                });
+                break;
+            }
+            case 'contrast': {
+                const f = obj?.filter || {};
+                const val = f.contrast !== undefined ? f.contrast : 100;
+                popup.innerHTML = `<label>Contrasto <input type="range" min="10" max="300" step="10" value="${val}"> <span>${val}%</span></label>`;
+                popup.style.display = 'block';
+                const inp = popup.querySelector('input');
+                const sp = popup.querySelector('span');
+                const bEl = document.getElementById('ctx-brightness');
+                const cEl = document.getElementById('ctx-contrast');
+                const sEl = document.getElementById('ctx-saturation');
+                inp.addEventListener('input', () => {
+                    sp.textContent = inp.value + '%';
+                    if (cEl) cEl.value = inp.value;
+                    if (obj) objectLayer.updateFilter(obj.id, parseInt(bEl?.value || 100), parseInt(inp.value), parseInt(sEl?.value || 100));
+                });
+                break;
+            }
+            case 'saturation': {
+                const f = obj?.filter || {};
+                const val = f.saturation !== undefined ? f.saturation : 100;
+                popup.innerHTML = `<label>Saturazione <input type="range" min="0" max="300" step="10" value="${val}"> <span>${val}%</span></label>`;
+                popup.style.display = 'block';
+                const inp = popup.querySelector('input');
+                const sp = popup.querySelector('span');
+                const bEl = document.getElementById('ctx-brightness');
+                const cEl = document.getElementById('ctx-contrast');
+                const sEl = document.getElementById('ctx-saturation');
+                inp.addEventListener('input', () => {
+                    sp.textContent = inp.value + '%';
+                    if (sEl) sEl.value = inp.value;
+                    if (obj) objectLayer.updateFilter(obj.id, parseInt(bEl?.value || 100), parseInt(cEl?.value || 100), parseInt(inp.value));
+                });
+                break;
+            }
+            case 'border-color': {
+                const bw = obj?.borderWidth || 0;
+                const bc = obj?.borderColor || '#000000';
+                popup.innerHTML = `<label>Bordo <input type="color" value="${bc}"> <input type="range" min="0" max="20" value="${bw}" style="flex:1"> <span>${bw}px</span></label>`;
+                popup.style.display = 'block';
+                const [colorInp, widthInp] = popup.querySelectorAll('input');
+                const sp = popup.querySelector('span');
+                colorInp.addEventListener('input', () => {
+                    const bcEl = document.getElementById('ctx-border-color');
+                    if (bcEl) bcEl.value = colorInp.value;
+                    if (obj) { obj.borderColor = colorInp.value; objectLayer.render(); }
+                });
+                widthInp.addEventListener('input', () => {
+                    sp.textContent = widthInp.value + 'px';
+                    const bwEl = document.getElementById('ctx-border-width');
+                    if (bwEl) bwEl.value = widthInp.value;
+                    if (obj) { obj.borderWidth = parseInt(widthInp.value); objectLayer.render(); }
+                });
+                break;
+            }
+            case 'width': {
+                const w = obj ? Math.round(obj.w) : 200;
+                popup.innerHTML = `<label>Larghezza <input type="number" min="50" max="3000" value="${w}" style="width:70px"> px</label>`;
+                popup.style.display = 'block';
+                const inp = popup.querySelector('input');
+                inp.addEventListener('change', () => {
+                    const newW = parseInt(inp.value);
+                    if (!obj || isNaN(newW) || newW < 50) return;
+                    const wiEl = document.getElementById('ctx-width-input');
+                    if (wiEl) wiEl.value = newW;
+                    objectLayer.resizeObject(obj.id, newW);
+                    this._drawSelectionRect(obj.x, obj.y, obj.w, obj.h, true);
+                });
+                break;
+            }
+        }
+    }
+
+    _showContextPanel(obj, isPixelSelection = false) {
         const panel = document.getElementById('object-context-panel');
         if (!panel) return;
+
+        // Mostra/nascondi pulsanti in base al tipo di selezione
+        panel.querySelectorAll('.ctx-obj-only').forEach(el => {
+            el.style.display = isPixelSelection ? 'none' : '';
+        });
+        panel.querySelectorAll('.ctx-pixel-only').forEach(el => {
+            el.style.display = isPixelSelection ? '' : 'none';
+        });
+
+        // Posizionamento
         const area = document.getElementById('canvas-area');
         const rect = area.getBoundingClientRect();
         const scale = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.scale : 1;
-        const screenX = rect.left + obj.x * scale;
-        const screenY = rect.top + obj.y * scale;
-        panel.style.left = Math.min(screenX + obj.w * scale + 8, window.innerWidth - 200) + 'px';
-        panel.style.top  = Math.max(screenY, 60) + 'px';
-        panel.style.display = 'flex';
-        panel.style.flexDirection = 'column';
-        // Aggiorna valori slider filtri
-        const f = obj.filter || { brightness: 100, contrast: 100, saturation: 100 };
-        const bInput = document.getElementById('ctx-brightness');
-        const cInput = document.getElementById('ctx-contrast');
-        const sInput = document.getElementById('ctx-saturation');
-        if (bInput) bInput.value = f.brightness;
-        if (cInput) cInput.value = f.contrast;
-        if (sInput) sInput.value = f.saturation;
-        // Bordo
-        const bw = document.getElementById('ctx-border-width');
-        const bc = document.getElementById('ctx-border-color');
-        const bwVal = document.getElementById('ctx-border-width-val');
-        if (bw) bw.value = obj.borderWidth || 0;
-        if (bwVal) bwVal.textContent = (obj.borderWidth || 0) + 'px';
-        if (bc) bc.value = obj.borderColor || '#3b82f6';
-        // Opacità
-        const op = document.getElementById('ctx-opacity');
-        if (op) op.value = Math.round((obj.opacity !== undefined ? obj.opacity : 1) * 100);
-        // Larghezza
-        const wi = document.getElementById('ctx-width-input');
-        if (wi) wi.value = Math.round(obj.w);
-        // Mostra/nascondi pulsante download PDF
-        const dlBtn = document.getElementById('ctx-download-pdf');
-        if (dlBtn) dlBtn.style.display = (obj.type === 'pdf-page') ? 'flex' : 'none';
+
+        let screenX, screenY;
+        if (isPixelSelection && this.selection) {
+            const sel = this.selection;
+            screenX = rect.left + (sel.x + sel.w) * scale;
+            screenY = rect.top + sel.y * scale;
+        } else {
+            screenX = rect.left + obj.x * scale;
+            screenY = rect.top + obj.y * scale;
+        }
+
+        // Assicura che il pannello sia visibile nella viewport
+        panel.style.left = Math.min(screenX + (isPixelSelection ? 0 : obj.w * scale) + 8, window.innerWidth - 240) + 'px';
+        panel.style.top  = Math.max(Math.min(screenY, window.innerHeight - 60), 60) + 'px';
+        panel.style.display = 'block';
+
+        // Chiudi popup interno se aperto
+        const popup = document.getElementById('ctx-popup');
+        if (popup) { popup.style.display = 'none'; popup.dataset.action = ''; }
+
+        if (!isPixelSelection && obj) {
+            // Aggiorna valori slider nascosti (compatibilità)
+            const f = obj.filter || { brightness: 100, contrast: 100, saturation: 100 };
+            const bInput = document.getElementById('ctx-brightness');
+            const cInput = document.getElementById('ctx-contrast');
+            const sInput = document.getElementById('ctx-saturation');
+            if (bInput) bInput.value = f.brightness;
+            if (cInput) cInput.value = f.contrast;
+            if (sInput) sInput.value = f.saturation;
+            const bw = document.getElementById('ctx-border-width');
+            const bc = document.getElementById('ctx-border-color');
+            if (bw) bw.value = obj.borderWidth || 0;
+            if (bc) bc.value = obj.borderColor || '#3b82f6';
+            const op = document.getElementById('ctx-opacity');
+            if (op) op.value = Math.round((obj.opacity !== undefined ? obj.opacity : 1) * 100);
+            const wi = document.getElementById('ctx-width-input');
+            if (wi) wi.value = Math.round(obj.w);
+            // Pulsante download PDF
+            const dlBtn = document.getElementById('ctx-download-pdf');
+            if (dlBtn) dlBtn.style.display = (obj.type === 'pdf-page') ? 'flex' : 'none';
+        }
     }
 
     _hideContextPanel() {
@@ -2557,6 +2762,8 @@ class SelectManager {
             const { x: sx, y: sy, w, h } = this.selection;
             // Dentro la selezione → inizia drag
             if (x >= sx && x <= sx + w && y >= sy && y <= sy + h) {
+                // Salva undo PRIMA di modificare il canvas
+                if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
                 this.phase    = 'dragging';
                 this.dragData = {
                     startX: x,
@@ -2580,7 +2787,6 @@ class SelectManager {
         this.phase  = 'selecting';
         this.startX = x;
         this.startY = y;
-        if (typeof toast === 'function') toast('Trascina per selezionare — poi sposta, Canc per cancellare', 'info');
         return true;
     }
 
@@ -2724,7 +2930,7 @@ class SelectManager {
                 this.selection = { x: rx, y: ry, w: rw, h: rh };
                 this.phase     = 'selected';
                 this._drawSelectionRect(rx, ry, rw, rh);
-                if (typeof toast === 'function') toast('Area selezionata! Trascina per spostarla, Canc per eliminarla', 'success');
+                this._showContextPanel({ x: rx, y: ry, w: rw, h: rh }, true);
             } else {
                 this._clearSelection();
             }
@@ -2774,6 +2980,7 @@ class SelectManager {
             // Cancella selezione pixel
             if (this.phase === 'selected' && this.selection) {
                 const { x, y, w, h } = this.selection;
+                if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
                 this.ctx.save();
                 this.ctx.globalCompositeOperation = 'destination-out';
                 this.ctx.fillStyle = 'rgba(255,255,255,1)';
@@ -3149,11 +3356,184 @@ async function importPdfFile(file, clientX, clientY) {
 }
 
 // =============================================================================
+// SEZIONE 13e — PageManager
+// Gestisce più pagine (slide) nella lavagna.
+// =============================================================================
+
+class PageManager {
+    constructor(canvasManager, objectLayerRef, backgroundManager) {
+        this.pages = [];
+        this.currentIndex = 0;
+        this.canvasManager = canvasManager;
+        this.objectLayerRef = objectLayerRef;
+        this.backgroundManager = backgroundManager;
+        this._init();
+    }
+
+    _init() {
+        this.pages.push(this._captureCurrentPage());
+        this._renderPageBar();
+    }
+
+    _captureCurrentPage() {
+        const drawCanvas = document.getElementById('draw-canvas');
+        return {
+            drawImageData: drawCanvas && drawCanvas.width > 0 ? drawCanvas.toDataURL('image/png') : null,
+            objects: JSON.parse(JSON.stringify(this.objectLayerRef.objects.map(o => {
+                // Serializza l'immagine come dataUrl per il salvataggio in memoria
+                try {
+                    const tmp = document.createElement('canvas');
+                    const srcW = o.img.naturalWidth || o.img.width || o.w;
+                    const srcH = o.img.naturalHeight || o.img.height || o.h;
+                    tmp.width = srcW;
+                    tmp.height = srcH;
+                    tmp.getContext('2d').drawImage(o.img, 0, 0);
+                    return { ...o, img: null, dataUrl: tmp.toDataURL() };
+                } catch (_) {
+                    return { ...o, img: null, dataUrl: null };
+                }
+            }))),
+            background: {
+                type: this.backgroundManager.currentBg,
+                color: this.backgroundManager.bgColor,
+                orientation: this.backgroundManager.orientation
+            }
+        };
+    }
+
+    _restorePage(pageData) {
+        const drawCanvas = document.getElementById('draw-canvas');
+        const ctx = drawCanvas.getContext('2d');
+        ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        if (pageData.drawImageData) {
+            const img = new Image();
+            img.onload = () => ctx.drawImage(img, 0, 0);
+            img.src = pageData.drawImageData;
+        }
+        // Ripristina objects
+        this.objectLayerRef.objects = [];
+        const loadPromises = (pageData.objects || []).map(o => new Promise(resolve => {
+            if (!o.dataUrl) { resolve(); return; }
+            const img = new Image();
+            img.onload = () => {
+                this.objectLayerRef.objects.push({ ...o, img });
+                resolve();
+            };
+            img.onerror = resolve;
+            img.src = o.dataUrl;
+        }));
+        Promise.all(loadPromises).then(() => this.objectLayerRef.render());
+
+        // Ripristina sfondo
+        if (pageData.background) {
+            this.backgroundManager.currentBg = pageData.background.type || 'white';
+            this.backgroundManager.bgColor = pageData.background.color || '#ffffff';
+            this.backgroundManager.orientation = pageData.background.orientation || 'landscape';
+            this.backgroundManager.uploadedImage = null;
+            this.backgroundManager.render();
+            // Aggiorna UI colore/orientamento
+            const colorEl = document.getElementById('bg-page-color');
+            if (colorEl) colorEl.value = this.backgroundManager.bgColor;
+            const oL = document.getElementById('bg-orient-landscape');
+            const oP = document.getElementById('bg-orient-portrait');
+            if (oL && oP) {
+                oL.classList.toggle('active', this.backgroundManager.orientation === 'landscape');
+                oP.classList.toggle('active', this.backgroundManager.orientation === 'portrait');
+            }
+        }
+    }
+
+    goToPage(index) {
+        if (index < 0 || index >= this.pages.length) return;
+        this.pages[this.currentIndex] = this._captureCurrentPage();
+        this.currentIndex = index;
+        this._restorePage(this.pages[this.currentIndex]);
+        this._updatePageBar();
+    }
+
+    addPage() {
+        this.pages[this.currentIndex] = this._captureCurrentPage();
+        this.pages.push({
+            drawImageData: null,
+            objects: [],
+            background: {
+                type: 'white',
+                color: '#ffffff',
+                orientation: this.backgroundManager.orientation
+            }
+        });
+        this.currentIndex = this.pages.length - 1;
+        this._restorePage(this.pages[this.currentIndex]);
+        this._updatePageBar();
+    }
+
+    deletePage(index) {
+        if (this.pages.length <= 1) return;
+        if (!confirm(`Eliminare la pagina ${index + 1}?`)) return;
+        this.pages.splice(index, 1);
+        const newIndex = Math.min(this.currentIndex, this.pages.length - 1);
+        this.currentIndex = newIndex;
+        this._restorePage(this.pages[this.currentIndex]);
+        this._updatePageBar();
+    }
+
+    serialize() {
+        this.pages[this.currentIndex] = this._captureCurrentPage();
+        return this.pages;
+    }
+
+    deserialize(pagesData) {
+        if (!pagesData || !pagesData.length) return;
+        this.pages = pagesData;
+        this.currentIndex = 0;
+        this._restorePage(this.pages[0]);
+        this._renderPageBar();
+    }
+
+    _renderPageBar() {
+        let bar = document.getElementById('page-bar');
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = 'page-bar';
+            // Inserisci sotto il canvas-area (dopo il main#canvas-area)
+            const canvasArea = document.getElementById('canvas-area');
+            if (canvasArea && canvasArea.parentNode) {
+                canvasArea.parentNode.insertBefore(bar, canvasArea.nextSibling);
+            } else {
+                document.body.appendChild(bar);
+            }
+        }
+        this._updatePageBar();
+    }
+
+    _updatePageBar() {
+        const bar = document.getElementById('page-bar');
+        if (!bar) return;
+        bar.innerHTML = '';
+        this.pages.forEach((p, i) => {
+            const btn = document.createElement('button');
+            btn.className = 'page-btn' + (i === this.currentIndex ? ' page-btn--active' : '');
+            btn.textContent = i + 1;
+            btn.title = `Pagina ${i + 1} (tasto destro per eliminare)`;
+            btn.addEventListener('click', () => this.goToPage(i));
+            btn.addEventListener('contextmenu', e => { e.preventDefault(); this.deletePage(i); });
+            bar.appendChild(btn);
+        });
+        const addBtn = document.createElement('button');
+        addBtn.className = 'page-btn page-btn--add';
+        addBtn.textContent = '+';
+        addBtn.title = 'Aggiungi pagina';
+        addBtn.addEventListener('click', () => this.addPage());
+        bar.appendChild(addBtn);
+    }
+}
+
+// =============================================================================
 // SEZIONE 14 — INIT
 // Istanziazione globale dei manager e avvio dell'applicazione.
 // =============================================================================
 
-let bgMgr, brush, laserMgr, canvasMgr, toolbarMgr, textMgr, projectMgr, selectMgr, panMgr, objectLayer;
+let bgMgr, brush, laserMgr, canvasMgr, toolbarMgr, textMgr, projectMgr, selectMgr, panMgr, objectLayer, pageManager;
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Inizializza i manager nell'ordine corretto (le dipendenze prima)
@@ -3176,6 +3556,11 @@ document.addEventListener('DOMContentLoaded', () => {
     setupFullscreen();    // Feature 5
     setupProjectName();   // Feature 6
     setupLibraryTabs();   // Feature A: linguette libreria laterali
+
+    // PageManager — pagine multiple
+    pageManager = new PageManager(canvasMgr, objectLayer, bgMgr);
+    window.pageManager = pageManager; // esposto globalmente per drive.js
+    document.body.classList.add('has-page-bar');
 
     // 2. Pulsanti header
     document.getElementById('btn-save').addEventListener('click',   () => projectMgr.save());

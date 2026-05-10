@@ -345,6 +345,15 @@
     <!-- Popup: Selezione sfondo -->
     <div id="bg-popup" class="popup-panel" style="display:none">
         <div class="popup-title">Sfondo</div>
+        <!-- Orientamento e colore pagina -->
+        <div class="bg-orient-row">
+            <button class="bg-orient-btn active" id="bg-orient-landscape" title="Orizzontale A4">&#8596; Orizzontale</button>
+            <button class="bg-orient-btn" id="bg-orient-portrait" title="Verticale A4">&#8597; Verticale</button>
+            <label class="bg-color-label" title="Colore pagina">
+                <span>Colore</span>
+                <input type="color" id="bg-page-color" value="#ffffff">
+            </label>
+        </div>
         <div class="bg-grid">
             <button class="bg-opt active" data-bg="white" title="Bianco"><div class="bg-preview" style="background:#fff"></div><span>Bianco</span></button>
             <button class="bg-opt" data-bg="lines-8" title="Righe larghe (8mm)"><div class="bg-preview bg-p-lines-8"></div><span>Righe 8mm</span></button>
@@ -418,52 +427,52 @@
         </svg>
     </button>
 
-    <!-- Pannello contestuale oggetti selezionati -->
-    <div id="object-context-panel" style="display:none" class="object-ctx-panel">
-        <!-- Azioni rapide -->
-        <div class="ctx-row">
-            <button class="ctx-btn" id="ctx-bring-front" title="Porta in primo piano">⬆ Primo piano</button>
-            <button class="ctx-btn" id="ctx-send-back" title="Manda indietro">⬇ Indietro</button>
+    <!-- Pannello contestuale oggetti selezionati (compatto con icone) -->
+    <div id="object-context-panel" class="ctx-panel" style="display:none">
+        <!-- Barra icone compatta -->
+        <div class="ctx-toolbar">
+            <!-- Ordinamento -->
+            <button class="ctx-icon-btn ctx-obj-only" data-action="bring-front" title="Porta in primo piano">&#8679;</button>
+            <button class="ctx-icon-btn ctx-obj-only" data-action="send-back" title="Manda indietro">&#8681;</button>
+            <div class="ctx-sep ctx-obj-only"></div>
+            <!-- Trasformazioni -->
+            <button class="ctx-icon-btn ctx-obj-only" data-action="flip-h" title="Specchia orizzontale">&#8660;</button>
+            <button class="ctx-icon-btn ctx-obj-only" data-action="flip-v" title="Specchia verticale">&#8661;</button>
+            <button class="ctx-icon-btn ctx-obj-only" data-action="rot-ccw" title="Ruota -90°">&#8634;</button>
+            <button class="ctx-icon-btn ctx-obj-only" data-action="rot-cw" title="Ruota +90°">&#8635;</button>
+            <button class="ctx-icon-btn ctx-obj-only" data-action="rot-180" title="Ruota 180°">&#10227;</button>
+            <div class="ctx-sep ctx-obj-only"></div>
+            <!-- Stile -->
+            <button class="ctx-icon-btn ctx-obj-only" data-action="border-color" title="Colore bordo">&#9998;</button>
+            <button class="ctx-icon-btn ctx-obj-only" data-action="opacity" title="Opacit&#224;">&#9685;</button>
+            <div class="ctx-sep ctx-obj-only"></div>
+            <!-- Filtri -->
+            <button class="ctx-icon-btn ctx-obj-only" data-action="brightness" title="Luminosit&#224;">&#9728;</button>
+            <button class="ctx-icon-btn ctx-obj-only" data-action="contrast" title="Contrasto">&#9680;</button>
+            <button class="ctx-icon-btn ctx-obj-only" data-action="saturation" title="Saturazione">&#127912;</button>
+            <div class="ctx-sep ctx-obj-only"></div>
+            <!-- Dimensioni -->
+            <button class="ctx-icon-btn ctx-obj-only" data-action="width" title="Larghezza">&#8596;</button>
+            <button class="ctx-icon-btn ctx-obj-only" data-action="restore" title="Dimensioni originali">&#8861;</button>
+            <div class="ctx-sep ctx-obj-only"></div>
+            <!-- Selezione pixel -->
+            <button class="ctx-icon-btn ctx-pixel-only" data-action="copy" title="Copia">&#9192;</button>
+            <button class="ctx-icon-btn ctx-pixel-only" data-action="paste" title="Incolla">&#9193;</button>
+            <div class="ctx-sep ctx-pixel-only"></div>
+            <!-- Comune a tutti -->
+            <button class="ctx-icon-btn ctx-obj-only" data-action="download" title="Scarica PNG" id="ctx-download-pdf" style="display:none">&#11015;</button>
+            <button class="ctx-icon-btn ctx-icon-btn--danger" data-action="delete" title="Elimina">&#10005;</button>
         </div>
-        <div class="ctx-divider"></div>
-        <!-- Trasformazioni -->
-        <div class="ctx-row">
-            <button class="ctx-btn" id="ctx-flip-h" title="Specchia orizzontale">↔ Specchia H</button>
-            <button class="ctx-btn" id="ctx-flip-v" title="Specchia verticale">↕ Specchia V</button>
-        </div>
-        <div class="ctx-row">
-            <button class="ctx-btn" id="ctx-rotate-90" title="Ruota 90° senso orario">↻ +90°</button>
-            <button class="ctx-btn" id="ctx-rotate-180" title="Ruota 180°">↻ 180°</button>
-            <button class="ctx-btn" id="ctx-rotate-ccw" title="Ruota 90° antiorario">↺ -90°</button>
-        </div>
-        <div class="ctx-divider"></div>
-        <!-- Colori bordo -->
-        <div class="ctx-label">Bordo oggetto</div>
-        <div class="ctx-row">
-            <input type="color" id="ctx-border-color" value="#3b82f6" class="ctx-color-input" title="Colore bordo">
-            <input type="range" id="ctx-border-width" min="0" max="20" value="0" class="ctx-slider" title="Spessore bordo">
-            <span id="ctx-border-width-val" style="font-size:0.72rem;color:#94a3b8;min-width:20px">0px</span>
-        </div>
-        <div class="ctx-divider"></div>
-        <!-- Filtri immagine -->
-        <div class="ctx-label">Luminosità</div>
-        <input type="range" id="ctx-brightness" min="10" max="300" value="100" class="ctx-slider">
-        <div class="ctx-label">Contrasto</div>
-        <input type="range" id="ctx-contrast" min="10" max="300" value="100" class="ctx-slider">
-        <div class="ctx-label">Saturazione</div>
-        <input type="range" id="ctx-saturation" min="0" max="300" value="100" class="ctx-slider">
-        <div class="ctx-label">Opacità</div>
-        <input type="range" id="ctx-opacity" min="10" max="100" value="100" class="ctx-slider">
-        <div class="ctx-divider"></div>
-        <!-- Dimensione -->
-        <div class="ctx-label">Larghezza (px)</div>
-        <div class="ctx-row">
-            <input type="number" id="ctx-width-input" min="10" max="5000" class="ctx-number-input" placeholder="px">
-            <button class="ctx-btn ctx-btn--small" id="ctx-reset-size" title="Ripristina dimensione originale">↺ Originale</button>
-        </div>
-        <div class="ctx-divider"></div>
-        <button class="ctx-btn" id="ctx-download-pdf" style="display:none" title="Scarica il PDF originale da Drive">⬇ Scarica PDF</button>
-        <button class="ctx-btn ctx-btn--danger" id="ctx-delete" title="Elimina oggetto">🗑 Elimina</button>
+        <!-- Popup dinamico (appare sotto la barra quando si clicca un'icona) -->
+        <div class="ctx-popup" id="ctx-popup" style="display:none"></div>
+        <!-- Campi nascosti per compatibilità con codice esistente -->
+        <input type="range" id="ctx-brightness" min="10" max="300" value="100" style="display:none">
+        <input type="range" id="ctx-contrast" min="10" max="300" value="100" style="display:none">
+        <input type="range" id="ctx-saturation" min="0" max="300" value="100" style="display:none">
+        <input type="range" id="ctx-opacity" min="10" max="100" value="100" style="display:none">
+        <input type="range" id="ctx-border-width" min="0" max="20" value="0" style="display:none">
+        <input type="color" id="ctx-border-color" value="#3b82f6" style="display:none">
+        <input type="number" id="ctx-width-input" min="10" max="5000" style="display:none">
     </div>
 
     <!-- Modal: salva prima di continuare -->

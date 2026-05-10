@@ -852,6 +852,11 @@ class LibraryManager {
             CONFIG.projectName = name;
             document.getElementById('project-name').textContent = name;
 
+            // 4. Ripristina pagine multiple (se presenti)
+            if (lesson.pages && Array.isArray(lesson.pages) && typeof window.pageManager !== 'undefined' && window.pageManager) {
+                window.pageManager.deserialize(lesson.pages);
+            }
+
             toast('Lezione "' + name + '" caricata!', 'success');
             // Memorizza fileId corrente per ripristino posizione
             this.currentFileId = fileId;
@@ -922,7 +927,8 @@ class LibraryManager {
                 folderId:       targetFolder,
                 drawingDataURL: canvasMgr.getDataURL(),
                 bgKey:          bgMgr.currentBg,
-                bgImageBase64
+                bgImageBase64,
+                pages:          window.pageManager ? window.pageManager.serialize() : null
             });
 
             // Traccia fileId corrente e salva posizione associata al nuovo fileId
