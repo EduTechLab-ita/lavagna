@@ -1475,10 +1475,23 @@ class ToolbarManager {
 
         // Colore pagina — palette predefinita + fallback color picker nativo
         const PAGE_COLORS = [
-            '#ffffff', '#fffef0', '#fffde7', '#f0fff4',
-            '#e8f5e9', '#e3f2fd', '#fce4ec', '#f3e5f5',
-            '#fff3e0', '#fbe9e7', '#ede7f6', '#e0f2f1',
-            '#f5f5f5', '#bdbdbd', '#424242', '#212121',
+            // Bianchi e crema
+            '#ffffff', '#fffef5', '#fafaf8', '#f5f0e8',
+            // Gialli e ambra
+            '#fffde7', '#fff9c4', '#fff3cd', '#fdefc3',
+            // Verdi chiari
+            '#f1f8e9', '#e8f5e9', '#e0f2e9', '#d7f5e3',
+            // Blu chiari
+            '#e3f2fd', '#dbeafe', '#e0f0ff', '#e8eaf6',
+            // Rosa e lilla
+            '#fce4ec', '#fde8f0', '#f3e5f5', '#ede7f6',
+            // Arancio e pesca
+            '#fff3e0', '#fbe9e7', '#fef3ee', '#fdecea',
+            // Toni medi
+            '#eceff1', '#f5f5f5', '#eeeeee', '#e0e0e0',
+            // Scuri
+            '#90a4ae', '#546e7a', '#37474f', '#263238',
+            '#1e293b', '#0f172a', '#1a1a2e', '#000000',
         ];
 
         const _applyPageColor = (color) => {
@@ -1498,8 +1511,13 @@ class ToolbarManager {
                 dot.className = 'bg-page-color-dot';
                 dot.style.background = color;
                 dot.title = color;
+                // Bordo scuro per i colori chiari (leggibilità)
+                if (['#ffffff','#fffef5','#fafaf8','#f5f0e8','#fffde7','#fff9c4'].includes(color))
+                    dot.style.border = '2px solid rgba(0,0,0,0.12)';
                 dot.addEventListener('click', () => {
                     _applyPageColor(color);
+                    colorGrid.querySelectorAll('.bg-page-color-dot').forEach(d => d.classList.remove('active'));
+                    dot.classList.add('active');
                     document.getElementById('bg-page-color-popup').style.display = 'none';
                     CONFIG.isDirty = true;
                     window.autoSaveMgr?.onDirty();
@@ -1508,12 +1526,22 @@ class ToolbarManager {
             });
         }
 
-        // Apri/chiudi mini-popup
+        // Apri/chiudi palette colori — posizionata vicino al bottone con JS
         document.getElementById('bg-page-color-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             const popup = document.getElementById('bg-page-color-popup');
             if (!popup) return;
-            popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+            if (popup.style.display !== 'none') { popup.style.display = 'none'; return; }
+            popup.style.display = 'block';
+            // Posiziona sopra/accanto al bottone colore
+            const btnRect = e.currentTarget.getBoundingClientRect();
+            const popW = 220, popH = 240;
+            let left = btnRect.left;
+            let top  = btnRect.top - popH - 8;
+            if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+            if (top < 60) top = btnRect.bottom + 8; // se non c'è spazio sopra, apri sotto
+            popup.style.left = left + 'px';
+            popup.style.top  = top  + 'px';
         });
 
         // Pulsante "Altro..." apre color picker nativo
@@ -1611,12 +1639,13 @@ class ToolbarManager {
         this._closeAllPopups();
         if (!isVisible) {
             popup.style.display = 'block';
-            // Posiziona popup sopra la toolbar con maxHeight dinamico per non debordare in cima
-            const tbRect = this.wrapper.getBoundingClientRect();
+            // Posiziona popup sopra la toolbar — non deborda sull'header
+            const tbRect  = this.wrapper.getBoundingClientRect();
+            const headerH = document.getElementById('app-header')?.offsetHeight || 56;
             const bottomOffset = window.innerHeight - tbRect.top + 12;
-            const availableH = tbRect.top - 16; // spazio disponibile sopra la toolbar
-            popup.style.bottom = bottomOffset + 'px';
-            popup.style.maxHeight = Math.max(200, availableH) + 'px';
+            const availableH   = tbRect.top - headerH - 12; // spazio tra header e toolbar
+            popup.style.bottom    = bottomOffset + 'px';
+            popup.style.maxHeight = Math.max(180, availableH) + 'px';
             // Se è il popup sfondi, carica le immagini da Drive
             if (id === 'bg-popup') {
                 loadDriveBackgrounds();
