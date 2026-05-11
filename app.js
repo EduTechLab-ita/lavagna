@@ -1039,6 +1039,12 @@ class CanvasManager {
             this._highlightStroke(idx);
             return;
         }
+        // Cursor hint sugli handle selezione (funziona anche senza isDrawing, per mouse hover)
+        if (CONFIG.currentTool === 'select' && !CONFIG.isDrawing) {
+            const { x, y } = this.getCoords(e);
+            selectMgr?.onPointerMove(x, y);
+            return;
+        }
         if (!CONFIG.isDrawing) return;
         const { x, y } = this.getCoords(e);
 
@@ -2298,6 +2304,10 @@ function setupKeyboard() {
                 e.preventDefault();
                 selectMgr?._handleCtxAction('paste', null);
             }
+            if (e.key === 'x' && CONFIG.currentTool === 'select') {
+                e.preventDefault();
+                selectMgr?._handleCtxAction('cut', null);
+            }
         }
 
         if (!e.ctrlKey && !e.metaKey) {
@@ -3026,6 +3036,27 @@ class SelectManager {
                     toast('Area copiata!', 'success');
                 }
                 return;
+            case 'cut':
+                // Taglia = copia + elimina
+                this._handleCtxAction('copy', btn);
+                if (obj) {
+                    objectLayer.removeObject(obj.id);
+                    this.selectedObject = null;
+                    this._clearSelection();
+                    this._hideContextPanel();
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                } else if (this.phase === 'selected' && this.selection) {
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+                    const { x, y, w, h } = this.selection;
+                    this.ctx.save();
+                    this.ctx.globalCompositeOperation = 'destination-out';
+                    this.ctx.fillRect(x, y, w, h);
+                    this.ctx.restore();
+                    this._clearSelection();
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                    toast('Tagliato!', 'success');
+                }
+                return;
             case 'paste':
                 if (this._objectClipboard) {
                     // Incolla oggetto (offset +20px per distinguerlo dall'originale)
@@ -3054,9 +3085,20 @@ class SelectManager {
                     // Incolla area pixel al centro della vista
                     if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
                     const center = typeof getViewportCenter !== 'undefined' ? getViewportCenter() : { x: 100, y: 100 };
-                    const px = Math.round(center.x - this._pixelClipboard.w / 2);
-                    const py = Math.round(center.y - this._pixelClipboard.h / 2);
-                    this.ctx.putImageData(this._pixelClipboard.data, px, py);
+                    const { data, w: pw, h: ph } = this._pixelClipboard;
+                    const px = Math.round(center.x - pw / 2);
+                    const py = Math.round(center.y - ph / 2);
+                    // Usa drawImage (non putImageData) per preservare compositing:
+                    // i pixel trasparenti non sovrascrivono il disegno esistente
+                    const tmp = document.createElement('canvas');
+                    tmp.width = pw; tmp.height = ph;
+                    tmp.getContext('2d').putImageData(data, 0, 0);
+                    this.ctx.drawImage(tmp, px, py);
+                    // Mostra dove è finito il paste (selezione + pannello)
+                    this.selection = { x: px, y: py, w: pw, h: ph };
+                    this.phase = 'selected';
+                    this._drawSelectionRect(px, py, pw, ph);
+                    this._showContextPanel(this.selection, true);
                     CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
                     toast('Incollato!', 'success');
                 }
@@ -3409,8 +3451,8 @@ class SelectManager {
         if (this.phase === 'selected' && this.selection) {
             const { x: sx, y: sy, w, h } = this.selection;
 
-            // 3a. Hit test angoli per resize pixel
-            const HIT_PIX = 12;
+            // 3a. Hit test angoli per resize pixel (raggio grande per touch)
+            const HIT_PIX = 24;
             const corners = [
                 { corner: 'tl', hx: sx,     hy: sy },
                 { corner: 'tr', hx: sx + w,  hy: sy },
@@ -3525,7 +3567,7 @@ class SelectManager {
         // Cursore: cambia quando si passa vicino a un handle (selezione pixel)
         if (this.phase === 'selected' && this.selection) {
             const { x: sx, y: sy, w, h } = this.selection;
-            const HIT = 12;
+            const HIT = 24;
             const cornerCursors = { tl: 'nwse-resize', br: 'nwse-resize', tr: 'nesw-resize', bl: 'nesw-resize' };
             const pixCorners = [
                 { corner: 'tl', hx: sx,     hy: sy },
