@@ -2930,20 +2930,33 @@ class SelectManager {
                 return;
             case 'download':
                 if (obj) {
-                    const tmpCanvas = document.createElement('canvas');
-                    tmpCanvas.width  = obj.originalW || obj.w;
-                    tmpCanvas.height = obj.originalH || obj.h;
-                    tmpCanvas.getContext('2d').drawImage(obj.img, 0, 0, tmpCanvas.width, tmpCanvas.height);
-                    tmpCanvas.toBlob(blob => {
-                        if (!blob) { toast('Errore nel download', 'error'); return; }
-                        const url = URL.createObjectURL(blob);
+                    const sourceFile = obj.img?._sourceFile;
+                    if (sourceFile) {
+                        // Scarica il file originale (PDF o immagine nel formato originale)
+                        const url = URL.createObjectURL(sourceFile);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = obj.type === 'pdf-page' ? 'pagina-pdf.png' : 'immagine.png';
+                        a.download = sourceFile.name || (obj.type === 'pdf-page' ? 'documento.pdf' : 'immagine');
                         a.click();
-                        setTimeout(() => URL.revokeObjectURL(url), 1000);
+                        setTimeout(() => URL.revokeObjectURL(url), 2000);
                         toast('Download avviato!', 'success');
-                    }, 'image/png');
+                    } else {
+                        // Fallback: scarica come PNG dal canvas
+                        const tmpCanvas = document.createElement('canvas');
+                        tmpCanvas.width  = obj.originalW || obj.w;
+                        tmpCanvas.height = obj.originalH || obj.h;
+                        tmpCanvas.getContext('2d').drawImage(obj.img, 0, 0, tmpCanvas.width, tmpCanvas.height);
+                        tmpCanvas.toBlob(blob => {
+                            if (!blob) { toast('Errore nel download', 'error'); return; }
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = obj.type === 'pdf-page' ? 'pagina-pdf.png' : 'immagine.png';
+                            a.click();
+                            setTimeout(() => URL.revokeObjectURL(url), 1000);
+                            toast('Download avviato!', 'success');
+                        }, 'image/png');
+                    }
                 } else if (isPixelSel) {
                     // Scarica l'area selezionata come PNG
                     const { x: sx, y: sy, w: sw, h: sh } = this.selection;
@@ -3229,9 +3242,13 @@ class SelectManager {
             if (op) op.value = Math.round((obj.opacity !== undefined ? obj.opacity : 1) * 100);
             const wi = document.getElementById('ctx-width-input');
             if (wi) wi.value = Math.round(obj.w);
-            // Pulsante download PDF
+            // Pulsante download — visibile per PDF e immagini
             const dlBtn = document.getElementById('ctx-download-pdf');
-            if (dlBtn) dlBtn.style.display = (obj.type === 'pdf-page') ? 'flex' : 'none';
+            if (dlBtn) {
+                const canDownload = (obj.type === 'pdf-page' || obj.type === 'image');
+                dlBtn.style.display = canDownload ? 'flex' : 'none';
+                dlBtn.title = obj.type === 'pdf-page' ? 'Scarica PDF' : 'Scarica immagine';
+            }
         }
     }
 
@@ -3908,6 +3925,7 @@ async function importImageFile(file, clientX, clientY) {
             }
             // Non clampare a 0: il canvas è 3× il viewport e il centro visibile è a (W/2, H/2),
             // non all'origine. Il clamp a 0 sposterebbe le immagini grandi fuori dal foglio A4.
+            img._sourceFile = file; // salva file originale per download
             objectLayer.addObject('image', img, x, y,
                 img.naturalWidth, img.naturalHeight);
             URL.revokeObjectURL(url);
@@ -3977,6 +3995,8 @@ async function importPdfFile(file, clientX, clientY) {
             // Converti in Image per ObjectLayer
             const imgEl = new Image();
             await new Promise(r => { imgEl.onload = r; imgEl.src = tmpCanvas.toDataURL('image/png'); });
+            imgEl._sourceFile = file;      // salva file originale per download
+            imgEl._sourcePage  = pageNum;  // numero di pagina
 
             // Aggiungi come oggetto (una pagina sotto l'altra, offset di 20px)
             const offsetY = baseY + (pageNum - 1) * (viewport.height / scale + 20);
@@ -4563,22 +4583,27 @@ async function _doPrint(pageIndices) {
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#fff}
+@page{margin:0;size:auto}
 .print-page{
     position:relative;
-    width:100%;
+    width:100vw;
     height:100vh;
-    display:flex;
-    align-items:center;
-    justify-content:center;
+    overflow:hidden;
     page-break-after:always;
 }
 .print-page:last-child{page-break-after:avoid}
-.board-img{max-width:100%;max-height:calc(100vh - 28px);object-fit:contain}
+.board-img{
+    display:block;
+    width:100%;
+    height:calc(100vh - 22px);
+    object-fit:fill;
+}
 .page-footer{
     position:absolute;
-    bottom:6mm;
-    left:10mm;
-    right:10mm;
+    bottom:4px;
+    left:8mm;
+    right:8mm;
+    height:18px;
     display:flex;
     align-items:center;
     justify-content:space-between;
@@ -4588,11 +4613,6 @@ body{background:#fff}
 }
 .footer-pub{flex:1;text-align:center}
 .footer-pagenum{flex-shrink:0;margin-left:8px;white-space:nowrap}
-@media print{
-    body{margin:0}
-    .print-page{height:100vh}
-    .board-img{width:100%;height:calc(100vh - 28px);object-fit:contain}
-}
 </style></head><body>
 ${pagesHTML}
 <script>window.onload=function(){window.print();setTimeout(function(){window.close();},1500)}<\/script>
