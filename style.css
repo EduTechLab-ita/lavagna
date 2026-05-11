@@ -221,6 +221,7 @@ button {
     z-index: 4;
     /* Non riceve eventi di default; il JS abilita pointer-events per il laser */
     pointer-events: none;
+    touch-action: none; /* impedisce al browser di intercettare tocchi come scroll → evita pointercancel */
 }
 
 /* Layer 4: input testo inline */
@@ -695,15 +696,19 @@ button {
    -------------------------------------------------------------------------- */
 
 #bg-popup {
-    max-height: calc(100vh - 140px);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    max-height: calc(100vh - 80px); /* mai fuori dallo schermo anche senza fullscreen */
+    overflow-y: auto;
 }
 
-/* Titolo: non scrolla */
-#bg-popup .popup-title {
-    flex-shrink: 0;
+/* Titolo + riga orientamento: sticky in cima quando si scrolla */
+#bg-popup .popup-title,
+#bg-popup .bg-orient-row {
+    position: sticky;
+    top: 0;
+    background: rgba(30, 41, 59, 0.98);
+    z-index: 1;
+    padding-top: 2px;
+    padding-bottom: 2px;
 }
 
 /* Riga orientamento + colore pagina */
@@ -750,9 +755,6 @@ button {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 8px;
-    overflow-y: auto;
-    flex: 1; /* assorbe lo spazio disponibile nel flex column di #bg-popup e scrolla */
-    min-height: 0; /* necessario per il flex+overflow su alcuni browser */
 }
 
 .bg-opt {
@@ -1495,6 +1497,38 @@ button {
     .lib-tab span { display: none; }
 }
 
+/* Tab freccia sul bordo destro/sinistro del pannello libreria */
+.library-tab {
+    position: absolute;
+    top: 50%;
+    right: -28px;                       /* sporge fuori dal pannello a destra */
+    transform: translateY(-50%);
+    width: 28px;
+    height: 56px;
+    background: rgba(30, 41, 59, 0.97);
+    border: 1px solid var(--border);
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    transition: background 0.2s, color 0.2s;
+    z-index: 1;
+    touch-action: none;
+}
+.library-tab:hover { background: rgba(51, 65, 85, 0.97); color: var(--text); }
+
+/* Quando il pannello è da destra il tab è sul bordo sinistro */
+.library-panel.from-right .library-tab {
+    right: auto;
+    left: -28px;
+    border-left: 1px solid var(--border);
+    border-right: none;
+    border-radius: 8px 0 0 8px;
+}
+
 /* Libreria aperta da destra */
 .library-panel.from-right {
     left: auto;
@@ -1673,7 +1707,7 @@ body.fullscreen-mode #canvas-area {
 
 /* ===== Sfondi da Drive ===== */
 #bg-drive-section {
-    flex-shrink: 0; /* non viene compresso dal flex di #bg-popup */
+    /* nessun vincolo flex speciale necessario con il nuovo layout overflow-y */
 }
 
 .bg-drive-grid {

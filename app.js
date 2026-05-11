@@ -2155,6 +2155,19 @@ function setupLibraryTabs() {
     });
 }
 
+/** Aggiorna la freccia del tab libreria in base allo stato aperto/chiuso e al lato. */
+function _updateLibraryTabArrow(panel) {
+    const arrow = document.getElementById('library-tab-arrow');
+    if (!arrow) return;
+    const open = panel.classList.contains('open');
+    const fromRight = panel.classList.contains('from-right');
+    // Pannello sinistro: aperto → freccia sx (indica chiudi), chiuso → freccia dx (indica apri)
+    // Pannello destro:  aperto → freccia dx (indica chiudi), chiuso → freccia sx (indica apri)
+    arrow.setAttribute('points', open
+        ? (fromRight ? '9 18 15 12 9 6' : '15 18 9 12 15 6')
+        : (fromRight ? '15 18 9 12 15 6' : '9 18 15 12 9 6'));
+}
+
 function openLibraryFrom(side) {
     const panel = document.getElementById('library-panel');
     if (!panel) return;
@@ -2166,6 +2179,7 @@ function openLibraryFrom(side) {
         // Chiudi
         panel.classList.remove('open');
         document.getElementById(`lib-tab-${side}`)?.classList.remove('lib-tab--active');
+        _updateLibraryTabArrow(panel);
         return;
     }
 
@@ -2183,6 +2197,7 @@ function openLibraryFrom(side) {
     document.getElementById(`lib-tab-${side}`)?.classList.add('lib-tab--active');
 
     panel.classList.add('open');
+    _updateLibraryTabArrow(panel);
     if (typeof libraryMgr !== 'undefined' && libraryMgr) {
         libraryMgr.refresh();
     }

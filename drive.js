@@ -848,39 +848,63 @@ class LibraryManager {
      * Dopo il render dell'albero, cerca il file con currentFileId,
      * lo evidenzia con la classe lesson-item--active, espande le cartelle
      * genitrici e fa scroll fino all'elemento.
+     * Se il file non è ancora nel DOM (cartella non caricata), espande tutto l'albero e riprova.
      */
-    _highlightCurrentLesson() {
+    async _highlightCurrentLesson() {
         if (!this.currentFileId) return;
         const panel = this.treeEl;
         if (!panel) return;
-        // Rimuovi eventuali highlight precedenti
         panel.querySelectorAll('.lesson-item--active').forEach(el => el.classList.remove('lesson-item--active'));
-        // Cerca l'elemento con data-file-id corrispondente
-        const items = panel.querySelectorAll('[data-file-id]');
-        items.forEach(item => {
-            if (item.dataset.fileId === this.currentFileId) {
-                item.classList.add('lesson-item--active');
-                // Apri tutti i folder genitori fino alla radice del tree
-                let parent = item.parentElement;
-                while (parent && parent !== panel) {
-                    if (parent.classList.contains('tree-subtree')) {
-                        parent.style.display = 'block';
-                        parent.dataset.loaded = parent.dataset.loaded || 'true';
-                        // Aggiorna icona del folder genitore (la riga item precedente al subContainer)
-                        const folderItem = parent.previousElementSibling;
-                        if (folderItem && folderItem.classList.contains('tree-item')) {
-                            const iconEl = folderItem.querySelector('.tree-icon');
-                            if (iconEl) iconEl.textContent = '📂';
-                            // Recupera folderId dall'event listener non è possibile direttamente;
-                            // usiamo il dataset se disponibile
-                        }
+        // Prima prova: cerca nel DOM già caricato
+        if (this._applyHighlight(panel)) return;
+        // Non trovato → espandi forzatamente tutti i nodi non ancora caricati e riprova
+        await this._forceExpandAll(panel);
+        this._applyHighlight(panel);
+    }
+
+    /** Cerca currentFileId nel DOM, applica l'highlight e apre i folder genitori. Ritorna true se trovato. */
+    _applyHighlight(panel) {
+        let found = false;
+        panel.querySelectorAll('[data-file-id]').forEach(item => {
+            if (item.dataset.fileId !== this.currentFileId) return;
+            item.classList.add('lesson-item--active');
+            // Rendi visibili tutti i tree-subtree antenati
+            let p = item.parentElement;
+            while (p && p !== panel) {
+                if (p.classList.contains('tree-subtree')) {
+                    p.style.display = 'block';
+                    const folderRow = p.previousElementSibling;
+                    if (folderRow) {
+                        const icon = folderRow.querySelector('.tree-icon');
+                        if (icon) icon.textContent = '📂';
                     }
-                    parent = parent.parentElement;
                 }
-                // Scroll verso l'elemento
-                setTimeout(() => item.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 150);
+                p = p.parentElement;
             }
+            setTimeout(() => item.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 150);
+            found = true;
         });
+        return found;
+    }
+
+    /** Espande forzatamente tutti i tree-subtree non ancora caricati (data-loaded="false") in tutto l'albero. */
+    async _forceExpandAll(panel) {
+        // Itera finché ci sono nodi da caricare (le cartelle appena caricate possono avere altri nodi figli)
+        let safety = 0;
+        while (safety++ < 10) {
+            const unloaded = [...panel.querySelectorAll('.tree-subtree[data-loaded="false"]')];
+            if (!unloaded.length) break;
+            for (const sub of unloaded) {
+                const folderId = sub.dataset.folderId;
+                if (!folderId) continue;
+                sub.dataset.loaded = 'true';
+                sub.style.display = 'block';
+                sub.innerHTML = '';
+                try {
+                    await this.renderTree(folderId, sub, 1);
+                } catch (_) {}
+            }
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -916,6 +940,7 @@ class LibraryManager {
             subContainer.className = 'tree-subtree';
             subContainer.style.display = 'none';
             subContainer.dataset.loaded = 'false';
+            subContainer.dataset.folderId = folder.id; // usato da _forceExpandAll per highlight lezione
             container.appendChild(subContainer);
 
             // Helper per espandere la cartella (usato sia dal click che dall'auto-restore)
@@ -1805,12 +1830,43 @@ function initDrive() {
         }
     }
 
-    // ── Pulsante chiudi pannello libreria ──────────────────────────────────
+    // ── Pulsante chiudi pannello libreria (×) ─────────────────────────────
     document.getElementById('library-close')?.addEventListener('click', () => {
         const panel = document.getElementById('library-panel');
         const side  = panel?.dataset.side || 'left';
         panel?.classList.remove('open');
         document.getElementById(`lib-tab-${side}`)?.classList.remove('lib-tab--active');
+        if (typeof _updateLibraryTabArrow === 'function') _updateLibraryTabArrow(panel);
+    });
+
+    // ── Tab freccia sul bordo del pannello (apri/chiudi) ──────────────────
+    document.getElementById('library-tab')?.addEventListener('click', () => {
+        const panel = document.getElementById('library-panel');
+        if (!panel) return;
+        const isOpen = panel.classList.contains('open');
+        if (isOpen) {
+            const side = panel.dataset.side || 'left';
+            panel.classList.remove('open');
+            document.getElementById(`lib-tab-${side}`)?.classList.remove('lib-tab--active');
+        } else {
+            // Riapri usando il lato attuale (default: left)
+            const side = panel.dataset.side || 'left';
+            panel.classList.toggle('from-right', side === 'right');
+            panel.classList.add('open');
+            document.getElementById(`lib-tab-${side}`)?.classList.add('lib-tab--active');
+            if (typeof libraryMgr !== 'undefined' && libraryMgr) libraryMgr.refresh();
+        }
+        // Ruota la freccia del tab in base allo stato
+        const arrow = document.getElementById('library-tab-arrow');
+        if (arrow) {
+            const open = panel.classList.contains('open');
+            const fromRight = panel.classList.contains('from-right');
+            // Pannello sinistro aperto → freccia sinistra (chiudi); chiuso → freccia destra (apri)
+            // Pannello destro aperto → freccia destra (chiudi); chiuso → freccia sinistra (apri)
+            arrow.setAttribute('points', open
+                ? (fromRight ? '9 18 15 12 9 6' : '15 18 9 12 15 6')
+                : (fromRight ? '15 18 9 12 15 6' : '9 18 15 12 9 6'));
+        }
     });
 
     // ── Pulsante "Nuova cartella" nel pannello ─────────────────────────────
