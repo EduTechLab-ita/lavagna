@@ -2784,9 +2784,11 @@ class SelectManager {
         this.startY     = 0;
         this.selectedObject = null; // oggetto ObjectLayer selezionato
         this._objDragStart  = null; // {x, y, origObjX, origObjY}
-        this._pixelClipboard  = null; // { data: ImageData, w, h }
+        this._pixelClipboard  = null; // { data: ImageData, w, h, srcX, srcY }
         this._objectClipboard = null; // copia di un oggetto ObjectLayer
         this._pixelResizeData = null; // dati resize in corso per selezione pixel
+        this._pastedData      = null; // { snap: ImageData, data: ImageData, w, h } — snapshot pre-paste
+        this._pressing        = false; // true solo quando pointer/mouse è premuto
         this._setupContextPanel();
     }
 
@@ -3136,12 +3138,17 @@ class SelectManager {
                     const srcY = this._pixelClipboard.srcY ?? 40;
                     const px = Math.round(srcX + 20);
                     const py = Math.round(srcY + 20);
+                    // Salva snapshot PRIMA del paste: serve per il drag senza toccare la sorgente
+                    const W = this.drawCanvas.width, H = this.drawCanvas.height;
+                    const preSnap = this.ctx.getImageData(0, 0, W, H);
                     // Usa drawImage (non putImageData) per preservare compositing:
                     // i pixel trasparenti non sovrascrivono il disegno esistente
                     const tmp = document.createElement('canvas');
                     tmp.width = pw; tmp.height = ph;
                     tmp.getContext('2d').putImageData(data, 0, 0);
                     this.ctx.drawImage(tmp, px, py);
+                    // Salva i dati per il drag successivo (ripristina pre-paste invece di destination-out)
+                    this._pastedData = { snap: preSnap, data, w: pw, h: ph };
                     // Mostra dove è finito il paste (selezione + pannello)
                     this.selection = { x: px, y: py, w: pw, h: ph };
                     this.phase = 'selected';
@@ -3433,6 +3440,7 @@ class SelectManager {
         this.selection = null;
         this.selectedObject = null;
         this.phase     = 'idle';
+        this._pastedData = null;
         this._hideContextPanel();
     }
 
@@ -3445,6 +3453,7 @@ class SelectManager {
 
     onPointerDown(x, y) {
         if (!this.active) return false;
+        this._pressing = true;
 
         // 0. Se c'è un oggetto selezionato, controlla handle resize
         if (this.phase === 'object-selected' && this.selectedObject) {
@@ -3507,19 +3516,30 @@ class SelectManager {
             // 1b. Dentro la selezione → inizia drag (ha priorità sugli oggetti sotto)
             if (x >= sx && x <= sx + w && y >= sy && y <= sy + h) {
                 if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
-                this.phase    = 'dragging';
-                this.dragData = {
-                    startX: x,
-                    startY: y,
-                    imgData: this.ctx.getImageData(sx, sy, w, h),
-                    selX:   sx,
-                    selY:   sy,
-                };
-                this.ctx.save();
-                this.ctx.globalCompositeOperation = 'destination-out';
-                this.ctx.fillStyle = 'rgba(255,255,255,1)';
-                this.ctx.fillRect(sx, sy, w, h);
-                this.ctx.restore();
+                this.phase = 'dragging';
+                if (this._pastedData) {
+                    // Contenuto incollato: ripristina pre-paste così la sorgente rimane intatta
+                    this.dragData = {
+                        startX: x, startY: y,
+                        imgData: this._pastedData.data, // il contenuto incollato
+                        selX: sx, selY: sy,
+                        baseSnap: this._pastedData.snap, // canvas prima dell'incolla
+                    };
+                    this.ctx.putImageData(this._pastedData.snap, 0, 0);
+                    this._pastedData = null;
+                } else {
+                    // Selezione normale: cut (destination-out) e sposta
+                    this.dragData = {
+                        startX: x, startY: y,
+                        imgData: this.ctx.getImageData(sx, sy, w, h),
+                        selX: sx, selY: sy,
+                    };
+                    this.ctx.save();
+                    this.ctx.globalCompositeOperation = 'destination-out';
+                    this.ctx.fillStyle = 'rgba(255,255,255,1)';
+                    this.ctx.fillRect(sx, sy, w, h);
+                    this.ctx.restore();
+                }
                 return true;
             }
 
@@ -3682,6 +3702,8 @@ class SelectManager {
         }
 
         if (this.phase === 'selecting') {
+            // Disegna il rettangolo SOLO se il tasto/stilo è ancora premuto
+            if (!this._pressing) return false;
             const rx = Math.min(x, this.startX);
             const ry = Math.min(y, this.startY);
             const rw = Math.abs(x - this.startX);
@@ -3738,6 +3760,7 @@ class SelectManager {
 
     onPointerUp(x, y) {
         if (!this.active) return false;
+        this._pressing = false;
 
         // Fine resize selezione pixel
         if (this.phase === 'pixel-resizing') {

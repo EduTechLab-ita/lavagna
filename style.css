@@ -2121,40 +2121,33 @@ body.has-page-bar #zoom-indicator {
     opacity: 1;
 }
 
-/* Badge zoom fisso — sempre visibile in basso a destra */
+/* Badge zoom fisso — sotto il cerchio account, sempre visibile */
 #zoom-badge {
     position: fixed;
-    bottom: 88px;
+    bottom: 4px;
     right: 24px;
-    background: rgba(30,41,59,0.55);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 6px;
-    padding: 3px 9px;
-    font-size: 0.75rem;
-    color: var(--text-muted);
+    width: 52px;
+    background: transparent;
+    border: none;
+    padding: 2px 0;
+    font-size: 0.7rem;
+    color: rgba(71, 85, 105, 0.9);
     z-index: 200;
     cursor: pointer;
     user-select: none;
-    transition: background 0.15s;
-    min-width: 46px;
     text-align: center;
 }
 #zoom-badge:hover {
-    background: rgba(59,130,246,0.25);
-    border-color: #3b82f6;
-    color: var(--text);
+    color: #3b82f6;
 }
 #zoom-badge input {
     background: transparent;
     border: none;
     outline: none;
-    color: var(--text);
-    font-size: 0.75rem;
+    color: rgba(71, 85, 105, 0.9);
+    font-size: 0.7rem;
     width: 3.5ch;
     text-align: center;
-}
-body.has-page-bar #zoom-badge {
-    bottom: 148px;
 }
 
 /* =============================================
