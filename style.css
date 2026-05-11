@@ -2253,8 +2253,9 @@ body.has-page-bar #zoom-indicator {
    ============================================================================= */
 #toolbar-top-row {
     display: flex;
-    align-items: flex-end;  /* allinea in basso così le pillole sembrano appoggiate */
-    gap: 0;
+    align-items: flex-end;
+    gap: 10px;               /* spazio tra le mini-bar e la linguetta */
+    padding-bottom: 0;
 }
 
 /* =============================================================================
@@ -2262,27 +2263,29 @@ body.has-page-bar #zoom-indicator {
    MINI SIZE BAR  — a DESTRA della freccia, stessa condizione
    ============================================================================= */
 
-/* Stile base condiviso per entrambe le mini-bar */
+/* Stile base condiviso — pillola flottante, staccata dalla linguetta */
 #mini-color-bar,
 #mini-size-bar {
     display: none;           /* nascosta di default, JS la mostra con flex */
     align-items: center;
     gap: 5px;
-    padding: 6px 9px;
-    background: rgba(15, 23, 42, 0.45);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    padding: 5px 10px;
+    height: 36px;            /* altezza fissa uguale per entrambe */
+    box-sizing: border-box;
+    background: rgba(10, 18, 35, 0.28);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     border: 1px solid rgba(255,255,255,0.10);
-    border-bottom: none;
-    border-radius: 14px 14px 0 0;
+    border-radius: 18px;     /* pillola completa — staccata dalla linguetta */
+    margin-bottom: 6px;      /* galleggia sopra il bordo inferiore */
     touch-action: none;
     transition: background 0.2s;
 }
 
-/* Pallini colore */
+/* Pallini colore — stessa altezza dei pulsanti dimensione */
 .mini-color-dot {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     border: 2px solid rgba(255,255,255,0.22);
     cursor: pointer;
@@ -2297,10 +2300,10 @@ body.has-page-bar #zoom-indicator {
     box-shadow: 0 0 0 2px rgba(59,130,246,0.65);
 }
 
-/* Pulsanti dimensione — icone linea SVG */
+/* Pulsanti dimensione — icone linea SVG, stessa altezza dei pallini */
 .mini-size-btn {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     display: flex;
     align-items: center;
     justify-content: center;
