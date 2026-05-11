@@ -2554,6 +2554,7 @@ class PanManager {
         this._zoomIndicatorTimer = null;
         this._setupScrollZoom();
         this._setupPinchZoom();
+        this._setupZoomBadge();
     }
 
     activate() {
@@ -2699,18 +2700,64 @@ class PanManager {
     }
 
     _showZoomIndicator() {
+        const pct = Math.round(this.scale * 100) + '%';
+        // Aggiorna il badge fisso sempre visibile
+        const badge = document.getElementById('zoom-badge');
+        if (badge && !badge._editing) badge.textContent = pct;
+        // Indicatore temporaneo (fade-out dopo 1.5s)
         let indicator = document.getElementById('zoom-indicator');
         if (!indicator) {
             indicator = document.createElement('div');
             indicator.id = 'zoom-indicator';
             document.body.appendChild(indicator);
         }
-        indicator.textContent = Math.round(this.scale * 100) + '%';
+        indicator.textContent = pct;
         indicator.classList.add('visible');
         clearTimeout(this._zoomIndicatorTimer);
         this._zoomIndicatorTimer = setTimeout(() => {
             indicator.classList.remove('visible');
         }, 1500);
+    }
+
+    _setupZoomBadge() {
+        // Attende che il DOM sia pronto (il badge è già in index.html)
+        const init = () => {
+            const badge = document.getElementById('zoom-badge');
+            if (!badge) return;
+            badge.addEventListener('click', () => {
+                if (badge._editing) return;
+                badge._editing = true;
+                const current = Math.round(this.scale * 100);
+                badge.innerHTML = `<input type="number" min="10" max="400" value="${current}">%`;
+                const inp = badge.querySelector('input');
+                inp.focus();
+                inp.select();
+                const done = () => {
+                    const val = parseInt(inp.value, 10);
+                    if (!isNaN(val) && val >= 10 && val <= 400) {
+                        this.scale = val / 100;
+                        this._applyTransform();
+                    }
+                    badge.textContent = Math.round(this.scale * 100) + '%';
+                    badge._editing = false;
+                };
+                inp.addEventListener('blur', done);
+                inp.addEventListener('keydown', e => {
+                    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+                    if (e.key === 'Escape') {
+                        badge.textContent = Math.round(this.scale * 100) + '%';
+                        badge._editing = false;
+                    }
+                });
+                // Stoppa propagazione per non fare zoom involontario con la rotella
+                inp.addEventListener('wheel', e => e.stopPropagation());
+            });
+        };
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
     }
 
     _setCursor(cursor) {
@@ -3031,7 +3078,7 @@ class SelectManager {
                 } else if (this.phase === 'selected' && this.selection) {
                     // Copia area pixel
                     const { x, y, w, h } = this.selection;
-                    this._pixelClipboard = { data: this.ctx.getImageData(x, y, w, h), w, h };
+                    this._pixelClipboard = { data: this.ctx.getImageData(x, y, w, h), w, h, srcX: x, srcY: y };
                     this._objectClipboard = null;
                     toast('Area copiata!', 'success');
                 }
@@ -3082,12 +3129,13 @@ class SelectManager {
                     CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
                     toast('Incollato!', 'success');
                 } else if (this._pixelClipboard) {
-                    // Incolla area pixel al centro della vista
+                    // Incolla area pixel vicino alla sorgente (+20px offset, cascata)
                     if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
-                    const center = typeof getViewportCenter !== 'undefined' ? getViewportCenter() : { x: 100, y: 100 };
                     const { data, w: pw, h: ph } = this._pixelClipboard;
-                    const px = Math.round(center.x - pw / 2);
-                    const py = Math.round(center.y - ph / 2);
+                    const srcX = this._pixelClipboard.srcX ?? 40;
+                    const srcY = this._pixelClipboard.srcY ?? 40;
+                    const px = Math.round(srcX + 20);
+                    const py = Math.round(srcY + 20);
                     // Usa drawImage (non putImageData) per preservare compositing:
                     // i pixel trasparenti non sovrascrivono il disegno esistente
                     const tmp = document.createElement('canvas');
@@ -3099,6 +3147,8 @@ class SelectManager {
                     this.phase = 'selected';
                     this._drawSelectionRect(px, py, pw, ph);
                     this._showContextPanel(this.selection, true);
+                    // Aggiorna srcX/srcY per la cascata dei paste successivi
+                    this._pixelClipboard = { ...this._pixelClipboard, srcX: px, srcY: py };
                     CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
                     toast('Incollato!', 'success');
                 }
@@ -3420,38 +3470,12 @@ class SelectManager {
             }
         }
 
-        // 1. Hit test su ObjectLayer (priorità su selezione pixel)
-        if (typeof objectLayer !== 'undefined' && objectLayer) {
-            const hit = objectLayer.hitTest(x, y);
-            if (hit) {
-                // Se avevo un oggetto selezionato e clicco su di lui → drag
-                if (this.phase === 'object-selected' && this.selectedObject?.id === hit.id) {
-                    this.phase = 'object-dragging';
-                    this._objDragStart = { x, y, origX: hit.x, origY: hit.y };
-                    return true;
-                }
-                // Seleziona nuovo oggetto
-                this.selectedObject = hit;
-                this.phase = 'object-selected';
-                this._clearPixelSelection();
-                this._drawSelectionRect(hit.x, hit.y, hit.w, hit.h, true);
-                this._showContextPanel(hit);
-                return true;
-            }
-        }
-
-        // 2. Click fuori da qualsiasi oggetto: deseleziona oggetto se c'era
-        if (this.phase === 'object-selected' || this.phase === 'object-dragging') {
-            this.selectedObject = null;
-            this._clearSelection();
-            this._hideContextPanel();
-        }
-
-        // 3. Selezione pixel rettangolare
+        // 1. Selezione pixel attiva — PRIORITÀ su oggetti sotto
+        // Se il click cade dentro la selezione pixel (o sui suoi handle), gestiamo qui.
         if (this.phase === 'selected' && this.selection) {
             const { x: sx, y: sy, w, h } = this.selection;
 
-            // 3a. Hit test angoli per resize pixel (raggio grande per touch)
+            // 1a. Hit test angoli per resize pixel (raggio grande per touch)
             const HIT_PIX = 24;
             const corners = [
                 { corner: 'tl', hx: sx,     hy: sy },
@@ -3480,7 +3504,7 @@ class SelectManager {
                 }
             }
 
-            // 3b. Dentro la selezione → inizia drag
+            // 1b. Dentro la selezione → inizia drag (ha priorità sugli oggetti sotto)
             if (x >= sx && x <= sx + w && y >= sy && y <= sy + h) {
                 if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
                 this.phase    = 'dragging';
@@ -3498,6 +3522,37 @@ class SelectManager {
                 this.ctx.restore();
                 return true;
             }
+
+            // 1c. Click fuori dalla selezione pixel → deseleziona pixel
+            this._clearPixelSelection();
+            this.phase = 'idle';
+        }
+
+        // 2. Hit test su ObjectLayer
+        if (typeof objectLayer !== 'undefined' && objectLayer) {
+            const hit = objectLayer.hitTest(x, y);
+            if (hit) {
+                // Se avevo un oggetto selezionato e clicco su di lui → drag
+                if (this.phase === 'object-selected' && this.selectedObject?.id === hit.id) {
+                    this.phase = 'object-dragging';
+                    this._objDragStart = { x, y, origX: hit.x, origY: hit.y };
+                    return true;
+                }
+                // Seleziona nuovo oggetto
+                this.selectedObject = hit;
+                this.phase = 'object-selected';
+                this._clearPixelSelection();
+                this._drawSelectionRect(hit.x, hit.y, hit.w, hit.h, true);
+                this._showContextPanel(hit);
+                return true;
+            }
+        }
+
+        // 3. Click fuori da qualsiasi oggetto: deseleziona oggetto se c'era
+        if (this.phase === 'object-selected' || this.phase === 'object-dragging') {
+            this.selectedObject = null;
+            this._clearSelection();
+            this._hideContextPanel();
         }
 
         // Nuova selezione rettangolare
