@@ -197,6 +197,9 @@ class RulerTool {
                 origX:  this.x,
                 origY:  this.y
             };
+            // setPointerCapture garantisce il tracking fluido anche se il dito
+            // esce dai bordi dell'handle durante il trascinamento su LIM
+            try { e.target.setPointerCapture(e.pointerId); } catch(_) {}
         };
 
         const onMove = (e) => {
@@ -216,7 +219,12 @@ class RulerTool {
 
         // Il drag è attivo SOLO sull'handle dedicato
         const dragHandle = this.el.querySelector('#ruler-drag');
-        if (dragHandle) dragHandle.addEventListener('pointerdown', onStart);
+        if (dragHandle) {
+            dragHandle.addEventListener('pointerdown', onStart);
+            // pointermove/pointerup vengono ricevuti anche dopo setPointerCapture,
+            // ma li teniamo su window come safety-net per browser che non supportano
+            // setPointerCapture sugli elementi figli
+        }
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup',   onEnd);
     }
@@ -242,6 +250,8 @@ class RulerTool {
                 startMouse: mouseAngle
             };
             handle.style.cursor = 'grabbing';
+            // setPointerCapture per tracking continuo durante la rotazione su LIM
+            try { e.target.setPointerCapture(e.pointerId); } catch(_) {}
         };
 
         const onMove = (e) => {
@@ -307,18 +317,56 @@ class RulerTool {
     /**
      * Proietta il punto (x, y) sulla retta definita dalla posizione
      * e dall'angolo corrente del righello.
-     * @param {number} x
-     * @param {number} y
+     *
+     * NOTA: this.cx / this.cy sono coordinate schermo (pixel viewport),
+     * ricavate da getBoundingClientRect(). Il punto (x, y) ricevuto dal
+     * CanvasManager è invece in coordinate canvas (già diviso per scale).
+     * Convertiamo il centro del righello nello stesso sistema di riferimento
+     * usando panMgr.getCanvasCoords, oppure facendo la conversione a mano.
+     *
+     * La proiezione avviene sul bordo inferiore del righello (y + height/2
+     * in coordinate locali), che è il riferimento visivo usato per tracciare.
+     *
+     * @param {number} x  — coordinata canvas (già convertita da getCoords)
+     * @param {number} y  — coordinata canvas (già convertita da getCoords)
      * @returns {{x: number, y: number}}
      */
     snapToRuler(x, y) {
+        // --- Converti il centro del righello in coordinate canvas ---
+        let cxCanvas, cyCanvas;
+
+        if (typeof panMgr !== 'undefined' && panMgr) {
+            // Usa la stessa funzione che usa getCoords() in CanvasManager
+            const cc = panMgr.getCanvasCoords(this.cx, this.cy);
+            cxCanvas = cc.x;
+            cyCanvas = cc.y;
+        } else {
+            // Fallback senza pan/zoom: sottrai l'offset del canvas dal DOM
+            const area = document.getElementById('canvas-area');
+            const areaRect = area ? area.getBoundingClientRect() : { left: 0, top: 0 };
+            cxCanvas = this.cx - areaRect.left;
+            cyCanvas = this.cy - areaRect.top;
+        }
+
+        // --- Offset verso il bordo inferiore del righello (linea di riferimento) ---
+        // Il canvas delle tacche è alto 48px; il bordo inferiore è il riferimento visivo.
+        // In coordinate canvas l'offset è (altezza/2 in pixel schermo) / scale.
+        const rulerHalfH = this.body ? this.body.getBoundingClientRect().height / 2 : 24;
+        const scale = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.scale : 1;
+        const halfHCanvas = rulerHalfH / scale;
+
+        // Il bordo inferiore del righello (tenendo conto della rotazione)
         const rad = this.angle * Math.PI / 180;
-        const dx  = x - this.cx;
-        const dy  = y - this.cy;
+        const edgeX = cxCanvas + halfHCanvas * Math.sin(rad);
+        const edgeY = cyCanvas + halfHCanvas * Math.cos(rad);
+
+        // --- Proiezione del punto sul bordo inferiore del righello ---
+        const dx   = x - edgeX;
+        const dy   = y - edgeY;
         const proj = dx * Math.cos(rad) + dy * Math.sin(rad);
         return {
-            x: this.cx + proj * Math.cos(rad),
-            y: this.cy + proj * Math.sin(rad)
+            x: edgeX + proj * Math.cos(rad),
+            y: edgeY + proj * Math.sin(rad)
         };
     }
 }
@@ -801,13 +849,15 @@ class GeometryManager {
     right: 22px;
     top: 50%;
     transform: translateY(-50%);
-    width: 22px;
-    height: 22px;
+    /* Area visiva 22×22, ma hit-area minima 44×44 per uso dito su LIM */
+    width: 44px;
+    height: 44px;
     cursor: grab;
     color: rgba(80, 40, 0, 0.85);
     font-size: 20px;
     line-height: 1;
     user-select: none;
+    touch-action: none;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -845,8 +895,9 @@ class GeometryManager {
     left: 4px;
     top: 50%;
     transform: translateY(-50%);
-    width: 22px;
-    height: 32px;
+    /* Minimo 44×44 per hit-area dito su LIM */
+    width: 44px;
+    height: 44px;
     cursor: grab;
     color: rgba(80, 40, 0, 0.65);
     font-size: 16px;
@@ -854,8 +905,9 @@ class GeometryManager {
     align-items: center;
     justify-content: center;
     user-select: none;
+    touch-action: none;
     z-index: 4;
-    border-radius: 3px;
+    border-radius: 6px;
 }
 .ruler-drag-handle:hover { background: rgba(80,40,0,0.10); }
 .ruler-drag-handle:active { cursor: grabbing; }

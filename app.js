@@ -905,24 +905,18 @@ class CanvasManager {
     }
 
     getCoords(e) {
-        // Con il nuovo sistema CSS transform su canvas-area, le coordinate
-        // devono essere convertite usando panMgr.getCanvasCoords() che divide per scale
+        // Con Pointer Events API, clientX/clientY sono sempre disponibili
+        // (mouse, touch e penna usano la stessa proprietà)
+        const clientX = e.clientX;
+        const clientY = e.clientY;
         if (typeof panMgr !== 'undefined' && panMgr) {
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
             return panMgr.getCanvasCoords(clientX, clientY);
         }
         // Fallback: senza panMgr usa il rect direttamente
         const rect = this.canvas.getBoundingClientRect();
-        if (e.touches) {
-            return {
-                x: (e.touches[0].clientX - rect.left) / (rect.width / this.canvas.width),
-                y: (e.touches[0].clientY - rect.top) / (rect.height / this.canvas.height)
-            };
-        }
         return {
-            x: (e.clientX - rect.left) / (rect.width / this.canvas.width),
-            y: (e.clientY - rect.top) / (rect.height / this.canvas.height)
+            x: (clientX - rect.left) / (rect.width / this.canvas.width),
+            y: (clientY - rect.top) / (rect.height / this.canvas.height)
         };
     }
 
@@ -933,19 +927,29 @@ class CanvasManager {
         el.style.pointerEvents = 'auto'; // overlay riceve eventi
         this.canvas.style.pointerEvents = 'none'; // draw-canvas non riceve eventi diretti
 
-        // Mouse
-        el.addEventListener('mousedown',  e => this._onStart(e));
-        el.addEventListener('mousemove',  e => this._onMove(e));
-        el.addEventListener('mouseup',    e => this._onEnd(e));
-        el.addEventListener('mouseleave', e => this._onEnd(e));
-        // Touch (esclude pinch a 2 dita gestito da PanManager)
-        el.addEventListener('touchstart', e => {
-            if (e.touches.length === 1) { e.preventDefault(); this._onStart(e); }
+        // Pointer Events API unificata (gestisce mouse, touch e penna identicamente)
+        el.addEventListener('pointerdown', e => {
+            // Pinch a 2 dita: non interferire (gestito da PanManager via touchstart)
+            if (e.pointerType === 'touch' && e.isPrimary === false) return;
+            e.preventDefault();
+            el.setPointerCapture(e.pointerId);
+            this._onStart(e);
         }, { passive: false });
-        el.addEventListener('touchmove',  e => {
-            if (e.touches.length === 1) { e.preventDefault(); this._onMove(e); }
+
+        el.addEventListener('pointermove', e => {
+            if (e.pointerType === 'touch' && e.isPrimary === false) return;
+            this._onMove(e);
         }, { passive: false });
-        el.addEventListener('touchend',   e => { e.preventDefault(); this._onEnd(e); }, { passive: false });
+
+        el.addEventListener('pointerup', e => {
+            if (e.pointerType === 'touch' && e.isPrimary === false) return;
+            this._onEnd(e);
+        });
+
+        el.addEventListener('pointercancel', e => {
+            // Tratta come fine tratto (es. sistema interrompe il gesto)
+            this._onEnd(e);
+        });
     }
 
     _onStart(e) {
@@ -960,8 +964,7 @@ class CanvasManager {
             return;
         }
         if (CONFIG.currentTool === 'pan') {
-            panMgr?.onPointerDown(e.clientX || e.touches?.[0]?.clientX || 0,
-                                  e.clientY || e.touches?.[0]?.clientY || 0);
+            panMgr?.onPointerDown(e.clientX, e.clientY);
             CONFIG.isDrawing = true;
             return;
         }
@@ -1003,8 +1006,7 @@ class CanvasManager {
             return;
         }
         if (CONFIG.currentTool === 'pan') {
-            panMgr?.onPointerMove(e.clientX || e.touches?.[0]?.clientX || 0,
-                                  e.clientY || e.touches?.[0]?.clientY || 0);
+            panMgr?.onPointerMove(e.clientX, e.clientY);
             return;
         }
         if (CONFIG.currentTool === 'laser') {
@@ -1056,9 +1058,16 @@ class CanvasManager {
         }
         if (CONFIG.currentTool === 'shape') {
             // La forma è già sul canvas (dall'ultimo _onMove)
-            this._saveUndo(); // salva DOPO aver disegnato la forma
+            this._saveUndo(true); // salva DOPO aver disegnato la forma, notifica dirty
             CONFIG.shapeSnapshot = null;
             return;
+        }
+
+        // Fine tratto per strumenti di disegno (pen, pencil, pastel, marker, eraser):
+        // notifica dirty + auto-save qui, non durante il movimento
+        if (CONFIG.drawTools.includes(CONFIG.currentTool) || CONFIG.currentTool === 'eraser') {
+            CONFIG.isDirty = true;
+            window.autoSaveMgr?.onDirty();
         }
     }
 
@@ -1075,12 +1084,14 @@ class CanvasManager {
         }
     }
 
-    _saveUndo() {
-        CONFIG.isDirty = true;
-        window.autoSaveMgr?.onDirty();
+    _saveUndo(notifyDirty = false) {
         this.undoStack.push(this.canvas.toDataURL());
         if (this.undoStack.length > CONFIG.maxUndo) this.undoStack.shift();
         this.redoStack = [];
+        if (notifyDirty) {
+            CONFIG.isDirty = true;
+            window.autoSaveMgr?.onDirty();
+        }
     }
 
     undo() {
@@ -1747,8 +1758,8 @@ class TextManager {
         const x = (inputRect.left - canvasRect.left) * scaleX;
         const y = (inputRect.top  - canvasRect.top)  * scaleY + this.fontSize * scaleY;
 
-        // Salva undo
-        if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+        // Salva undo e notifica dirty (azione testo completata)
+        if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo(true);
 
         ctx.save();
         const fontString = `${this.fontStyle} ${this.fontSize * scaleY}px ${this.fontFamily}`.trim();
@@ -3523,16 +3534,14 @@ async function loadDriveBackgrounds() {
                     const url  = URL.createObjectURL(blob);
                     const image = new Image();
                     image.onload = () => {
-                        // Aggiunge come oggetto sul canvas (non come sfondo)
-                        const center = getViewportCenter();
-                        const x = center.x - image.naturalWidth / 2;
-                        const y = center.y - image.naturalHeight / 2;
-                        objectLayer.addObject('image', image,
-                            Math.max(0, x), Math.max(0, y),
-                            image.naturalWidth, image.naturalHeight);
+                        // Imposta come sfondo su bg-canvas (sotto i tratti)
+                        bgMgr.setImage(image);
+                        CONFIG.currentBg = 'image';
+                        CONFIG.isDirty = true;
+                        window.autoSaveMgr?.onDirty();
                         const popup = document.getElementById('bg-popup');
                         if (popup) popup.style.display = 'none';
-                        toast('Immagine aggiunta alla lavagna! Usa Seleziona per spostarla.', 'success');
+                        toast('Sfondo impostato! Scrivi sopra liberamente.', 'success');
                         URL.revokeObjectURL(url);
                     };
                     image.onerror = () => toast('Errore caricamento immagine', 'error');

@@ -766,6 +766,59 @@ class LibraryManager {
             return;
         }
 
+        const CACHE_KEY = 'eduboard-lib-cache';
+        const CACHE_TTL = 600000; // 10 minuti
+
+        // Controlla cache localStorage
+        const _renderFromData = async () => {
+            await this.drive._ensureLessonsFolder();
+            this.treeEl.innerHTML = '';
+            await this.renderTree(this.drive.lessonsFolderId, this.treeEl, 0);
+            if (!this.treeEl.hasChildNodes()) {
+                this.treeEl.innerHTML = '<div class="tree-empty">Nessuna lezione salvata.</div>';
+            }
+            if (this.currentFileId) {
+                // Espansione cartelle di primo livello è asincrona — attendi il DOM
+                setTimeout(() => this._highlightCurrentLesson(), 1500);
+            } else {
+                this.treeEl.scrollTop = savedScroll;
+            }
+        };
+
+        // Leggi cache
+        let cached = null;
+        try {
+            const raw = localStorage.getItem(CACHE_KEY);
+            if (raw) cached = JSON.parse(raw);
+        } catch (_) {}
+
+        const cacheValid = cached && (Date.now() - cached.ts < CACHE_TTL);
+
+        if (cacheValid) {
+            // Renderizza subito da cache, poi aggiorna da Drive in background
+            try {
+                await _renderFromData();
+            } catch (err) {
+                this.treeEl.innerHTML = `<div class="tree-empty tree-error">Errore: ${err.message}</div>`;
+            }
+            // Aggiornamento background silenzioso — aggiorna cache e re-render
+            this._backgroundRefresh(CACHE_KEY, savedScroll);
+        } else {
+            // Cache mancante o scaduta: fetch Drive normalmente
+            try {
+                await _renderFromData();
+                // Salva in cache dopo render riuscito
+                try {
+                    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now() }));
+                } catch (_) {}
+            } catch (err) {
+                this.treeEl.innerHTML = `<div class="tree-empty tree-error">Errore: ${err.message}</div>`;
+            }
+        }
+    }
+
+    /** Aggiornamento silenzioso da Drive in background dopo render da cache. */
+    async _backgroundRefresh(cacheKey, savedScroll) {
         try {
             await this.drive._ensureLessonsFolder();
             this.treeEl.innerHTML = '';
@@ -773,18 +826,17 @@ class LibraryManager {
             if (!this.treeEl.hasChildNodes()) {
                 this.treeEl.innerHTML = '<div class="tree-empty">Nessuna lezione salvata.</div>';
             }
-            // Evidenzia la lezione corrente (se esiste) e apri le cartelle genitrici.
-            // Il delay serve per attendere l'espansione asincrona delle cartelle aperte
-            // (le cartelle in _expandedFolders si espandono con expandFolder() non-awaited).
+            // Aggiorna timestamp cache dopo fetch riuscito
+            try {
+                localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now() }));
+            } catch (_) {}
             if (this.currentFileId) {
-                // 1500ms: le cartelle di primo livello si espandono con fetch asincrono,
-                // serve tempo sufficiente per avere il DOM dei sotto-alberi disponibile.
                 setTimeout(() => this._highlightCurrentLesson(), 1500);
             } else {
                 this.treeEl.scrollTop = savedScroll;
             }
-        } catch (err) {
-            this.treeEl.innerHTML = `<div class="tree-empty tree-error">Errore: ${err.message}</div>`;
+        } catch (_) {
+            // Background refresh fallito: nessun messaggio (la cache è già mostrata)
         }
     }
 

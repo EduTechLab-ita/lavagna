@@ -208,12 +208,12 @@ button {
 }
 
 #draw-canvas {
-    z-index: 2;
+    z-index: 3;
     cursor: crosshair;
 }
 
 #objects-canvas {
-    z-index: 3;
+    z-index: 2;
     pointer-events: none; /* non intercetta: SelectManager usa hitTest via overlay */
 }
 
@@ -694,6 +694,18 @@ button {
    Popup selezione sfondo (#bg-popup)
    -------------------------------------------------------------------------- */
 
+#bg-popup {
+    max-height: calc(100vh - 140px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Titolo: non scrolla */
+#bg-popup .popup-title {
+    flex-shrink: 0;
+}
+
 /* Riga orientamento + colore pagina */
 .bg-orient-row {
     display: flex;
@@ -701,6 +713,7 @@ button {
     gap: 6px;
     margin-bottom: 10px;
     flex-wrap: wrap;
+    flex-shrink: 0; /* rimane sempre visibile in cima, non entra nel flusso scroll */
 }
 .bg-orient-btn {
     padding: 4px 10px;
@@ -737,6 +750,9 @@ button {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 8px;
+    overflow-y: auto;
+    flex: 1; /* assorbe lo spazio disponibile nel flex column di #bg-popup e scrolla */
+    min-height: 0; /* necessario per il flex+overflow su alcuni browser */
 }
 
 .bg-opt {
@@ -1656,6 +1672,10 @@ body.fullscreen-mode #canvas-area {
 
 
 /* ===== Sfondi da Drive ===== */
+#bg-drive-section {
+    flex-shrink: 0; /* non viene compresso dal flex di #bg-popup */
+}
+
 .bg-drive-grid {
     display: flex;
     flex-wrap: wrap;
