@@ -2256,28 +2256,57 @@ function openLibraryFrom(side) {
 
 function setupProjectName() {
     const badge = document.getElementById('project-name');
-    badge.title = 'Doppio click per rinominare';
-    badge.style.cursor = 'pointer';
+    badge.title = 'Click per rinominare';
+    badge.style.cursor = 'text';
 
-    badge.addEventListener('dblclick', () => {
+    function startEdit() {
+        if (badge.contentEditable === 'true') return;
         badge.contentEditable = 'true';
+        badge.classList.add('editing');
         badge.focus();
-        // Seleziona tutto
         const range = document.createRange();
         range.selectNodeContents(badge);
         window.getSelection().removeAllRanges();
         window.getSelection().addRange(range);
-    });
+    }
 
-    badge.addEventListener('blur', () => {
+    async function commitEdit() {
+        if (badge.contentEditable !== 'true') return;
         badge.contentEditable = 'false';
-        CONFIG.projectName = badge.textContent.trim() || 'Nuova Lavagna';
-        badge.textContent = CONFIG.projectName;
-    });
+        badge.classList.remove('editing');
+        const newName = badge.textContent.trim() || CONFIG.projectName;
+        badge.textContent = newName;
+
+        if (newName === CONFIG.projectName) return; // nessuna modifica
+        const oldName = CONFIG.projectName;
+        CONFIG.projectName = newName;
+
+        // Se c'è un file Drive aperto, rinomina anche lì
+        const fileId = window.libraryMgr?.currentFileId;
+        if (fileId && window.libraryMgr?.drive?.isConnected?.()) {
+            try {
+                await window.libraryMgr.drive.renameItem(fileId, newName);
+                window.libraryMgr.refresh(); // aggiorna l'albero
+                toast('Rinominato!', 'success');
+            } catch (err) {
+                toast('Errore rinomina Drive: ' + err.message, 'error');
+                CONFIG.projectName = oldName;
+                badge.textContent = oldName;
+            }
+        }
+    }
+
+    badge.addEventListener('click', startEdit);
+
+    badge.addEventListener('blur', commitEdit);
 
     badge.addEventListener('keydown', e => {
         if (e.key === 'Enter') { e.preventDefault(); badge.blur(); }
-        if (e.key === 'Escape') { badge.textContent = CONFIG.projectName; badge.blur(); }
+        if (e.key === 'Escape') {
+            badge.textContent = CONFIG.projectName;
+            badge.contentEditable = 'false';
+            badge.classList.remove('editing');
+        }
     });
 }
 

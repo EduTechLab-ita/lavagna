@@ -130,6 +130,21 @@ button {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    outline: none;
+    border: 1px solid transparent;
+    transition: border-color 0.15s, color 0.15s;
+}
+#project-name:hover {
+    border-color: rgba(255,255,255,0.15);
+    color: var(--text);
+}
+#project-name.editing {
+    border-color: rgba(59,130,246,0.6);
+    color: var(--text);
+    white-space: nowrap;
+    overflow: visible;
+    max-width: 300px;
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
 }
 
 /* --- Lato destro: bottoni azioni --- */
