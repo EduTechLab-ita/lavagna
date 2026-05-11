@@ -1593,9 +1593,10 @@ button {
     transition: opacity 0.3s;
 }
 
-/* Tab freccia libreria — sempre visibile sul bordo sinistro dello schermo */
+/* Tab freccia libreria — sempre visibile sul bordo sinistro dello schermo.
+   NOTA: l'elemento è FUORI da #library-panel (transform del parent blocca position:fixed). */
 .library-tab {
-    position: fixed;               /* fisso rispetto al viewport, sempre visibile */
+    position: fixed;
     left: 0;
     top: 50%;
     transform: translateY(-50%);
@@ -1615,32 +1616,6 @@ button {
     touch-action: none;
 }
 .library-tab:hover { background: rgba(51, 65, 85, 0.97); color: var(--text); }
-
-/* Quando il pannello è aperto, il tab diventa relativo al pannello e sporge a destra */
-.library-panel.open .library-tab {
-    position: absolute;
-    left: auto;
-    right: -28px;
-    top: 50%;
-    z-index: 1;
-}
-
-/* Pannello da destra: tab sul bordo destro dello schermo quando chiuso */
-.library-panel.from-right:not(.open) .library-tab {
-    left: auto;
-    right: 0;
-    border-left: 1px solid var(--border);
-    border-right: none;
-    border-radius: 8px 0 0 8px;
-}
-/* Pannello da destra aperto: tab sporge a sinistra */
-.library-panel.from-right.open .library-tab {
-    right: auto;
-    left: -28px;
-    border-left: 1px solid var(--border);
-    border-right: none;
-    border-radius: 8px 0 0 8px;
-}
 
 /* Libreria aperta da destra */
 .library-panel.from-right {
