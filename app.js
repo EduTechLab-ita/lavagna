@@ -863,23 +863,31 @@ class CanvasManager {
     }
 
     resize() {
+        // ─── SOLUZIONE DEFINITIVA fullscreen/normale ───────────────────────────
+        // Il canvas viene inizializzato UNA SOLA VOLTA al primo avvio.
+        // Dopo, la dimensione del canvas rimane FISSA: solo il CSS scale cambia.
+        // Questo garantisce che:
+        //   • pw (larghezza pagina in canvas-px) non cambi mai → fitScale costante
+        //   • dx non cambi mai → nessuno spostamento orizzontale
+        //   • disegni e oggetti rimangano ai loro canvas-px originali
+        // ──────────────────────────────────────────────────────────────────────
+        const isFirstResize = this.canvas.width === 0;
+
+        if (!isFirstResize) {
+            // Già inizializzato: aggiorna solo la vista CSS (scale + pan) per
+            // il nuovo viewport (es. fullscreen toggle, resize finestra).
+            if (typeof panMgr !== 'undefined' && panMgr) {
+                panMgr.centerView();
+            }
+            return;
+        }
+
+        // Prima inizializzazione: imposta le dimensioni fisse del canvas
         const vW = window.innerWidth;
         const headerH = document.body.classList.contains('fullscreen-mode') ? 0 : 56;
         const vH = window.innerHeight - headerH;
-        const W = vW * 3;   // canvas 3× viewport per simulare area infinita
+        const W = vW * 3;   // 3× viewport: abbondante spazio per pan in tutte le direzioni
         const H = vH * 3;
-
-        // BUG 3 fix: salva posizione relativa prima del resize per ripristinarla dopo
-        const prevCanvasW = this.canvas.width;
-        const prevCanvasH = this.canvas.height;
-        const hadPan = typeof panMgr !== 'undefined' && panMgr && prevCanvasW > 0;
-        const prevDx = hadPan ? panMgr.dx : 0;
-        const prevDy = hadPan ? panMgr.dy : 0;
-        // se il canvas era già inizializzato, calcola posizione relativa (0=primo avvio)
-        const isFirstResize = prevCanvasW === 0;
-
-        // Salva disegno prima del resize
-        const savedURL = prevCanvasW > 0 ? this.canvas.toDataURL() : null;
 
         this.canvas.width = W;
         this.canvas.height = H;
@@ -889,46 +897,19 @@ class CanvasManager {
         this.overlayCanvas.height = H;
         this.overlayCanvas.style.width  = W + 'px';
         this.overlayCanvas.style.height = H + 'px';
-        // Nota: bgCanvas non ha stile gestito qui, è gestito da bgMgr
         const bgCvs = document.getElementById('bg-canvas');
         if (bgCvs) { bgCvs.style.width = W + 'px'; bgCvs.style.height = H + 'px'; }
-        // objects-canvas
         if (typeof objectLayer !== 'undefined' && objectLayer) {
             objectLayer.resize(W, H);
         } else {
             const objCvs = document.getElementById('objects-canvas');
-            if (objCvs) { objCvs.width = W; objCvs.height = H; objCvs.style.width = W + 'px'; objCvs.style.height = H + 'px'; }
+            if (objCvs) { objCvs.width = W; objCvs.height = H;
+                          objCvs.style.width = W + 'px'; objCvs.style.height = H + 'px'; }
         }
         this.bgMgr.resize(W, H);
         this.laser.resize(W, H);
 
-        // Calcola shift per mantenere disegni e oggetti allineati alla pagina di sfondo.
-        // La pagina è centrata nel canvas: quando H cambia (es. fullscreen toggle),
-        // il centro verticale del canvas cambia di deltaH/2 → shift tutti i contenuti.
-        const shiftX = isFirstResize ? 0 : (W - prevCanvasW) / 2;
-        const shiftY = isFirstResize ? 0 : (H - prevCanvasH) / 2;
-
-        // Ripristina disegno shiftato: il contenuto rimane allineato alla pagina di sfondo.
-        if (savedURL && prevCanvasW > 0) {
-            const img = new Image();
-            img.onload = () => {
-                this.ctx.drawImage(img, shiftX, shiftY);
-            };
-            img.src = savedURL;
-        }
-
-        // Sposta gli oggetti dello stesso delta: rimangono allineati alla pagina
-        if (!isFirstResize && (shiftX !== 0 || shiftY !== 0) &&
-            typeof objectLayer !== 'undefined' && objectLayer) {
-            for (const obj of objectLayer.objects) {
-                obj.x += shiftX;
-                obj.y += shiftY;
-            }
-            // render è già stato chiamato da objectLayer.resize(); questo aggiorna le posizioni
-            objectLayer.render();
-        }
-
-        // Al primo avvio E dopo ogni resize: centra la vista con scale=100% (pagina = schermo)
+        // Centra la vista al 100% (pagina = larghezza schermo)
         if (typeof panMgr !== 'undefined' && panMgr) {
             panMgr.centerView();
         }
@@ -2597,13 +2578,15 @@ class PanManager {
     }
 
     // Calcola lo scale corrispondente a "100%" = pagina larga come lo schermo.
-    // Dipende dalla dimensione della pagina di sfondo nel canvas 3× viewport.
+    // Usa le dimensioni FISSE del canvas (impostate una sola volta al primo avvio)
+    // così fitScale rimane costante tra fullscreen e normale (vW non cambia col fullscreen).
     _computeFitScale() {
         const vW = window.innerWidth;
-        const headerH = document.body.classList.contains('fullscreen-mode') ? 0 : 56;
-        const vH = window.innerHeight - headerH;
-        const W = vW * 3;
-        const H = vH * 3;
+        const canvas = document.getElementById('draw-canvas');
+        // Canvas non ancora inizializzato: usa fallback
+        if (!canvas || canvas.width === 0) return 1 / (3 * 0.9);
+        const W = canvas.width;   // dimensioni FISSE
+        const H = canvas.height;  // dimensioni FISSE
         if (typeof bgMgr !== 'undefined' && bgMgr && typeof bgMgr._getPageRect === 'function') {
             const { pw } = bgMgr._getPageRect(W, H);
             if (pw > 0) return vW / pw;
