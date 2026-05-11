@@ -355,10 +355,11 @@ class RulerTool {
         const scale = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.scale : 1;
         const halfHCanvas = rulerHalfH / scale;
 
-        // Il bordo inferiore del righello (tenendo conto della rotazione)
+        // Bordo SUPERIORE del righello = lato numerato (riferimento visivo per la scrittura)
+        // Direzione perpendicolare verso l'alto rispetto all'asse del righello: (+sin, -cos)
         const rad = this.angle * Math.PI / 180;
         const edgeX = cxCanvas + halfHCanvas * Math.sin(rad);
-        const edgeY = cyCanvas + halfHCanvas * Math.cos(rad);
+        const edgeY = cyCanvas - halfHCanvas * Math.cos(rad);
 
         // --- Proiezione del punto sul bordo inferiore del righello ---
         const dx   = x - edgeX;

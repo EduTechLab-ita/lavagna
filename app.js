@@ -146,19 +146,21 @@ class BackgroundManager {
             ctx.restore();
 
             const img = this.uploadedImage;
-            const scaleX = pw / img.width;
-            const scaleY = ph / img.height;
-            const scale = Math.max(scaleX, scaleY);
-            const w = img.width * scale;
-            const h = img.height * scale;
-            const x = px + (pw - w) / 2;
-            const y = py + (ph - h) / 2;
+            // Contain top-left: se l'immagine supera il foglio la scala proporzionalmente
+            // per stare dentro (contain), poi la ancora all'angolo top-left. Mai cover, mai centrato.
+            let drawW = img.width;
+            let drawH = img.height;
+            if (drawW > pw || drawH > ph) {
+                const scale = Math.min(pw / drawW, ph / drawH);
+                drawW = drawW * scale;
+                drawH = drawH * scale;
+            }
             ctx.save();
             ctx.beginPath();
             ctx.rect(px, py, pw, ph);
             ctx.clip();
             ctx.globalAlpha = 0.9;
-            ctx.drawImage(img, x, y, w, h);
+            ctx.drawImage(img, px, py, drawW, drawH);
             ctx.globalAlpha = 1;
             ctx.restore();
             return;
@@ -1446,9 +1448,68 @@ class ToolbarManager {
             document.getElementById('bg-orient-landscape')?.classList.remove('active');
         });
 
-        // Colore pagina
+        // Colore pagina — palette predefinita + fallback color picker nativo
+        const PAGE_COLORS = [
+            '#ffffff', '#fffef0', '#fffde7', '#f0fff4',
+            '#e8f5e9', '#e3f2fd', '#fce4ec', '#f3e5f5',
+            '#fff3e0', '#fbe9e7', '#ede7f6', '#e0f2f1',
+            '#f5f5f5', '#bdbdbd', '#424242', '#212121',
+        ];
+
+        const _applyPageColor = (color) => {
+            bgMgr.setBgColor(color);
+            const swatch = document.getElementById('bg-page-color-swatch');
+            if (swatch) swatch.style.background = color;
+            // Aggiorna anche il color picker nascosto per coerenza
+            const picker = document.getElementById('bg-page-color');
+            if (picker) picker.value = color;
+        };
+
+        // Popola la griglia colori
+        const colorGrid = document.getElementById('bg-page-color-grid');
+        if (colorGrid) {
+            PAGE_COLORS.forEach(color => {
+                const dot = document.createElement('button');
+                dot.className = 'bg-page-color-dot';
+                dot.style.background = color;
+                dot.title = color;
+                dot.addEventListener('click', () => {
+                    _applyPageColor(color);
+                    document.getElementById('bg-page-color-popup').style.display = 'none';
+                    CONFIG.isDirty = true;
+                    window.autoSaveMgr?.onDirty();
+                });
+                colorGrid.appendChild(dot);
+            });
+        }
+
+        // Apri/chiudi mini-popup
+        document.getElementById('bg-page-color-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const popup = document.getElementById('bg-page-color-popup');
+            if (!popup) return;
+            popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+        });
+
+        // Pulsante "Altro..." apre color picker nativo
+        document.getElementById('bg-page-color-custom-btn')?.addEventListener('click', () => {
+            document.getElementById('bg-page-color')?.click();
+        });
+
+        // Color picker nativo (fallback)
         document.getElementById('bg-page-color')?.addEventListener('input', (e) => {
-            bgMgr.setBgColor(e.target.value);
+            _applyPageColor(e.target.value);
+            CONFIG.isDirty = true;
+            window.autoSaveMgr?.onDirty();
+        });
+
+        // Chiudi mini-popup cliccando fuori
+        document.addEventListener('click', (e) => {
+            const popup = document.getElementById('bg-page-color-popup');
+            if (!popup || popup.style.display === 'none') return;
+            if (!e.target.closest('#bg-page-color-btn') && !e.target.closest('#bg-page-color-popup')) {
+                popup.style.display = 'none';
+            }
         });
 
         document.querySelectorAll('.bg-opt').forEach(btn => {
@@ -3605,18 +3666,24 @@ async function importImageFile(file, clientX, clientY) {
         img.onload = () => {
             let x, y;
             if (clientX !== undefined && clientY !== undefined) {
-                // Drop position
-                const area = document.getElementById('canvas-area');
-                const rect = area.getBoundingClientRect();
-                const scale = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.scale : 1;
-                x = (clientX - rect.left) / scale - img.naturalWidth / 2;
-                y = (clientY - rect.top) / scale - img.naturalHeight / 2;
+                // Drop position: usa la stessa funzione di conversione usata dal resto del codice
+                const coords = (typeof panMgr !== 'undefined' && panMgr)
+                    ? panMgr.getCanvasCoords(clientX, clientY)
+                    : (() => {
+                        const area = document.getElementById('canvas-area');
+                        const rect = area.getBoundingClientRect();
+                        return { x: clientX - rect.left, y: clientY - rect.top };
+                    })();
+                x = coords.x - img.naturalWidth / 2;
+                y = coords.y - img.naturalHeight / 2;
             } else {
                 const center = getViewportCenter();
                 x = center.x - img.naturalWidth / 2;
                 y = center.y - img.naturalHeight / 2;
             }
-            objectLayer.addObject('image', img, Math.max(0, x), Math.max(0, y),
+            // Non clampare a 0: il canvas è 3× il viewport e il centro visibile è a (W/2, H/2),
+            // non all'origine. Il clamp a 0 sposterebbe le immagini grandi fuori dal foglio A4.
+            objectLayer.addObject('image', img, x, y,
                 img.naturalWidth, img.naturalHeight);
             URL.revokeObjectURL(url);
             toast('Immagine importata! Usa Seleziona per spostarla.', 'success');
@@ -3652,12 +3719,23 @@ async function importPdfFile(file, clientX, clientY) {
         // Scala: fattore per renderizzare a buona risoluzione (1.5 = 150% DPI)
         const scale = 1.5;
 
-        // Calcola posizione iniziale
-        const area = document.getElementById('canvas-area');
-        const rect = area.getBoundingClientRect();
-        const pScale = panMgr?.scale || 1;
-        let baseX = clientX !== undefined ? (clientX - rect.left) / pScale : 50;
-        let baseY = clientY !== undefined ? (clientY - rect.top) / pScale : 50;
+        // Calcola posizione iniziale — usa la stessa conversione coordinate del resto del codice
+        let baseX, baseY;
+        if (clientX !== undefined && clientY !== undefined) {
+            const coords = (typeof panMgr !== 'undefined' && panMgr)
+                ? panMgr.getCanvasCoords(clientX, clientY)
+                : (() => {
+                    const area = document.getElementById('canvas-area');
+                    const rect = area.getBoundingClientRect();
+                    return { x: clientX - rect.left, y: clientY - rect.top };
+                })();
+            baseX = coords.x;
+            baseY = coords.y;
+        } else {
+            const center = getViewportCenter();
+            baseX = center.x;
+            baseY = center.y;
+        }
 
         // Renderizza tutte le pagine come immagini separate
         for (let pageNum = 1; pageNum <= numPages; pageNum++) {
@@ -3677,7 +3755,8 @@ async function importPdfFile(file, clientX, clientY) {
 
             // Aggiungi come oggetto (una pagina sotto l'altra, offset di 20px)
             const offsetY = baseY + (pageNum - 1) * (viewport.height / scale + 20);
-            objectLayer.addObject('pdf-page', imgEl, Math.max(0, baseX), Math.max(0, offsetY), viewport.width / scale, viewport.height / scale);
+            // Non clampare a 0: il canvas è 3× il viewport, il centro visibile non è all'origine
+            objectLayer.addObject('pdf-page', imgEl, baseX, offsetY, viewport.width / scale, viewport.height / scale);
         }
 
         toast(`PDF importato! ${numPages} pagina${numPages > 1 ? 'e' : ''} — usa Seleziona per spostarle`, 'success');
@@ -3766,6 +3845,8 @@ class PageManager {
             // Aggiorna UI colore/orientamento
             const colorEl = document.getElementById('bg-page-color');
             if (colorEl) colorEl.value = this.backgroundManager.bgColor;
+            const swatch = document.getElementById('bg-page-color-swatch');
+            if (swatch) swatch.style.background = this.backgroundManager.bgColor;
             const oL = document.getElementById('bg-orient-landscape');
             const oP = document.getElementById('bg-orient-portrait');
             if (oL && oP) {

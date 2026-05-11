@@ -751,6 +751,78 @@ button {
     cursor: pointer;
 }
 
+/* Bottone colore pagina (sostituisce input[type=color] visibile) */
+.bg-page-color-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 24px;
+    padding: 2px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--bg-elevated);
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+.bg-page-color-btn:hover { border-color: var(--accent); }
+.bg-page-color-swatch {
+    display: block;
+    width: 20px;
+    height: 16px;
+    border-radius: 3px;
+    border: 1px solid rgba(0,0,0,0.18);
+}
+
+/* Mini-popup palette colori pagina */
+.bg-page-color-popup {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 200;
+    background: rgba(30, 41, 59, 0.98);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+    width: 154px;
+}
+.bg-page-color-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-bottom: 8px;
+}
+.bg-page-color-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.12s;
+    padding: 0;
+}
+.bg-page-color-dot:hover {
+    border-color: var(--accent);
+    transform: scale(1.15);
+}
+.bg-page-color-custom-btn {
+    width: 100%;
+    padding: 5px 0;
+    font-size: 0.78rem;
+    font-family: inherit;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.bg-page-color-custom-btn:hover {
+    background: rgba(59,130,246,0.15);
+    color: var(--accent);
+}
+
 .bg-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -1281,7 +1353,7 @@ button {
     z-index: 250;
     display: flex;
     flex-direction: column;
-    overflow: hidden;               /* impedisce al contenuto di fuoriuscire */
+    overflow: visible;              /* visible per non clippare il tab-freccia che sporge fuori dal bordo */
     /* Animazione slide da sinistra */
     transform: translateX(-100%);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
