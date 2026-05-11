@@ -2216,41 +2216,63 @@ body.has-page-bar #zoom-indicator {
 }
 
 /* =============================================================================
-   MINI COLOR BAR — barra colori rapida sopra la toolbar
-   Visibile solo con strumenti di scrittura attivi (pen, pencil, pastel, marker)
+   TOOLBAR TOP ROW — riga con mini-color-bar + linguetta toggle fianco a fianco
+   ============================================================================= */
+#toolbar-top-row {
+    display: flex;
+    align-items: flex-end;  /* allinea in basso così le pillole sembrano appoggiate */
+    gap: 0;
+}
+
+/* =============================================================================
+   MINI COLOR BAR — accanto alla freccia toolbar, stessa altezza della linguetta
    ============================================================================= */
 #mini-color-bar {
-    position: fixed;
-    bottom: 48px;  /* sopra la linguetta toolbar (40px) + 8px margine */
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 8px;
+    display: none;           /* nascosta di default, JS la mostra con flex */
+    align-items: center;
+    gap: 6px;
     padding: 6px 10px;
-    background: rgba(15, 23, 42, 0.75);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 24px;
-    z-index: 180;
+    /* Stessa pillola della toolbar-toggle ma sul lato opposto */
+    background: rgba(30, 41, 59, 0.55);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-bottom: none;
+    border-radius: 20px 20px 0 0;
     touch-action: none;
+    order: -1;               /* default: a sinistra della freccia */
+    transition: background 0.2s;
 }
-/* Con page-bar visibile, sposta la mini-bar più in alto */
-body.has-page-bar #mini-color-bar {
-    bottom: 86px;  /* 38px page-bar + 48px base */
+#mini-color-bar.right {
+    order: 1;                /* a destra della freccia */
+    border-radius: 20px 20px 0 0;
 }
 .mini-color-dot {
-    width: 26px;
-    height: 26px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
-    border: 2px solid rgba(255,255,255,0.3);
+    border: 2px solid rgba(255,255,255,0.25);
     cursor: pointer;
     transition: transform 0.15s, border-color 0.15s;
     touch-action: manipulation;
     padding: 0;
+    flex-shrink: 0;
 }
 .mini-color-dot:active { transform: scale(0.85); }
 .mini-color-dot.active {
-    border-color: white;
-    box-shadow: 0 0 0 2px rgba(59,130,246,0.7);
+    border-color: rgba(255,255,255,0.9);
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.6);
 }
+/* Pulsante ⇄ per spostare a destra/sinistra */
+.mini-color-side-btn {
+    font-size: 0.75rem;
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.35);
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+    touch-action: manipulation;
+    flex-shrink: 0;
+}
+.mini-color-side-btn:hover { color: rgba(255,255,255,0.7); }

@@ -101,12 +101,20 @@
     <!-- ===== TOOLBAR WRAPPER ===== -->
     <div id="toolbar-wrapper">
 
-        <!-- Linguetta toggle — sempre visibile -->
-        <button id="toolbar-toggle" title="Mostra/Nascondi strumenti">
-            <svg id="toggle-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="18 15 12 9 6 15"/>
-            </svg>
-        </button>
+        <!-- Riga superiore: mini-color-bar + linguetta toggle -->
+        <div id="toolbar-top-row">
+            <!-- Mini-bar colori rapidi — visibile solo con strumenti di scrittura -->
+            <div id="mini-color-bar" class="mini-color-bar">
+                <!-- Pallini generati dinamicamente in JS -->
+                <button id="mini-color-side-btn" class="mini-color-side-btn" title="Sposta a destra/sinistra">⇄</button>
+            </div>
+            <!-- Linguetta toggle — sempre visibile -->
+            <button id="toolbar-toggle" title="Mostra/Nascondi strumenti">
+                <svg id="toggle-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polyline points="18 15 12 9 6 15"/>
+                </svg>
+            </button>
+        </div>
 
         <!-- Toolbar principale -->
         <div id="floating-toolbar">
@@ -555,10 +563,6 @@
         </div>
     </div>
 
-    <!-- Mini Color Bar — pallini colore rapidi sopra la toolbar -->
-    <div id="mini-color-bar" class="mini-color-bar" style="display:none">
-        <!-- Pallini generati dinamicamente in JS -->
-    </div>
 
     <!-- PDF.js per importazione PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>

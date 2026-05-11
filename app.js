@@ -3991,53 +3991,54 @@ class PageManager {
 // Barra colori rapida persistente, visibile solo con strumenti di scrittura.
 // =============================================================================
 
-const MINI_COLORS_KEY = 'eduboard_recent_colors';
-const MAX_RECENT = 4;
+const MAX_RECENT_MINI = 4;
 const DEFAULT_COLORS_MINI = ['#000000', '#dc2626', '#1d4ed8', '#16a34a'];
+
+// Colori recenti della SESSIONE CORRENTE (reset ad ogni ricaricamento, mai su localStorage)
+let _miniSessionColors = [];
 
 function setupMiniColorBar() {
     const bar = document.getElementById('mini-color-bar');
     if (!bar) return;
 
-    // Carica colori recenti da localStorage
-    let recentColors = JSON.parse(localStorage.getItem(MINI_COLORS_KEY) || '[]');
+    // Lato preferito (localStorage solo per il lato, non per i colori)
+    const SIDE_KEY = 'eduboard_minibar_side';
+    if (localStorage.getItem(SIDE_KEY) === 'right') bar.classList.add('right');
+
+    function _applyColor(color) {
+        CONFIG.currentColor = color;
+        if (typeof brush !== 'undefined' && brush) brush.color = color;
+        // Sincronizza toolbar principale
+        document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
+        const match = document.querySelector(`.color-swatch[data-color="${CSS.escape ? CSS.escape(color) : color}"]`);
+        if (match) { match.classList.add('active'); }
+        else {
+            const custom = document.getElementById('color-custom');
+            if (custom) { custom.style.background = color; custom.classList.add('active'); }
+        }
+        // Aggiorna recenti sessione (prepend, no duplicati, max 4)
+        _miniSessionColors = [color, ..._miniSessionColors.filter(c => c !== color)].slice(0, MAX_RECENT_MINI);
+        renderBar();
+    }
 
     function getDisplayColors() {
-        // Combina recenti + default, no duplicati, max 8 pallini
-        return [...new Set([...recentColors, ...DEFAULT_COLORS_MINI])].slice(0, 8);
+        // Recenti sessione + default, no duplicati, max 4 totali
+        return [...new Set([..._miniSessionColors, ...DEFAULT_COLORS_MINI])].slice(0, MAX_RECENT_MINI);
     }
 
     function renderBar() {
-        bar.innerHTML = '';
+        // Rimuovi solo i pallini (non il pulsante ⇄)
+        bar.querySelectorAll('.mini-color-dot').forEach(d => d.remove());
+        const sideBtn = bar.querySelector('.mini-color-side-btn');
         getDisplayColors().forEach(color => {
             const dot = document.createElement('button');
             dot.className = 'mini-color-dot' + (color === CONFIG.currentColor ? ' active' : '');
             dot.style.background = color;
-            dot.setAttribute('aria-label', 'Colore ' + color);
-            dot.setAttribute('title', color);
-            dot.addEventListener('click', () => {
-                CONFIG.currentColor = color;
-                // Aggiorna tutti i color-swatch della toolbar principale
-                document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
-                // Cerca il swatch corrispondente, altrimenti attiva il pulsante custom
-                const matchingSwatch = document.querySelector(`.color-swatch[data-color="${color}"]`);
-                if (matchingSwatch) {
-                    matchingSwatch.classList.add('active');
-                } else {
-                    const customBtn = document.getElementById('color-custom');
-                    if (customBtn) {
-                        customBtn.style.background = color;
-                        customBtn.classList.add('active');
-                    }
-                }
-                // Aggiorna attivo nella mini-bar
-                bar.querySelectorAll('.mini-color-dot').forEach(d => d.classList.remove('active'));
-                dot.classList.add('active');
-                // Aggiungi ai recenti e salva
-                recentColors = [color, ...recentColors.filter(c => c !== color)].slice(0, MAX_RECENT);
-                localStorage.setItem(MINI_COLORS_KEY, JSON.stringify(recentColors));
-            });
-            bar.appendChild(dot);
+            dot.title = color;
+            dot.addEventListener('click', () => _applyColor(color));
+            // Inserisci prima del pulsante ⇄ se c'è, altrimenti in fondo
+            if (sideBtn) bar.insertBefore(dot, sideBtn);
+            else bar.appendChild(dot);
         });
     }
 
@@ -4048,23 +4049,26 @@ function setupMiniColorBar() {
         if (isDrawTool) renderBar();
     }
 
-    // Aggiorna il pallino attivo quando il colore cambia dal menu principale
+    // Pulsante ⇄ — toggle lato sinistro/destro
+    const sideBtn = document.getElementById('mini-color-side-btn');
+    if (sideBtn) {
+        sideBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            bar.classList.toggle('right');
+            localStorage.setItem(SIDE_KEY, bar.classList.contains('right') ? 'right' : 'left');
+        });
+    }
+
+    // Aggiorna pallino attivo quando il colore cambia dal menu principale
     document.addEventListener('minicolor:update', (e) => {
         const color = e.detail?.color;
         if (!color) return;
-        // Aggiorna active nella mini-bar senza fare un re-render completo
-        bar.querySelectorAll('.mini-color-dot').forEach(d => {
-            d.classList.toggle('active', d.style.background === color ||
-                d.getAttribute('aria-label') === 'Colore ' + color);
-        });
-        // Aggiungi il nuovo colore ai recenti (non ridisegna subito, verrà mostrato alla prossima apertura)
-        if (!recentColors.includes(color)) {
-            recentColors = [color, ...recentColors].slice(0, MAX_RECENT);
-            localStorage.setItem(MINI_COLORS_KEY, JSON.stringify(recentColors));
-        }
+        // Aggiungi ai recenti di sessione e ri-renderizza
+        _miniSessionColors = [color, ..._miniSessionColors.filter(c => c !== color)].slice(0, MAX_RECENT_MINI);
+        if (bar.style.display !== 'none') renderBar();
     });
 
-    // Hook sulla selezione strumento: ogni tool-btn[data-tool] aggiorna la visibilità
+    // Aggiorna visibilità quando cambia strumento
     document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
         btn.addEventListener('click', () => setTimeout(updateVisibility, 50));
     });
