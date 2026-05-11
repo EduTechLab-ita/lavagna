@@ -761,10 +761,24 @@ class LibraryManager {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // RENDER LOCK — previene rendering concorrenti che causano duplicazione
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /** Annulla il background refresh in corso (se presente). */
+    _cancelBackgroundRefresh() {
+        this._bgRefreshToken = (this._bgRefreshToken || 0) + 1;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // REFRESH — ricarica albero dal Drive
     // ──────────────────────────────────────────────────────────────────────────
 
     async refresh() {
+        // Annulla qualsiasi background refresh in corso e acquisisci il lock
+        this._cancelBackgroundRefresh();
+        if (this._refreshLock) return; // già in corso: ignora chiamata doppia
+        this._refreshLock = true;
+
         this._updateDriveStatus();
         const savedScroll = this.treeEl.scrollTop;
         this.treeEl.innerHTML = '<div class="tree-loading">Caricamento...</div>';
@@ -814,6 +828,9 @@ class LibraryManager {
             } catch (err) {
                 this.treeEl.innerHTML = `<div class="tree-empty tree-error">Errore: ${err.message}</div>`;
             }
+            // Rilascia lock PRIMA del background refresh (così se refresh() è richiamata
+            // durante il background refresh, partirà una nuova sequenza da capo)
+            this._refreshLock = false;
             // Aggiornamento background silenzioso — aggiorna cache e re-render
             this._backgroundRefresh(CACHE_KEY, savedScroll);
         } else {
@@ -827,15 +844,22 @@ class LibraryManager {
             } catch (err) {
                 this.treeEl.innerHTML = `<div class="tree-empty tree-error">Errore: ${err.message}</div>`;
             }
+            this._refreshLock = false;
         }
     }
 
     /** Aggiornamento silenzioso da Drive in background dopo render da cache. */
     async _backgroundRefresh(cacheKey, savedScroll) {
+        // Cattura il token corrente: se refresh() viene chiamata di nuovo, il token cambia
+        // e questo background refresh si fermerà prima di sovrascrivere il nuovo render.
+        const myToken = this._bgRefreshToken || 0;
         try {
             await this.drive._ensureLessonsFolder();
+            // Controlla se siamo stati annullati (nuovo refresh partito)
+            if ((this._bgRefreshToken || 0) !== myToken) return;
             this.treeEl.innerHTML = '';
             await this.renderTree(this.drive.lessonsFolderId, this.treeEl, 0);
+            if ((this._bgRefreshToken || 0) !== myToken) return; // annullato durante renderTree
             if (!this.treeEl.hasChildNodes()) {
                 this.treeEl.innerHTML = '<div class="tree-empty">Nessuna lezione salvata.</div>';
             }
@@ -1879,9 +1903,7 @@ function initDrive() {
     // ── Pulsante chiudi pannello libreria (×) ─────────────────────────────
     document.getElementById('library-close')?.addEventListener('click', () => {
         const panel = document.getElementById('library-panel');
-        const side  = panel?.dataset.side || 'left';
         panel?.classList.remove('open');
-        document.getElementById(`lib-tab-${side}`)?.classList.remove('lib-tab--active');
         if (typeof _updateLibraryTabArrow === 'function') _updateLibraryTabArrow(panel);
     });
 
@@ -1891,15 +1913,12 @@ function initDrive() {
         if (!panel) return;
         const isOpen = panel.classList.contains('open');
         if (isOpen) {
-            const side = panel.dataset.side || 'left';
             panel.classList.remove('open');
-            document.getElementById(`lib-tab-${side}`)?.classList.remove('lib-tab--active');
         } else {
-            // Riapri usando il lato attuale (default: left)
-            const side = panel.dataset.side || 'left';
-            panel.classList.toggle('from-right', side === 'right');
+            // Riapri sempre da sinistra (le vecchie linguette laterali sono state rimosse)
+            panel.classList.remove('from-right');
+            panel.dataset.side = 'left';
             panel.classList.add('open');
-            document.getElementById(`lib-tab-${side}`)?.classList.add('lib-tab--active');
             if (typeof libraryMgr !== 'undefined' && libraryMgr) libraryMgr.refresh();
         }
         // Ruota la freccia del tab in base allo stato

@@ -1193,6 +1193,8 @@ class ToolbarManager {
         this.wrapper.classList.add('visible');
         this.toggleBtn.querySelector('#toggle-arrow').style.transform = 'rotate(180deg)';
         this._updateOptionsRow();
+        // Nascondi le mini-bar quando il menu grande è aperto (si sovrapporrebbero)
+        document.dispatchEvent(new CustomEvent('toolbar:opened'));
     }
 
     hide() {
@@ -1201,6 +1203,8 @@ class ToolbarManager {
         this.toggleBtn.querySelector('#toggle-arrow').style.transform = 'rotate(0deg)';
         this._closeAllPopups();
         this.optionsRow.style.display = 'none'; // nasconde esplicitamente la riga opzioni
+        // Mostra le mini-bar quando il menu grande si chiude
+        document.dispatchEvent(new CustomEvent('toolbar:closed'));
     }
 
     toggle() {
@@ -2193,53 +2197,10 @@ function setupFullscreen() {
 }
 
 // =============================================================================
-// SEZIONE 12b — Linguette libreria laterali + apertura da lato
+// SEZIONE 12b — Linguette libreria laterali (RIMOSSE — ora usa .library-tab fixed in CSS)
 // =============================================================================
-
-function setupLibraryTabs() {
-    ['left', 'right'].forEach(side => {
-        const tab = document.getElementById(`lib-tab-${side}`);
-        if (!tab) return;
-
-        // Ripristina posizione salvata
-        const savedTop = localStorage.getItem(`lib-tab-${side}-top`);
-        if (savedTop) {
-            tab.style.top    = savedTop;
-            tab.style.transform = 'none';
-        }
-
-        let dragStartY = 0, dragStartTop = 0, isDragging = false;
-
-        tab.addEventListener('pointerdown', (e) => {
-            dragStartY   = e.clientY;
-            dragStartTop = tab.getBoundingClientRect().top;
-            isDragging   = false;
-            tab.setPointerCapture(e.pointerId);
-        });
-
-        tab.addEventListener('pointermove', (e) => {
-            const dy = Math.abs(e.clientY - dragStartY);
-            if (dy > 5) isDragging = true;
-            if (!isDragging) return;
-            const newTop = Math.max(40, Math.min(window.innerHeight - 80,
-                dragStartTop + (e.clientY - dragStartY)));
-            tab.style.top       = newTop + 'px';
-            tab.style.transform = 'none';
-            localStorage.setItem(`lib-tab-${side}-top`, newTop + 'px');
-        });
-
-        tab.addEventListener('pointerup', (e) => {
-            if (!isDragging) {
-                // È un click: apri/chiudi libreria dal lato corrispondente
-                if (typeof libraryMgr !== 'undefined' && libraryMgr) {
-                    openLibraryFrom(side);
-                } else {
-                    toast('Connetti Google Drive per usare la libreria', 'info');
-                }
-            }
-        });
-    });
-}
+// setupLibraryTabs() rimossa: le vecchie #lib-tab-left/right sono state eliminate.
+// La nuova #library-tab (position:fixed) è sempre visibile e gestita in drive.js.
 
 /** Aggiorna la freccia del tab libreria in base allo stato aperto/chiuso e al lato. */
 function _updateLibraryTabArrow(panel) {
@@ -4001,9 +3962,7 @@ function setupMiniColorBar() {
     const bar = document.getElementById('mini-color-bar');
     if (!bar) return;
 
-    // Lato preferito (localStorage solo per il lato, non per i colori)
-    const SIDE_KEY = 'eduboard_minibar_side';
-    if (localStorage.getItem(SIDE_KEY) === 'right') bar.classList.add('right');
+    let _toolbarOpen = false;
 
     function _applyColor(color) {
         CONFIG.currentColor = color;
@@ -4022,48 +3981,38 @@ function setupMiniColorBar() {
     }
 
     function getDisplayColors() {
-        // Recenti sessione + default, no duplicati, max 4 totali
         return [...new Set([..._miniSessionColors, ...DEFAULT_COLORS_MINI])].slice(0, MAX_RECENT_MINI);
     }
 
     function renderBar() {
-        // Rimuovi solo i pallini (non il pulsante ⇄)
         bar.querySelectorAll('.mini-color-dot').forEach(d => d.remove());
-        const sideBtn = bar.querySelector('.mini-color-side-btn');
         getDisplayColors().forEach(color => {
             const dot = document.createElement('button');
             dot.className = 'mini-color-dot' + (color === CONFIG.currentColor ? ' active' : '');
             dot.style.background = color;
             dot.title = color;
             dot.addEventListener('click', () => _applyColor(color));
-            // Inserisci prima del pulsante ⇄ se c'è, altrimenti in fondo
-            if (sideBtn) bar.insertBefore(dot, sideBtn);
-            else bar.appendChild(dot);
+            bar.appendChild(dot);
         });
     }
 
     function updateVisibility() {
         const drawTools = ['pen', 'pencil', 'pastel', 'marker'];
         const isDrawTool = drawTools.includes(CONFIG.currentTool);
-        bar.style.display = isDrawTool ? 'flex' : 'none';
-        if (isDrawTool) renderBar();
+        // Nascondi se toolbar grande aperta O se non è uno strumento di scrittura
+        const show = isDrawTool && !_toolbarOpen;
+        bar.style.display = show ? 'flex' : 'none';
+        if (show) renderBar();
     }
 
-    // Pulsante ⇄ — toggle lato sinistro/destro
-    const sideBtn = document.getElementById('mini-color-side-btn');
-    if (sideBtn) {
-        sideBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            bar.classList.toggle('right');
-            localStorage.setItem(SIDE_KEY, bar.classList.contains('right') ? 'right' : 'left');
-        });
-    }
+    // Nascondi quando il menu grande si apre
+    document.addEventListener('toolbar:opened', () => { _toolbarOpen = true; updateVisibility(); });
+    document.addEventListener('toolbar:closed',  () => { _toolbarOpen = false; updateVisibility(); });
 
     // Aggiorna pallino attivo quando il colore cambia dal menu principale
     document.addEventListener('minicolor:update', (e) => {
         const color = e.detail?.color;
         if (!color) return;
-        // Aggiungi ai recenti di sessione e ri-renderizza
         _miniSessionColors = [color, ..._miniSessionColors.filter(c => c !== color)].slice(0, MAX_RECENT_MINI);
         if (bar.style.display !== 'none') renderBar();
     });
@@ -4074,6 +4023,74 @@ function setupMiniColorBar() {
     });
 
     updateVisibility(); // stato iniziale
+}
+
+// =============================================================================
+// SEZIONE 14b — MINI SIZE BAR
+// Barra dimensioni tratto a destra della freccia toolbar, icone linea SVG.
+// =============================================================================
+
+function setupMiniSizeBar() {
+    const bar = document.getElementById('mini-size-bar');
+    if (!bar) return;
+
+    // Dimensioni esposte: stessa 4 principali della toolbar
+    const SIZES = [3, 6, 10, 16];
+    // SVG stroke-width proporzionale per l'icona
+    const SIZE_SW = [1.5, 3, 5, 8];
+
+    let _toolbarOpen = false;
+
+    function _applySize(size) {
+        CONFIG.currentSize = size;
+        // Sincronizza toolbar principale
+        document.querySelectorAll('.size-btn').forEach(b => {
+            b.classList.toggle('active', parseInt(b.dataset.size) === size);
+        });
+        renderBar();
+    }
+
+    function renderBar() {
+        bar.innerHTML = '';
+        SIZES.forEach((size, i) => {
+            const btn = document.createElement('button');
+            btn.className = 'mini-size-btn' + (CONFIG.currentSize === size ? ' active' : '');
+            btn.title = `Dimensione ${size}`;
+            btn.dataset.size = size;
+            // Icona: linea orizzontale con spessore crescente
+            btn.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none">
+                <line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="${SIZE_SW[i]}" stroke-linecap="round"/>
+            </svg>`;
+            btn.addEventListener('click', () => _applySize(size));
+            bar.appendChild(btn);
+        });
+    }
+
+    function updateVisibility() {
+        const drawTools = ['pen', 'pencil', 'pastel', 'marker'];
+        const isDrawTool = drawTools.includes(CONFIG.currentTool);
+        const show = isDrawTool && !_toolbarOpen;
+        bar.style.display = show ? 'flex' : 'none';
+        if (show) renderBar();
+    }
+
+    // Nascondi quando il menu grande si apre
+    document.addEventListener('toolbar:opened', () => { _toolbarOpen = true; updateVisibility(); });
+    document.addEventListener('toolbar:closed',  () => { _toolbarOpen = false; updateVisibility(); });
+
+    // Aggiorna quando cambia strumento
+    document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+        btn.addEventListener('click', () => setTimeout(updateVisibility, 50));
+    });
+
+    // Sincronizza se la dimensione cambia dalla toolbar principale
+    document.querySelectorAll('.size-btn').forEach(btn => {
+        btn.addEventListener('click', () => setTimeout(() => {
+            if (bar.style.display !== 'none') renderBar();
+        }, 60));
+    });
+
+    updateVisibility();
 }
 
 // =============================================================================
@@ -4103,8 +4120,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupKeyboard();
     setupFullscreen();    // Feature 5
     setupProjectName();   // Feature 6
-    setupLibraryTabs();   // Feature A: linguette libreria laterali
-    setupMiniColorBar();  // Mini barra colori rapida sopra la toolbar
+    setupMiniColorBar();  // Mini barra colori rapida (sinistra freccia, solo toolbar chiusa)
+    setupMiniSizeBar();   // Mini barra dimensioni tratto (destra freccia, solo toolbar chiusa)
 
     // PageManager — pagine multiple
     pageManager = new PageManager(canvasMgr, objectLayer, bgMgr);
