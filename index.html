@@ -491,10 +491,14 @@
             <button class="ctx-icon-btn ctx-obj-only" data-action="width" title="Larghezza">&#8596;</button>
             <button class="ctx-icon-btn ctx-obj-only" data-action="restore" title="Dimensioni originali">&#8861;</button>
             <div class="ctx-sep ctx-obj-only"></div>
-            <!-- Selezione pixel -->
-            <button class="ctx-icon-btn ctx-pixel-only" data-action="copy" title="Copia">&#9192;</button>
-            <button class="ctx-icon-btn ctx-pixel-only" data-action="paste" title="Incolla">&#9193;</button>
-            <div class="ctx-sep ctx-pixel-only"></div>
+            <!-- Copia / Incolla (pixel E oggetti) -->
+            <button class="ctx-icon-btn" data-action="copy" title="Copia (Ctrl+C)">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+            <button class="ctx-icon-btn" data-action="paste" title="Incolla (Ctrl+V)">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+            </button>
+            <div class="ctx-sep"></div>
             <!-- Comune a tutti -->
             <button class="ctx-icon-btn" data-action="download" title="Scarica file" id="ctx-download-pdf" style="display:none">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><rect x="3" y="18" width="18" height="3" rx="1" fill="currentColor" stroke="none"/></svg>

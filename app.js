@@ -2290,6 +2290,14 @@ function setupKeyboard() {
                 e.preventDefault();
                 projectMgr.save();
             }
+            if (e.key === 'c' && CONFIG.currentTool === 'select') {
+                e.preventDefault();
+                selectMgr?._handleCtxAction('copy', null);
+            }
+            if (e.key === 'v' && CONFIG.currentTool === 'select') {
+                e.preventDefault();
+                selectMgr?._handleCtxAction('paste', null);
+            }
         }
 
         if (!e.ctrlKey && !e.metaKey) {
@@ -2719,6 +2727,9 @@ class SelectManager {
         this.startY     = 0;
         this.selectedObject = null; // oggetto ObjectLayer selezionato
         this._objDragStart  = null; // {x, y, origObjX, origObjY}
+        this._pixelClipboard  = null; // { data: ImageData, w, h }
+        this._objectClipboard = null; // copia di un oggetto ObjectLayer
+        this._pixelResizeData = null; // dati resize in corso per selezione pixel
         this._setupContextPanel();
     }
 
@@ -2995,14 +3006,52 @@ class SelectManager {
                 }
                 return;
             case 'copy':
-                if (this.phase === 'selected' && this.selection) {
+                if (obj) {
+                    // Copia oggetto ObjectLayer
+                    this._objectClipboard = {
+                        type: obj.type, img: obj.img,
+                        x: obj.x, y: obj.y, w: obj.w, h: obj.h,
+                        originalW: obj.originalW, originalH: obj.originalH,
+                        opacity: obj.opacity, rotation: obj.rotation || 0,
+                        filter: { ...(obj.filter || {}) },
+                        flipH: obj.flipH || false, flipV: obj.flipV || false,
+                    };
+                    this._pixelClipboard = null;
+                    toast('Oggetto copiato!', 'success');
+                } else if (this.phase === 'selected' && this.selection) {
+                    // Copia area pixel
                     const { x, y, w, h } = this.selection;
                     this._pixelClipboard = { data: this.ctx.getImageData(x, y, w, h), w, h };
+                    this._objectClipboard = null;
                     toast('Area copiata!', 'success');
                 }
                 return;
             case 'paste':
-                if (this._pixelClipboard) {
+                if (this._objectClipboard) {
+                    // Incolla oggetto (offset +20px per distinguerlo dall'originale)
+                    const src = this._objectClipboard;
+                    const nx = src.x + 20, ny = src.y + 20;
+                    objectLayer.addObject(src.type, src.img, nx, ny, src.w, src.h);
+                    const newObj = objectLayer.objects[objectLayer.objects.length - 1];
+                    if (newObj) {
+                        newObj.opacity = src.opacity;
+                        newObj.rotation = src.rotation;
+                        newObj.filter = { ...src.filter };
+                        newObj.flipH = src.flipH;
+                        newObj.flipV = src.flipV;
+                        objectLayer.render();
+                        // Seleziona il nuovo oggetto
+                        this.selectedObject = newObj;
+                        this.phase = 'object-selected';
+                        this._drawSelectionRect(newObj.x, newObj.y, newObj.w, newObj.h, true);
+                        this._showContextPanel(newObj);
+                    }
+                    // Sposta il clipboard per il prossimo incolla a cascata
+                    this._objectClipboard = { ...this._objectClipboard, x: nx, y: ny };
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                    toast('Incollato!', 'success');
+                } else if (this._pixelClipboard) {
+                    // Incolla area pixel al centro della vista
                     if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
                     const center = typeof getViewportCenter !== 'undefined' ? getViewportCenter() : { x: 100, y: 100 };
                     const px = Math.round(center.x - this._pixelClipboard.w / 2);
@@ -3183,17 +3232,10 @@ class SelectManager {
                 // Contiamo i sep tra i pulsanti ctx-obj-only
                 sep.style.display = (i === 0 || i === 2 || i === 4) ? 'none' : '';
             });
-            // ctx-pixel-only: mostra copia/incolla
-            panel.querySelectorAll('.ctx-pixel-only').forEach(el => {
-                el.style.display = '';
-            });
         } else {
             // Per oggetti ObjectLayer: comportamento originale
             panel.querySelectorAll('.ctx-obj-only').forEach(el => {
                 el.style.display = '';
-            });
-            panel.querySelectorAll('.ctx-pixel-only').forEach(el => {
-                el.style.display = 'none';
             });
         }
 
@@ -3366,9 +3408,38 @@ class SelectManager {
         // 3. Selezione pixel rettangolare
         if (this.phase === 'selected' && this.selection) {
             const { x: sx, y: sy, w, h } = this.selection;
-            // Dentro la selezione → inizia drag
+
+            // 3a. Hit test angoli per resize pixel
+            const HIT_PIX = 12;
+            const corners = [
+                { corner: 'tl', hx: sx,     hy: sy },
+                { corner: 'tr', hx: sx + w,  hy: sy },
+                { corner: 'bl', hx: sx,     hy: sy + h },
+                { corner: 'br', hx: sx + w,  hy: sy + h },
+            ];
+            for (const c of corners) {
+                if (Math.abs(x - c.hx) < HIT_PIX && Math.abs(y - c.hy) < HIT_PIX) {
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+                    const origImg = this.ctx.getImageData(sx, sy, w, h);
+                    // Salva snapshot del canvas SENZA il contenuto selezionato
+                    this.ctx.save();
+                    this.ctx.globalCompositeOperation = 'destination-out';
+                    this.ctx.fillStyle = 'rgba(0,0,0,1)';
+                    this.ctx.fillRect(sx, sy, w, h);
+                    this.ctx.restore();
+                    const baseSnap = this.ctx.getImageData(0, 0, this.drawCanvas.width, this.drawCanvas.height);
+                    this._pixelResizeData = {
+                        corner: c.corner, origImg, baseSnap,
+                        origX: sx, origY: sy, origW: w, origH: h,
+                        startX: x, startY: y,
+                    };
+                    this.phase = 'pixel-resizing';
+                    return true;
+                }
+            }
+
+            // 3b. Dentro la selezione → inizia drag
             if (x >= sx && x <= sx + w && y >= sy && y <= sy + h) {
-                // Salva undo PRIMA di modificare il canvas
                 if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
                 this.phase    = 'dragging';
                 this.dragData = {
@@ -3378,7 +3449,6 @@ class SelectManager {
                     selX:   sx,
                     selY:   sy,
                 };
-                // Cancella l'area originale
                 this.ctx.save();
                 this.ctx.globalCompositeOperation = 'destination-out';
                 this.ctx.fillStyle = 'rgba(255,255,255,1)';
@@ -3398,6 +3468,28 @@ class SelectManager {
 
     onPointerMove(x, y) {
         if (!this.active) return false;
+
+        // Resize selezione pixel (drag angolo)
+        if (this.phase === 'pixel-resizing' && this._pixelResizeData) {
+            const d = this._pixelResizeData;
+            const dx = x - d.startX, dy = y - d.startY;
+            let nx = d.origX, ny = d.origY, nw = d.origW, nh = d.origH;
+            switch (d.corner) {
+                case 'br': nw = Math.max(10, d.origW + dx); nh = Math.max(10, d.origH + dy); break;
+                case 'bl': nw = Math.max(10, d.origW - dx); nx = d.origX + d.origW - nw; nh = Math.max(10, d.origH + dy); break;
+                case 'tr': nw = Math.max(10, d.origW + dx); nh = Math.max(10, d.origH - dy); ny = d.origY + d.origH - nh; break;
+                case 'tl': nw = Math.max(10, d.origW - dx); nx = d.origX + d.origW - nw; nh = Math.max(10, d.origH - dy); ny = d.origY + d.origH - nh; break;
+            }
+            // Ripristina base (senza contenuto) e ridisegna scalato
+            this.ctx.putImageData(d.baseSnap, 0, 0);
+            const tmp = document.createElement('canvas');
+            tmp.width = d.origW; tmp.height = d.origH;
+            tmp.getContext('2d').putImageData(d.origImg, 0, 0);
+            this.ctx.drawImage(tmp, nx, ny, nw, nh);
+            this.selection = { x: Math.round(nx), y: Math.round(ny), w: Math.round(nw), h: Math.round(nh) };
+            this._drawSelectionRect(nx, ny, nw, nh);
+            return true;
+        }
 
         // Resize oggetto ObjectLayer (drag handle angolo)
         if (this.phase === 'object-resizing' && this._resizeHandle && this.selectedObject) {
@@ -3428,6 +3520,30 @@ class SelectManager {
             objectLayer.render();
             this._drawSelectionRect(obj.x, obj.y, obj.w, obj.h, true);
             return true;
+        }
+
+        // Cursore: cambia quando si passa vicino a un handle (selezione pixel)
+        if (this.phase === 'selected' && this.selection) {
+            const { x: sx, y: sy, w, h } = this.selection;
+            const HIT = 12;
+            const cornerCursors = { tl: 'nwse-resize', br: 'nwse-resize', tr: 'nesw-resize', bl: 'nesw-resize' };
+            const pixCorners = [
+                { corner: 'tl', hx: sx,     hy: sy },
+                { corner: 'tr', hx: sx + w,  hy: sy },
+                { corner: 'bl', hx: sx,     hy: sy + h },
+                { corner: 'br', hx: sx + w,  hy: sy + h },
+            ];
+            const oc = document.getElementById('overlay-canvas');
+            let onCorner = false;
+            for (const c of pixCorners) {
+                if (Math.abs(x - c.hx) < HIT && Math.abs(y - c.hy) < HIT) {
+                    if (oc) oc.style.cursor = cornerCursors[c.corner];
+                    onCorner = true; break;
+                }
+            }
+            if (!onCorner && oc) {
+                oc.style.cursor = (x >= sx && x <= sx + w && y >= sy && y <= sy + h) ? 'move' : 'crosshair';
+            }
         }
 
         // Cursore: cambia quando si passa vicino a un handle (phase object-selected)
@@ -3524,6 +3640,21 @@ class SelectManager {
 
     onPointerUp(x, y) {
         if (!this.active) return false;
+
+        // Fine resize selezione pixel
+        if (this.phase === 'pixel-resizing') {
+            this.phase = 'selected';
+            this._pixelResizeData = null;
+            if (this.selection) {
+                this._drawSelectionRect(this.selection.x, this.selection.y, this.selection.w, this.selection.h);
+                this._showContextPanel(this.selection, true);
+            }
+            CONFIG.isDirty = true;
+            window.autoSaveMgr?.onDirty();
+            const oc = document.getElementById('overlay-canvas');
+            if (oc) oc.style.cursor = 'crosshair';
+            return true;
+        }
 
         // Fine resize oggetto ObjectLayer
         if (this.phase === 'object-resizing') {
