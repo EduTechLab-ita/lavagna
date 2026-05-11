@@ -3516,11 +3516,12 @@ class SelectManager {
             const d = this._pixelResizeData;
             const dx = x - d.startX, dy = y - d.startY;
             let nx = d.origX, ny = d.origY, nw = d.origW, nh = d.origH;
+            const ratio = d.origH / d.origW;
             switch (d.corner) {
-                case 'br': nw = Math.max(10, d.origW + dx); nh = Math.max(10, d.origH + dy); break;
-                case 'bl': nw = Math.max(10, d.origW - dx); nx = d.origX + d.origW - nw; nh = Math.max(10, d.origH + dy); break;
-                case 'tr': nw = Math.max(10, d.origW + dx); nh = Math.max(10, d.origH - dy); ny = d.origY + d.origH - nh; break;
-                case 'tl': nw = Math.max(10, d.origW - dx); nx = d.origX + d.origW - nw; nh = Math.max(10, d.origH - dy); ny = d.origY + d.origH - nh; break;
+                case 'br': nw = Math.max(10, d.origW + dx); nh = Math.max(10, nw * ratio); break;
+                case 'bl': nw = Math.max(10, d.origW - dx); nx = d.origX + d.origW - nw; nh = Math.max(10, nw * ratio); break;
+                case 'tr': nw = Math.max(10, d.origW + dx); nh = Math.max(10, nw * ratio); ny = d.origY + d.origH - nh; break;
+                case 'tl': nw = Math.max(10, d.origW - dx); nx = d.origX + d.origW - nw; nh = Math.max(10, nw * ratio); ny = d.origY + d.origH - nh; break;
             }
             // Ripristina base (senza contenuto) e ridisegna scalato
             this.ctx.putImageData(d.baseSnap, 0, 0);
@@ -3736,7 +3737,16 @@ class SelectManager {
                 this._drawSelectionRect(rx, ry, rw, rh);
                 this._showContextPanel({ x: rx, y: ry, w: rw, h: rh }, true);
             } else {
-                this._clearSelection();
+                // Era un click: prova auto-selezione tratto disegnato
+                const bbox = this._autoSelectAt(this.startX, this.startY);
+                if (bbox) {
+                    this.selection = bbox;
+                    this.phase     = 'selected';
+                    this._drawSelectionRect(bbox.x, bbox.y, bbox.w, bbox.h);
+                    this._showContextPanel(bbox, true);
+                } else {
+                    this._clearSelection();
+                }
             }
             return true;
         }
@@ -3768,6 +3778,85 @@ class SelectManager {
         }
 
         return false;
+    }
+
+    // Auto-selezione al click: trova il componente connesso di pixel non trasparenti
+    // più vicino al punto (x,y) e ritorna il suo bounding box (con padding),
+    // oppure null se il punto cade su pixel trasparenti.
+    _autoSelectAt(cx, cy) {
+        const W = this.canvas.width;
+        const H = this.canvas.height;
+
+        // Legge un'area limitata (±900px) per efficienza
+        const AREA = 900;
+        const ax = Math.max(0, cx - AREA);
+        const ay = Math.max(0, cy - AREA);
+        const aw = Math.min(W, cx + AREA) - ax;
+        const ah = Math.min(H, cy + AREA) - ay;
+        if (aw <= 0 || ah <= 0) return null;
+
+        const imageData = this.ctx.getImageData(ax, ay, aw, ah);
+        const data = imageData.data;
+
+        // Funzione: pixel opaco?
+        const isOpaque = (lx, ly) => {
+            if (lx < 0 || ly < 0 || lx >= aw || ly >= ah) return false;
+            return data[(ly * aw + lx) * 4 + 3] > 20;
+        };
+
+        // Cerca il seed: pixel opaco più vicino al click (raggio 16px) nello spazio locale
+        const lcx = cx - ax, lcy = cy - ay;
+        let seedX = -1, seedY = -1, bestDist = Infinity;
+        const SR = 16;
+        for (let dy = -SR; dy <= SR; dy++) {
+            for (let dx = -SR; dx <= SR; dx++) {
+                const lx = lcx + dx, ly = lcy + dy;
+                if (isOpaque(lx, ly)) {
+                    const dist = dx * dx + dy * dy;
+                    if (dist < bestDist) { bestDist = dist; seedX = lx; seedY = ly; }
+                }
+            }
+        }
+        if (seedX < 0) return null;
+
+        // DFS flood fill (pixel connessi diagonalmente inclusi) con limite 200K pixel
+        const MAX_PIX = 200000;
+        const visited = new Uint8Array(aw * ah);
+        const stack = [seedY * aw + seedX];
+        visited[seedY * aw + seedX] = 1;
+        let minX = seedX, maxX = seedX, minY = seedY, maxY = seedY;
+        let count = 0;
+
+        while (stack.length > 0 && count < MAX_PIX) {
+            const idx = stack.pop();
+            count++;
+            const px = idx % aw, py = (idx / aw) | 0;
+            if (px < minX) minX = px;
+            if (px > maxX) maxX = px;
+            if (py < minY) minY = py;
+            if (py > maxY) maxY = py;
+            // 8-connessione
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const nx = px + dx, ny = py + dy;
+                    const ni = ny * aw + nx;
+                    if (isOpaque(nx, ny) && !visited[ni]) {
+                        visited[ni] = 1;
+                        stack.push(ni);
+                    }
+                }
+            }
+        }
+
+        // Converti back alle coordinate canvas con padding
+        const PAD = 6;
+        const bx = Math.max(0, ax + minX - PAD);
+        const by = Math.max(0, ay + minY - PAD);
+        const bw = Math.min(W, ax + maxX + PAD) - bx;
+        const bh = Math.min(H, ay + maxY + PAD) - by;
+        if (bw < 2 || bh < 2) return null;
+        return { x: bx, y: by, w: bw, h: bh };
     }
 
     // Gestisce Escape (deseleziona) e Delete/Backspace (cancella area selezionata o oggetto)
