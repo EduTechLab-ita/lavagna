@@ -2121,21 +2121,26 @@ body.has-page-bar #zoom-indicator {
     opacity: 1;
 }
 
-/* Badge zoom fisso — sotto il cerchio account, sempre visibile */
+/* Badge zoom fisso — centrato nella page-bar in basso a destra */
 #zoom-badge {
     position: fixed;
-    bottom: 4px;
+    bottom: 9px;        /* centra verticalmente nella page-bar (h≈38px) */
     right: 24px;
     width: 52px;
     background: transparent;
     border: none;
     padding: 2px 0;
-    font-size: 0.7rem;
-    color: rgba(71, 85, 105, 0.9);
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: rgba(71, 85, 105, 0.95);
     z-index: 200;
     cursor: pointer;
     user-select: none;
     text-align: center;
+    line-height: 1;
+}
+body:not(.has-page-bar) #zoom-badge {
+    bottom: 4px;        /* fallback senza page-bar */
 }
 #zoom-badge:hover {
     color: #3b82f6;
@@ -2144,8 +2149,9 @@ body.has-page-bar #zoom-indicator {
     background: transparent;
     border: none;
     outline: none;
-    color: rgba(71, 85, 105, 0.9);
-    font-size: 0.7rem;
+    color: rgba(71, 85, 105, 0.95);
+    font-size: 0.82rem;
+    font-weight: 500;
     width: 3.5ch;
     text-align: center;
 }

@@ -902,30 +902,35 @@ class CanvasManager {
         this.bgMgr.resize(W, H);
         this.laser.resize(W, H);
 
-        // Ripristina disegno senza distorsione (nessuna scalatura, mantiene proporzioni)
+        // Calcola shift per mantenere disegni e oggetti allineati alla pagina di sfondo.
+        // La pagina è centrata nel canvas: quando H cambia (es. fullscreen toggle),
+        // il centro verticale del canvas cambia di deltaH/2 → shift tutti i contenuti.
+        const shiftX = isFirstResize ? 0 : (W - prevCanvasW) / 2;
+        const shiftY = isFirstResize ? 0 : (H - prevCanvasH) / 2;
+
+        // Ripristina disegno shiftato: il contenuto rimane allineato alla pagina di sfondo.
         if (savedURL && prevCanvasW > 0) {
             const img = new Image();
             img.onload = () => {
-                // Disegna all'origine senza scalare: il canvas è 3× viewport,
-                // quindi c'è abbondante spazio senza dover stirare il contenuto.
-                this.ctx.drawImage(img, 0, 0);
+                this.ctx.drawImage(img, shiftX, shiftY);
             };
             img.src = savedURL;
         }
 
-        // BUG 3 fix: al primo avvio centra la vista; ai resize successivi (es. fullscreen)
-        // mantieni la posizione relativa proporzionale invece di ricentrare da capo.
-        if (typeof panMgr !== 'undefined' && panMgr) {
-            if (isFirstResize) {
-                panMgr.centerView();
-            } else {
-                // Ripristina proporzione: la posizione relativa rispetto al centro del canvas
-                const ratioX = prevCanvasW > 0 ? W / prevCanvasW : 1;
-                const ratioY = prevCanvasH > 0 ? H / prevCanvasH : 1;
-                panMgr.dx = prevDx * ratioX;
-                panMgr.dy = prevDy * ratioY;
-                panMgr._applyTransform();
+        // Sposta gli oggetti dello stesso delta: rimangono allineati alla pagina
+        if (!isFirstResize && (shiftX !== 0 || shiftY !== 0) &&
+            typeof objectLayer !== 'undefined' && objectLayer) {
+            for (const obj of objectLayer.objects) {
+                obj.x += shiftX;
+                obj.y += shiftY;
             }
+            // render è già stato chiamato da objectLayer.resize(); questo aggiorna le posizioni
+            objectLayer.render();
+        }
+
+        // Al primo avvio E dopo ogni resize: centra la vista con scale=100% (pagina = schermo)
+        if (typeof panMgr !== 'undefined' && panMgr) {
+            panMgr.centerView();
         }
     }
 
@@ -2591,22 +2596,40 @@ class PanManager {
         this._applyTransform();
     }
 
-    centerView() {
-        // Centra la vista: parte dal centro del canvas 3× viewport
-        // così si può andare in tutte le direzioni ugualmente
-        const area = document.getElementById('canvas-area');
-        if (!area) return;
-        const canvas = document.getElementById('draw-canvas');
-        if (!canvas) return;
-        const canvasW = canvas.width;
-        const canvasH = canvas.height;
+    // Calcola lo scale corrispondente a "100%" = pagina larga come lo schermo.
+    // Dipende dalla dimensione della pagina di sfondo nel canvas 3× viewport.
+    _computeFitScale() {
         const vW = window.innerWidth;
         const headerH = document.body.classList.contains('fullscreen-mode') ? 0 : 56;
         const vH = window.innerHeight - headerH;
-        // dx negativo: il canvas inizia al centro del viewport
-        this.dx = -(canvasW - vW) / 2;
-        this.dy = -(canvasH - vH) / 2;
+        const W = vW * 3;
+        const H = vH * 3;
+        if (typeof bgMgr !== 'undefined' && bgMgr && typeof bgMgr._getPageRect === 'function') {
+            const { pw } = bgMgr._getPageRect(W, H);
+            if (pw > 0) return vW / pw;
+        }
+        return 1 / (3 * 0.9); // fallback: 1/2.7 ≈ 0.37
+    }
+
+    centerView() {
+        // Imposta scale = fitScale (100%) e centra la pagina nella viewport
+        const canvas = document.getElementById('draw-canvas');
+        if (!canvas) return;
+        const vW = window.innerWidth;
+        const headerH = document.body.classList.contains('fullscreen-mode') ? 0 : 56;
+        const vH = window.innerHeight - headerH;
+        const canvasW = canvas.width;
+        const canvasH = canvas.height;
+        const s = this._computeFitScale();
+        this.scale = s;
+        // Al fitScale, la pagina (centrata nel canvas) occupa esattamente vW px nel viewport.
+        // dx = (vW - canvasW*s) / 2 centra il canvas (e quindi la pagina) orizzontalmente.
+        this.dx = (vW - canvasW * s) / 2;
+        this.dy = (vH - canvasH * s) / 2;
         this._applyTransform();
+        // Aggiorna badge
+        const badge = document.getElementById('zoom-badge');
+        if (badge && !badge._editing) badge.textContent = '100%';
     }
 
     // Converte coordinate client in coordinate canvas (tenendo conto di pan+zoom)
@@ -2700,7 +2723,9 @@ class PanManager {
     }
 
     _showZoomIndicator() {
-        const pct = Math.round(this.scale * 100) + '%';
+        // 100% = pagina larga come lo schermo (non scale=1.0)
+        const fitScale = this._computeFitScale();
+        const pct = Math.round(this.scale / fitScale * 100) + '%';
         // Aggiorna il badge fisso sempre visibile
         const badge = document.getElementById('zoom-badge');
         if (badge && !badge._editing) badge.textContent = pct;
@@ -2734,11 +2759,22 @@ class PanManager {
                 inp.select();
                 const done = () => {
                     const val = parseInt(inp.value, 10);
-                    if (!isNaN(val) && val >= 10 && val <= 400) {
-                        this.scale = val / 100;
+                    if (!isNaN(val) && val >= 5 && val <= 500) {
+                        const fitScale = this._computeFitScale();
+                        this.scale = (val / 100) * fitScale;
+                        // Ricentra la vista al nuovo scale
+                        const cvs = document.getElementById('draw-canvas');
+                        if (cvs) {
+                            const vW2 = window.innerWidth;
+                            const headerH2 = document.body.classList.contains('fullscreen-mode') ? 0 : 56;
+                            const vH2 = window.innerHeight - headerH2;
+                            this.dx = (vW2 - cvs.width  * this.scale) / 2;
+                            this.dy = (vH2 - cvs.height * this.scale) / 2;
+                        }
                         this._applyTransform();
                     }
-                    badge.textContent = Math.round(this.scale * 100) + '%';
+                    const fitScale2 = this._computeFitScale();
+                    badge.textContent = Math.round(this.scale / fitScale2 * 100) + '%';
                     badge._editing = false;
                 };
                 inp.addEventListener('blur', done);
