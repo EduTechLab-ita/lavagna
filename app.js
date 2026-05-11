@@ -31,6 +31,8 @@ const CONFIG = {
     projectName: 'Nuova Lavagna',
     // Strumenti che usano colore + dimensione
     drawTools: ['pen', 'pencil', 'pastel', 'marker', 'eraser'],
+    // Modalità gomma: 'area' = cancella zona, 'stroke' = cancella tratto intero
+    eraserMode: 'area',
 };
 
 // Colori standard palette toolbar (usati da tutti gli strumenti tranne marker)
@@ -851,6 +853,10 @@ class CanvasManager {
         this.undoStack = [];
         this.redoStack = [];
 
+        // Tracking vettoriale per gomma-tratto: parallelo a undoStack
+        this._vectorStrokes = []; // null | {tool, color, size, points[]}
+        this._currentPoints  = []; // punti del tratto in corso
+
         this._setupEvents();
         this.resize();
         window.addEventListener('resize', () => this.resize());
@@ -973,6 +979,14 @@ class CanvasManager {
 
     _onStart(e) {
         const { x, y } = this.getCoords(e);
+
+        // Modalità gomma-tratto: cancella al click, senza avviare isDrawing
+        if (CONFIG.currentTool === 'eraser' && CONFIG.eraserMode === 'stroke') {
+            const idx = this.findNearestStroke(x, y);
+            if (idx >= 0) this.eraseStroke(idx);
+            return;
+        }
+
         CONFIG.isDrawing = true;
 
         // Auto-hide toolbar quando si inizia a disegnare
@@ -1007,6 +1021,7 @@ class CanvasManager {
         this._saveUndo();
         CONFIG.lastX = x;
         CONFIG.lastY = y;
+        this._currentPoints = [{x, y}]; // primo punto per tracking vettoriale
 
         // Disegna il punto iniziale (dot)
         if (CONFIG.currentTool === 'eraser') {
@@ -1017,6 +1032,13 @@ class CanvasManager {
     }
 
     _onMove(e) {
+        // Hover highlight gomma-tratto (funziona anche senza isDrawing)
+        if (CONFIG.currentTool === 'eraser' && CONFIG.eraserMode === 'stroke') {
+            const { x, y } = this.getCoords(e);
+            const idx = this.findNearestStroke(x, y);
+            this._highlightStroke(idx);
+            return;
+        }
         if (!CONFIG.isDrawing) return;
         const { x, y } = this.getCoords(e);
 
@@ -1053,6 +1075,7 @@ class CanvasManager {
             this._drawSegment(CONFIG.lastX, CONFIG.lastY, x, y);
         }
 
+        this._currentPoints.push({x, y}); // raccolta punti per tracking vettoriale
         CONFIG.lastX = x;
         CONFIG.lastY = y;
     }
@@ -1083,8 +1106,19 @@ class CanvasManager {
         }
 
         // Fine tratto per strumenti di disegno (pen, pencil, pastel, marker, eraser):
-        // notifica dirty + auto-save qui, non durante il movimento
-        if (CONFIG.drawTools.includes(CONFIG.currentTool) || CONFIG.currentTool === 'eraser') {
+        // salva dati vettoriali + notifica dirty
+        if (CONFIG.drawTools.includes(CONFIG.currentTool)) {
+            // Finalizza il vector stroke nell'ultimo slot di _vectorStrokes
+            const lastIdx = this._vectorStrokes.length - 1;
+            if (lastIdx >= 0 && this._currentPoints.length > 0) {
+                this._vectorStrokes[lastIdx] = {
+                    tool:   CONFIG.currentTool,
+                    color:  CONFIG.currentColor,
+                    size:   CONFIG.currentSize,
+                    points: [...this._currentPoints],
+                };
+            }
+            this._currentPoints = [];
             CONFIG.isDirty = true;
             window.autoSaveMgr?.onDirty();
         }
@@ -1105,8 +1139,13 @@ class CanvasManager {
 
     _saveUndo(notifyDirty = false) {
         this.undoStack.push(this.canvas.toDataURL());
-        if (this.undoStack.length > CONFIG.maxUndo) this.undoStack.shift();
+        this._vectorStrokes.push(null); // placeholder, aggiornato in _onEnd
+        if (this.undoStack.length > CONFIG.maxUndo) {
+            this.undoStack.shift();
+            this._vectorStrokes.shift();
+        }
         this.redoStack = [];
+        this._currentPoints = [];
         if (notifyDirty) {
             CONFIG.isDirty = true;
             window.autoSaveMgr?.onDirty();
@@ -1116,6 +1155,7 @@ class CanvasManager {
     undo() {
         if (this.undoStack.length === 0) return;
         this.redoStack.push(this.canvas.toDataURL());
+        this._vectorStrokes.pop();
         const prev = this.undoStack.pop();
         this._loadURL(prev);
     }
@@ -1123,6 +1163,7 @@ class CanvasManager {
     redo() {
         if (this.redoStack.length === 0) return;
         this.undoStack.push(this.canvas.toDataURL());
+        this._vectorStrokes.push(null); // dati vettoriali non disponibili per redo
         const next = this.redoStack.pop();
         this._loadURL(next);
     }
@@ -1134,6 +1175,108 @@ class CanvasManager {
             this.ctx.drawImage(img, 0, 0);
         };
         img.src = url;
+    }
+
+    _loadURLAsync(url) {
+        return new Promise(resolve => {
+            const img = new Image();
+            img.onload = () => {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.drawImage(img, 0, 0);
+                resolve();
+            };
+            img.src = url;
+        });
+    }
+
+    // Cancella un tratto specifico per indice (modalità gomma-tratto)
+    async eraseStroke(strokeIndex) {
+        if (strokeIndex < 0 || strokeIndex >= this.undoStack.length) return;
+
+        // Nascondi hover highlight
+        this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+
+        // Ripristina lo snapshot prima del tratto da cancellare
+        await this._loadURLAsync(this.undoStack[strokeIndex]);
+
+        // Ridisegna tutti i tratti successivi tramite dati vettoriali
+        for (let i = strokeIndex + 1; i < this._vectorStrokes.length; i++) {
+            const stroke = this._vectorStrokes[i];
+            if (stroke) this._replayStroke(stroke);
+        }
+
+        // Rimuovi il tratto cancellato dagli stack (splice mantiene gli altri)
+        this.undoStack.splice(strokeIndex, 1);
+        this._vectorStrokes.splice(strokeIndex, 1);
+
+        CONFIG.isDirty = true;
+        window.autoSaveMgr?.onDirty();
+    }
+
+    // Trova il tratto più vicino al punto (x,y) — ritorna l'indice in _vectorStrokes
+    findNearestStroke(x, y, maxDist = 40) {
+        let bestIdx = -1, bestDist = maxDist;
+        for (let i = 0; i < this._vectorStrokes.length; i++) {
+            const stroke = this._vectorStrokes[i];
+            if (!stroke || !stroke.points || stroke.tool === 'eraser') continue;
+            for (const pt of stroke.points) {
+                const d = Math.hypot(pt.x - x, pt.y - y);
+                if (d < bestDist) {
+                    bestDist = d;
+                    bestIdx = i;
+                }
+            }
+        }
+        return bestIdx;
+    }
+
+    // Ridisegna un tratto da dati vettoriali (usato dopo eraseStroke)
+    _replayStroke(stroke) {
+        const { tool, color, size, points } = stroke;
+        if (!points || points.length === 0) return;
+
+        if (tool === 'eraser') {
+            for (const { x, y } of points) {
+                this.brush.eraser(this.ctx, x, y, size * 2);
+            }
+            return;
+        }
+        // Dot iniziale
+        this._drawSegmentWith(tool, color, size, points[0].x, points[0].y, points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            this._drawSegmentWith(tool, color, size, points[i-1].x, points[i-1].y, points[i].x, points[i].y);
+        }
+    }
+
+    // Come _drawSegment ma con parametri tool/color/size espliciti (per replay)
+    _drawSegmentWith(tool, color, size, x0, y0, x1, y1) {
+        switch (tool) {
+            case 'pen':    this.brush.pen(this.ctx, x0, y0, x1, y1, size, color);    break;
+            case 'pencil': this.brush.pencil(this.ctx, x0, y0, x1, y1, size, color); break;
+            case 'pastel': this.brush.pastel(this.ctx, x0, y0, x1, y1, size, color); break;
+            case 'marker': this.brush.marker(this.ctx, x0, y0, x1, y1, size, color); break;
+        }
+    }
+
+    // Evidenzia il tratto sotto il cursore (overlay canvas rosso semitrasparente)
+    _highlightStroke(strokeIdx) {
+        this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+        if (strokeIdx < 0) return;
+        const stroke = this._vectorStrokes[strokeIdx];
+        if (!stroke || !stroke.points || stroke.points.length === 0) return;
+
+        this.overlayCtx.save();
+        this.overlayCtx.strokeStyle = 'rgba(239,68,68,0.65)';
+        this.overlayCtx.lineWidth = stroke.size + 10;
+        this.overlayCtx.lineCap = 'round';
+        this.overlayCtx.lineJoin = 'round';
+        this.overlayCtx.beginPath();
+        this.overlayCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
+        for (let i = 1; i < stroke.points.length; i++) {
+            this.overlayCtx.lineTo(stroke.points[i].x, stroke.points[i].y);
+        }
+        this.overlayCtx.stroke();
+        this.overlayCtx.restore();
     }
 
     clear() {
@@ -1182,6 +1325,7 @@ class ToolbarManager {
         this._setupShapePanel();
         this._setupBgPanel();
         this._setupColorPalettePopup(); // Feature 2
+        this._setupEraserMode();        // Gomma tratti
 
         // Mostra la riga opzioni subito (penna selezionata di default)
         this._updateOptionsRow();
@@ -1289,6 +1433,10 @@ class ToolbarManager {
         if (tool !== 'text' && typeof textMgr !== 'undefined') {
             textMgr.deactivate();
         }
+        // Se si stava usando la gomma-tratto, pulisci l'highlight sull'overlay
+        if (CONFIG.currentTool === 'eraser' && CONFIG.eraserMode === 'stroke' && window.canvasMgr) {
+            canvasMgr.overlayCtx.clearRect(0, 0, canvasMgr.overlayCanvas.width, canvasMgr.overlayCanvas.height);
+        }
 
         CONFIG.currentTool = tool;
         this._updateActiveBtn(btn);
@@ -1322,6 +1470,13 @@ class ToolbarManager {
         document.getElementById('options-colors').style.display = showColors ? 'flex' : 'none';
         const divider = document.querySelector('.options-divider');
         if (divider) divider.style.display = showColors ? 'block' : 'none';
+
+        // Modalità gomma (Area / Tratto) — visibile solo per lo strumento gomma
+        const showEraserMode = (tool === 'eraser');
+        const eraserModeBtns = document.getElementById('eraser-mode-btns');
+        const eraserModeDivider = document.getElementById('eraser-mode-divider');
+        if (eraserModeBtns) eraserModeBtns.style.display = showEraserMode ? 'flex' : 'none';
+        if (eraserModeDivider) eraserModeDivider.style.display = showEraserMode ? 'block' : 'none';
     }
 
     _updateCursor() {
@@ -1340,7 +1495,10 @@ class ToolbarManager {
             pan:    'grab',
             'import-media': 'default',
         };
-        if (canvas) canvas.style.cursor = cursorMap[CONFIG.currentTool] || 'default';
+        let cursor = cursorMap[CONFIG.currentTool] || 'default';
+        // Modalità gomma-tratto: usa cursore puntatore per indicare "clicca per cancellare"
+        if (CONFIG.currentTool === 'eraser' && CONFIG.eraserMode === 'stroke') cursor = 'pointer';
+        if (canvas) canvas.style.cursor = cursor;
     }
 
     // Feature 1: aggiorna i color-swatch in base allo strumento
@@ -1432,6 +1590,20 @@ class ToolbarManager {
         document.getElementById('palette-custom-btn').addEventListener('click', () => {
             document.getElementById('color-picker-input').click();
             this._closeAllPopups();
+        });
+    }
+
+    _setupEraserMode() {
+        document.querySelectorAll('.eraser-mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                CONFIG.eraserMode = btn.dataset.mode;
+                document.querySelectorAll('.eraser-mode-btn').forEach(b => b.classList.toggle('active', b === btn));
+                this._updateCursor();
+                // Pulisci eventuali highlight rimasti sull'overlay
+                if (window.canvasMgr) {
+                    canvasMgr.overlayCtx.clearRect(0, 0, canvasMgr.overlayCanvas.width, canvasMgr.overlayCanvas.height);
+                }
+            });
         });
     }
 
@@ -4292,40 +4464,57 @@ function parsePageRange(input, totalPages) {
 }
 
 function _buildPageDataURL(pageIndex) {
-    // Componi bg + draw + objects per la pagina indicata
+    // Componi bg + draw + objects per la pagina indicata,
+    // ritagliando all'area del "foglio" (senza lo sfondo grigio infinito)
     const pm = window.pageManager;
-
-    // Accedi ai dati della pagina (già catturati dal PageManager)
     const pageData = pm ? pm.pages[pageIndex] : null;
 
-    // Dimensioni del canvas principale
+    // Dimensioni del canvas principale (3× viewport)
     const W = canvasMgr.canvas.width;
     const H = canvasMgr.canvas.height;
 
+    // Determina orientamento per la pagina
+    const orientation = (pageData?.background?.orientation) || bgMgr.orientation || 'landscape';
+
+    // Calcola rect del "foglio" (stessa logica di bgMgr._getPageRect)
+    // Per bg 'white' (nessun foglio visibile) usiamo tutta l'area del canvas
+    const currentBgType = (pageIndex === (pm ? pm.currentIndex : 0))
+        ? bgMgr.currentBg
+        : (pageData?.background?.type || 'white');
+    const hasBgPage = (currentBgType !== 'white' && currentBgType !== 'color' && currentBgType !== 'image');
+
+    let cropX = 0, cropY = 0, cropW = W, cropH = H;
+    if (hasBgPage) {
+        // Ritaglia al foglio A4 calcolato da bgMgr
+        const { px, py, pw, ph } = bgMgr._getPageRect(W, H);
+        cropX = Math.round(px);
+        cropY = Math.round(py);
+        cropW = Math.round(pw);
+        cropH = Math.round(ph);
+    }
+
     const tmp = document.createElement('canvas');
-    tmp.width  = W;
-    tmp.height = H;
+    tmp.width  = cropW;
+    tmp.height = cropH;
     const ctx  = tmp.getContext('2d');
 
     if (pageIndex === (pm ? pm.currentIndex : 0)) {
-        // Pagina corrente: usa i canvas live
+        // Pagina corrente: usa i canvas live, ritagliati all'area del foglio
         const bgCvs = document.getElementById('bg-canvas');
-        if (bgCvs) ctx.drawImage(bgCvs, 0, 0);
-        ctx.drawImage(canvasMgr.canvas, 0, 0);
-        // Disegna anche gli oggetti (objects-canvas)
+        if (bgCvs) ctx.drawImage(bgCvs, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+        ctx.drawImage(canvasMgr.canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
         const objCvs = document.getElementById('objects-canvas');
-        if (objCvs) ctx.drawImage(objCvs, 0, 0);
+        if (objCvs) ctx.drawImage(objCvs, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
     } else if (pageData) {
-        // Altra pagina: ricostruiamo da drawImageData (il bg non è salvato come canvas,
-        // ma come tipo/colore — lo ricostruiamo con sfondo bianco come fallback)
+        // Altra pagina: ricostruiamo da drawImageData
         ctx.fillStyle = pageData.background ? (pageData.background.color || '#ffffff') : '#ffffff';
-        ctx.fillRect(0, 0, W, H);
+        ctx.fillRect(0, 0, cropW, cropH);
         if (pageData.drawImageData) {
-            // Disegno asincrono: la funzione ritorna una Promise
             return new Promise(resolve => {
                 const img = new Image();
                 img.onload = () => {
-                    ctx.drawImage(img, 0, 0);
+                    // Ritaglia all'area del foglio anche per le pagine non correnti
+                    ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
                     resolve(tmp.toDataURL('image/png'));
                 };
                 img.onerror = () => resolve(tmp.toDataURL('image/png'));
@@ -4333,9 +4522,8 @@ function _buildPageDataURL(pageIndex) {
             });
         }
     } else {
-        // Nessun dato: pagina bianca
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, W, H);
+        ctx.fillRect(0, 0, cropW, cropH);
     }
 
     return Promise.resolve(tmp.toDataURL('image/png'));

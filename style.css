@@ -361,6 +361,31 @@ button {
     gap: 4px;
 }
 
+/* Pulsanti modalità gomma (Area / Tratto) */
+.eraser-mode-btn {
+    padding: 3px 9px;
+    border-radius: 14px;
+    border: 1.5px solid rgba(255,255,255,0.2);
+    background: transparent;
+    color: rgba(255,255,255,0.65);
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.eraser-mode-btn.active {
+    background: rgba(59,130,246,0.35);
+    border-color: #3b82f6;
+    color: white;
+}
+.eraser-mode-btn:hover:not(.active) {
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.85);
+}
+
 /* Divisore verticale tra gruppi di opzioni */
 .options-divider {
     width: 1px;
