@@ -518,6 +518,23 @@ class BrushEngine {
                 break;
             }
 
+            case 'cerchio': {
+                // Cerchio perfetto (icona compasso) — raggio = min(w,h)/2
+                const w = Math.abs(x1 - x0);
+                const h = Math.abs(y1 - y0);
+                const r = Math.min(w, h) / 2;
+                const cx = (x0 + x1) / 2;
+                const cy = (y0 + y1) / 2;
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                if (fill) {
+                    ctx.globalAlpha = 0.15;
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                }
+                ctx.stroke();
+                break;
+            }
+
             case 'triangle': {
                 const mx = (x0 + x1) / 2;
                 ctx.moveTo(mx, y0);
@@ -1355,6 +1372,7 @@ class ToolbarManager {
         if (swatches[0]) {
             swatches[0].classList.add('active');
             CONFIG.currentColor = colors[0].color;
+            document.dispatchEvent(new CustomEvent('minicolor:update', { detail: { color: CONFIG.currentColor } }));
         }
     }
 
@@ -1365,6 +1383,7 @@ class ToolbarManager {
                 CONFIG.currentColor = btn.dataset.color;
                 document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
+                document.dispatchEvent(new CustomEvent('minicolor:update', { detail: { color: CONFIG.currentColor } }));
             });
         });
 
@@ -1379,6 +1398,7 @@ class ToolbarManager {
             customBtn.style.background = e.target.value;
             document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
             customBtn.classList.add('active');
+            document.dispatchEvent(new CustomEvent('minicolor:update', { detail: { color: CONFIG.currentColor } }));
         });
     }
 
@@ -1399,6 +1419,7 @@ class ToolbarManager {
                 document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
                 customBtn.classList.add('active');
                 this._closeAllPopups();
+                document.dispatchEvent(new CustomEvent('minicolor:update', { detail: { color } }));
             });
             grid.appendChild(btn);
         });
@@ -1586,9 +1607,12 @@ class ToolbarManager {
         this._closeAllPopups();
         if (!isVisible) {
             popup.style.display = 'block';
-            // Posiziona popup sopra la toolbar
+            // Posiziona popup sopra la toolbar con maxHeight dinamico per non debordare in cima
             const tbRect = this.wrapper.getBoundingClientRect();
-            popup.style.bottom = (window.innerHeight - tbRect.top + 12) + 'px';
+            const bottomOffset = window.innerHeight - tbRect.top + 12;
+            const availableH = tbRect.top - 16; // spazio disponibile sopra la toolbar
+            popup.style.bottom = bottomOffset + 'px';
+            popup.style.maxHeight = Math.max(200, availableH) + 'px';
             // Se è il popup sfondi, carica le immagini da Drive
             if (id === 'bg-popup') {
                 loadDriveBackgrounds();
@@ -1908,6 +1932,7 @@ class ProjectManager {
             if (!ok) return;
         }
         canvasMgr.clear();
+        if (typeof objectLayer !== 'undefined' && objectLayer) objectLayer.clear();
         bgMgr.setBackground('white');
         CONFIG.projectName = 'Nuova Lavagna';
         CONFIG.isDirty = false;
@@ -3962,6 +3987,92 @@ class PageManager {
 }
 
 // =============================================================================
+// SEZIONE 14 — MINI COLOR BAR
+// Barra colori rapida persistente, visibile solo con strumenti di scrittura.
+// =============================================================================
+
+const MINI_COLORS_KEY = 'eduboard_recent_colors';
+const MAX_RECENT = 4;
+const DEFAULT_COLORS_MINI = ['#000000', '#dc2626', '#1d4ed8', '#16a34a'];
+
+function setupMiniColorBar() {
+    const bar = document.getElementById('mini-color-bar');
+    if (!bar) return;
+
+    // Carica colori recenti da localStorage
+    let recentColors = JSON.parse(localStorage.getItem(MINI_COLORS_KEY) || '[]');
+
+    function getDisplayColors() {
+        // Combina recenti + default, no duplicati, max 8 pallini
+        return [...new Set([...recentColors, ...DEFAULT_COLORS_MINI])].slice(0, 8);
+    }
+
+    function renderBar() {
+        bar.innerHTML = '';
+        getDisplayColors().forEach(color => {
+            const dot = document.createElement('button');
+            dot.className = 'mini-color-dot' + (color === CONFIG.currentColor ? ' active' : '');
+            dot.style.background = color;
+            dot.setAttribute('aria-label', 'Colore ' + color);
+            dot.setAttribute('title', color);
+            dot.addEventListener('click', () => {
+                CONFIG.currentColor = color;
+                // Aggiorna tutti i color-swatch della toolbar principale
+                document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
+                // Cerca il swatch corrispondente, altrimenti attiva il pulsante custom
+                const matchingSwatch = document.querySelector(`.color-swatch[data-color="${color}"]`);
+                if (matchingSwatch) {
+                    matchingSwatch.classList.add('active');
+                } else {
+                    const customBtn = document.getElementById('color-custom');
+                    if (customBtn) {
+                        customBtn.style.background = color;
+                        customBtn.classList.add('active');
+                    }
+                }
+                // Aggiorna attivo nella mini-bar
+                bar.querySelectorAll('.mini-color-dot').forEach(d => d.classList.remove('active'));
+                dot.classList.add('active');
+                // Aggiungi ai recenti e salva
+                recentColors = [color, ...recentColors.filter(c => c !== color)].slice(0, MAX_RECENT);
+                localStorage.setItem(MINI_COLORS_KEY, JSON.stringify(recentColors));
+            });
+            bar.appendChild(dot);
+        });
+    }
+
+    function updateVisibility() {
+        const drawTools = ['pen', 'pencil', 'pastel', 'marker'];
+        const isDrawTool = drawTools.includes(CONFIG.currentTool);
+        bar.style.display = isDrawTool ? 'flex' : 'none';
+        if (isDrawTool) renderBar();
+    }
+
+    // Aggiorna il pallino attivo quando il colore cambia dal menu principale
+    document.addEventListener('minicolor:update', (e) => {
+        const color = e.detail?.color;
+        if (!color) return;
+        // Aggiorna active nella mini-bar senza fare un re-render completo
+        bar.querySelectorAll('.mini-color-dot').forEach(d => {
+            d.classList.toggle('active', d.style.background === color ||
+                d.getAttribute('aria-label') === 'Colore ' + color);
+        });
+        // Aggiungi il nuovo colore ai recenti (non ridisegna subito, verrà mostrato alla prossima apertura)
+        if (!recentColors.includes(color)) {
+            recentColors = [color, ...recentColors].slice(0, MAX_RECENT);
+            localStorage.setItem(MINI_COLORS_KEY, JSON.stringify(recentColors));
+        }
+    });
+
+    // Hook sulla selezione strumento: ogni tool-btn[data-tool] aggiorna la visibilità
+    document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+        btn.addEventListener('click', () => setTimeout(updateVisibility, 50));
+    });
+
+    updateVisibility(); // stato iniziale
+}
+
+// =============================================================================
 // SEZIONE 14 — INIT
 // Istanziazione globale dei manager e avvio dell'applicazione.
 // =============================================================================
@@ -3989,6 +4100,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupFullscreen();    // Feature 5
     setupProjectName();   // Feature 6
     setupLibraryTabs();   // Feature A: linguette libreria laterali
+    setupMiniColorBar();  // Mini barra colori rapida sopra la toolbar
 
     // PageManager — pagine multiple
     pageManager = new PageManager(canvasMgr, objectLayer, bgMgr);

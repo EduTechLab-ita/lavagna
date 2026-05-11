@@ -348,10 +348,12 @@ class RulerTool {
             cyCanvas = this.cy - areaRect.top;
         }
 
-        // --- Offset verso il bordo inferiore del righello (linea di riferimento) ---
-        // Il canvas delle tacche è alto 48px; il bordo inferiore è il riferimento visivo.
-        // In coordinate canvas l'offset è (altezza/2 in pixel schermo) / scale.
-        const rulerHalfH = this.body ? this.body.getBoundingClientRect().height / 2 : 24;
+        // --- Offset verso il bordo superiore del righello (linea numerata) ---
+        // ATTENZIONE: NON usare getBoundingClientRect().height su elementi ruotati —
+        // restituisce l'AABB (bounding box allineato agli assi), che è molto più
+        // grande dell'altezza originale quando l'angolo ≠ 0°/180°.
+        // Il canvas ruler è fisso 48px → metà = 24px sempre, a qualsiasi angolo.
+        const rulerHalfH = 24; // metà di 48px (height fissa del canvas righello)
         const scale = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.scale : 1;
         const halfHCanvas = rulerHalfH / scale;
 
@@ -1103,27 +1105,10 @@ class GeometryManager {
             });
         }
 
-        // Bottone Compasso
-        const btnComp = document.getElementById('btn-geo-compass');
-        if (btnComp) {
-            btnComp.addEventListener('click', () => {
-                if (CONFIG.currentTool === 'compass') {
-                    // Disattiva
-                    CONFIG.currentTool = 'pen';
-                    btnComp.classList.remove('geo-active');
-                    this.compass.deactivate();
-                    document.querySelectorAll('.tool-btn[data-tool="pen"]').forEach(b => b.classList.add('active'));
-                    toast('Compasso disattivato', 'info');
-                } else {
-                    CONFIG.currentTool = 'compass';
-                    btnComp.classList.add('geo-active');
-                    document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
-                    const popup = document.getElementById('geo-popup');
-                    if (popup) popup.style.display = 'none';
-                    this.compass.activate();
-                }
-            });
-        }
+        // Bottone Compasso — rimosso dal menu geo (funzionalità cerchio spostata nelle Forme)
+        // La classe CompassTool rimane nel codice ma non è più accessibile dall'UI
+        // const btnComp = document.getElementById('btn-geo-compass');
+        // if (btnComp) { ... }
     }
 
     _activateCompass(btn) {

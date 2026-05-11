@@ -27,6 +27,19 @@ const FOLDER_COLORS = [
     '#64748b', // grigio (default)
 ];
 
+/**
+ * Converte un colore esadecimale (#rrggbb) in rgba(r,g,b,alpha).
+ * @param {string} hex   - es. '#ef4444'
+ * @param {number} alpha - es. 0.15
+ * @returns {string}
+ */
+function _hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+}
+
 // =============================================================================
 // SEZIONE 1 — DriveManager
 // Gestisce autenticazione OAuth2 e tutte le operazioni su Drive API v3
@@ -923,15 +936,20 @@ class LibraryManager {
             this.drive.listLessons(parentId)
         ]);
 
-        const indent = depth * 16;
-
         // --- Cartelle ---
         for (const folder of folders) {
-            const item = this._createTreeItem('folder', '📁', folder.name, indent);
+            const item = this._createTreeItem('folder', '📁', folder.name, 0, depth);
             container.appendChild(item);
 
+            // Sfondo colorato sulla riga
+            const folderColor = localStorage.getItem('folder-color-' + folder.id);
+            if (folderColor) {
+                item.style.background = _hexToRgba(folderColor, 0.15);
+            }
+            item.dataset.folderId = folder.id;
+
             // Cerchietto colore cartella
-            const colorDot = this._createColorDot(folder.id);
+            const colorDot = this._createColorDot(folder.id, item);
             // Inserisci il dot prima dell'icona cartella
             item.insertBefore(colorDot, item.firstChild);
 
@@ -951,15 +969,15 @@ class LibraryManager {
                 this._expandedFolders.add(folder.id);
                 if (subContainer.dataset.loaded === 'false') {
                     subContainer.dataset.loaded = 'true';
-                    subContainer.innerHTML = `<div class="tree-loading" style="padding-left:${indent + 16}px">⏳ Caricamento...</div>`;
+                    subContainer.innerHTML = `<div class="tree-loading">⏳ Caricamento...</div>`;
                     try {
                         subContainer.innerHTML = '';
                         await this.renderTree(folder.id, subContainer, depth + 1);
                         if (!subContainer.children.length) {
-                            subContainer.innerHTML = `<div class="tree-empty" style="padding-left:${indent + 16}px;font-size:0.78rem;color:var(--text-muted)">Cartella vuota</div>`;
+                            subContainer.innerHTML = `<div class="tree-empty" style="font-size:0.78rem;color:var(--text-muted)">Cartella vuota</div>`;
                         }
                     } catch (err) {
-                        subContainer.innerHTML = `<div class="tree-empty" style="padding-left:${indent + 16}px;color:#ef4444">Errore: ${err.message}</div>`;
+                        subContainer.innerHTML = `<div class="tree-empty" style="color:#ef4444">Errore: ${err.message}</div>`;
                     }
                 }
             };
@@ -1000,7 +1018,7 @@ class LibraryManager {
         // --- File lezioni ---
         for (const file of files) {
             const name = file.name.replace(/\.json$/, '');
-            const item = this._createTreeItem('lesson', '📄', name, indent + 16);
+            const item = this._createTreeItem('lesson', '📄', name, 0, depth + 1);
             item.dataset.fileId = file.id; // necessario per _highlightCurrentLesson()
             container.appendChild(item);
 
@@ -1089,6 +1107,9 @@ class LibraryManager {
             window.autoSaveMgr?.beginLoading();
             toast('Caricamento lezione...', 'info');
             const lesson = await this.drive.loadLesson(fileId);
+
+            // 0. Pulisci lo stato corrente prima di caricare la nuova lezione
+            if (typeof objectLayer !== 'undefined' && objectLayer) objectLayer.clear();
 
             // 1. Ripristina sfondo
             if (lesson.background) {
@@ -1319,11 +1340,11 @@ class LibraryManager {
     // ──────────────────────────────────────────────────────────────────────────
 
     /** Crea un elemento riga dell'albero. */
-    _createTreeItem(type, icon, label, indent) {
+    _createTreeItem(type, icon, label, _indent, depth = 0) {
         const item = document.createElement('div');
         item.className  = `tree-item ${type}`;
-        item.style.paddingLeft = (8 + indent) + 'px';
         item.dataset.type = type;
+        item.dataset.depth = depth;
 
         item.innerHTML = `
             <span class="tree-icon">${icon}</span>
@@ -1402,7 +1423,7 @@ class LibraryManager {
      * @param {string} folderId
      * @returns {HTMLElement} il <span class="folder-color-dot">
      */
-    _createColorDot(folderId) {
+    _createColorDot(folderId, itemEl = null) {
         const storageKey = 'folder-color-' + folderId;
         const currentColor = localStorage.getItem(storageKey) || '#64748b';
 
@@ -1413,7 +1434,7 @@ class LibraryManager {
 
         dot.addEventListener('click', (e) => {
             e.stopPropagation();
-            this._showColorPopup(dot, folderId, storageKey);
+            this._showColorPopup(dot, folderId, storageKey, itemEl);
         });
 
         return dot;
@@ -1425,7 +1446,7 @@ class LibraryManager {
      * @param {string}      folderId
      * @param {string}      storageKey
      */
-    _showColorPopup(dotEl, folderId, storageKey) {
+    _showColorPopup(dotEl, folderId, storageKey, itemEl = null) {
         // Chiudi eventuali popup già aperti
         document.querySelector('.folder-color-popup')?.remove();
 
@@ -1444,6 +1465,11 @@ class LibraryManager {
                 e.stopPropagation();
                 localStorage.setItem(storageKey, color);
                 dotEl.style.backgroundColor = color;
+                // Aggiorna sfondo riga cartella
+                if (itemEl) {
+                    itemEl.style.background = _hexToRgba(color, 0.15);
+                    itemEl.dataset.folderColorBg = color;
+                }
                 popup.remove();
             });
 
@@ -1788,6 +1814,26 @@ function _injectDriveStyles() {
 .folder-color-swatch:hover { transform: scale(1.15); border-color: rgba(255,255,255,0.5); }
 .folder-color-swatch.selected { border-color: white; }
 
+/* ── Struttura ad albero: linee verticali ── */
+.tree-subtree {
+    position: relative;
+    margin-left: 14px;
+    padding-left: 8px;
+    border-left: 1.5px solid rgba(148,163,184,0.20);
+}
+/* Riga cartella con sfondo colorato: hover e selected usano blend */
+.tree-item.folder[style*="background"] {
+    transition: background 0.15s, filter 0.15s;
+}
+.tree-item.folder[style*="background"]:hover {
+    filter: brightness(1.28);
+}
+.tree-item.folder[style*="background"].selected {
+    filter: brightness(1.45) saturate(1.3);
+    outline: 1px solid rgba(59,130,246,0.35);
+    outline-offset: -1px;
+}
+
 /* ── Drag and drop ── */
 .tree-drop-target {
     background: rgba(59, 130, 246, 0.2);
@@ -1883,8 +1929,9 @@ function initDrive() {
     // (solo se Drive è connesso, altrimenti usa il salvataggio locale)
     const btnSave = document.getElementById('btn-save');
     if (btnSave) {
-        btnSave.addEventListener('click', () => {
+        btnSave.addEventListener('click', (e) => {
             if (driveMgr.isConnected()) {
+                e.stopImmediatePropagation(); // blocca il listener di app.js (salvataggio locale)
                 libraryMgr.saveCurrentLesson(libraryMgr.currentFolderId);
             }
             // Se non connesso: il listener originale di app.js gestisce il salvataggio locale
