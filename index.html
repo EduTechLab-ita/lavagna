@@ -376,17 +376,11 @@
         <div class="bg-orient-row">
             <button class="bg-orient-btn active" id="bg-orient-landscape" title="Orizzontale A4">&#8596; Orizzontale</button>
             <button class="bg-orient-btn" id="bg-orient-portrait" title="Verticale A4">&#8597; Verticale</button>
-            <div class="bg-color-label" title="Colore pagina" style="position:relative">
+            <div class="bg-color-label" title="Colore pagina">
                 <span>Colore</span>
                 <button id="bg-page-color-btn" class="bg-page-color-btn" title="Scegli colore pagina">
                     <span id="bg-page-color-swatch" class="bg-page-color-swatch" style="background:#ffffff"></span>
                 </button>
-                <!-- Mini-popup palette colori pagina -->
-                <div id="bg-page-color-popup" class="bg-page-color-popup" style="display:none">
-                    <div class="bg-page-color-grid" id="bg-page-color-grid"></div>
-                    <button class="bg-page-color-custom-btn" id="bg-page-color-custom-btn">&#127912; Altro...</button>
-                    <input type="color" id="bg-page-color" style="display:none" value="#ffffff">
-                </div>
             </div>
         </div>
         <div class="bg-grid">
@@ -450,6 +444,13 @@
             <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
         </svg>
     </button>
+
+    <!-- Palette colori pagina — FUORI da #bg-popup, position:fixed, posizionata via JS -->
+    <div id="bg-page-color-popup" class="bg-page-color-popup" style="display:none">
+        <div class="bg-page-color-grid" id="bg-page-color-grid"></div>
+        <button class="bg-page-color-custom-btn" id="bg-page-color-custom-btn">🎨 Apri selettore colori completo</button>
+        <input type="color" id="bg-page-color" style="display:none" value="#ffffff">
+    </div>
 
     <!-- Pannello contestuale oggetti selezionati (compatto con icone) -->
     <div id="object-context-panel" class="ctx-panel" style="display:none">
