@@ -2202,17 +2202,26 @@ function setupFullscreen() {
 // setupLibraryTabs() rimossa: le vecchie #lib-tab-left/right sono state eliminate.
 // La nuova #library-tab (position:fixed) è sempre visibile e gestita in drive.js.
 
-/** Aggiorna la freccia del tab libreria in base allo stato aperto/chiuso e al lato. */
-function _updateLibraryTabArrow(panel) {
-    const arrow = document.getElementById('library-tab-arrow');
-    if (!arrow) return;
-    const open = panel.classList.contains('open');
-    const fromRight = panel.classList.contains('from-right');
-    // Pannello sinistro: aperto → freccia sx (indica chiudi), chiuso → freccia dx (indica apri)
-    // Pannello destro:  aperto → freccia dx (indica chiudi), chiuso → freccia sx (indica apri)
-    arrow.setAttribute('points', open
-        ? (fromRight ? '9 18 15 12 9 6' : '15 18 9 12 15 6')
-        : (fromRight ? '15 18 9 12 15 6' : '9 18 15 12 9 6'));
+/** Sincronizza le frecce e l'highlight di entrambi i tab libreria. */
+function _updateLibraryTabArrow(panel) { _syncLibraryTabArrows(panel); }
+function _syncLibraryTabArrows(panel) {
+    if (!panel) return;
+    const open     = panel.classList.contains('open');
+    const curSide  = panel.dataset.side || 'left';
+
+    // Tab sinistro: aperto da sinistra → freccia sx (chiudi); altrimenti → freccia dx (apri)
+    const arrowL = document.getElementById('library-tab-arrow-left');
+    if (arrowL) arrowL.setAttribute('points',
+        (open && curSide === 'left') ? '15 18 9 12 15 6' : '9 18 15 12 9 6');
+
+    // Tab destro: aperto da destra → freccia dx (chiudi); altrimenti → freccia sx (apri)
+    const arrowR = document.getElementById('library-tab-arrow-right');
+    if (arrowR) arrowR.setAttribute('points',
+        (open && curSide === 'right') ? '9 18 15 12 9 6' : '15 18 9 12 15 6');
+
+    // Highlight tab attivo
+    document.getElementById('library-tab-left') ?.classList.toggle('active', open && curSide === 'left');
+    document.getElementById('library-tab-right')?.classList.toggle('active', open && curSide === 'right');
 }
 
 function openLibraryFrom(side) {

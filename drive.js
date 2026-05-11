@@ -1907,32 +1907,29 @@ function initDrive() {
         if (typeof _updateLibraryTabArrow === 'function') _updateLibraryTabArrow(panel);
     });
 
-    // ── Tab freccia sul bordo del pannello (apri/chiudi) ──────────────────
-    document.getElementById('library-tab')?.addEventListener('click', () => {
-        const panel = document.getElementById('library-panel');
-        if (!panel) return;
-        const isOpen = panel.classList.contains('open');
-        if (isOpen) {
-            panel.classList.remove('open');
-        } else {
-            // Riapri sempre da sinistra (le vecchie linguette laterali sono state rimosse)
-            panel.classList.remove('from-right');
-            panel.dataset.side = 'left';
-            panel.classList.add('open');
-            if (typeof libraryMgr !== 'undefined' && libraryMgr) libraryMgr.refresh();
-        }
-        // Ruota la freccia del tab in base allo stato
-        const arrow = document.getElementById('library-tab-arrow');
-        if (arrow) {
-            const open = panel.classList.contains('open');
-            const fromRight = panel.classList.contains('from-right');
-            // Pannello sinistro aperto → freccia sinistra (chiudi); chiuso → freccia destra (apri)
-            // Pannello destro aperto → freccia destra (chiudi); chiuso → freccia sinistra (apri)
-            arrow.setAttribute('points', open
-                ? (fromRight ? '9 18 15 12 9 6' : '15 18 9 12 15 6')
-                : (fromRight ? '15 18 9 12 15 6' : '9 18 15 12 9 6'));
-        }
-    });
+    // ── Tab freccia sinistra e destra (apri/chiudi libreria) ──────────────
+    function _setupLibraryTab(tabId, side) {
+        document.getElementById(tabId)?.addEventListener('click', () => {
+            const panel = document.getElementById('library-panel');
+            if (!panel) return;
+            const isOpen  = panel.classList.contains('open');
+            const curSide = panel.dataset.side || 'left';
+
+            if (isOpen && curSide === side) {
+                // Chiudi se già aperto dallo stesso lato
+                panel.classList.remove('open');
+            } else {
+                // Apri (o cambia lato)
+                panel.dataset.side = side;
+                panel.classList.toggle('from-right', side === 'right');
+                panel.classList.add('open');
+                if (typeof libraryMgr !== 'undefined' && libraryMgr) libraryMgr.refresh();
+            }
+            _syncLibraryTabArrows(panel);
+        });
+    }
+    _setupLibraryTab('library-tab-left',  'left');
+    _setupLibraryTab('library-tab-right', 'right');
 
     // ── Pulsante "Nuova cartella" nel pannello ─────────────────────────────
     document.getElementById('library-new-folder')?.addEventListener('click', () => {

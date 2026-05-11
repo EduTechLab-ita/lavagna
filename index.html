@@ -60,10 +60,17 @@
         </div>
     </header>
 
-    <!-- Tab libreria — FUORI dal pannello così position:fixed funziona (transform parent blocca fixed) -->
-    <button id="library-tab" class="library-tab" title="Apri/Chiudi libreria" aria-label="Apri/Chiudi libreria">
+    <!-- Tab libreria SINISTRA — fisso, fuori dal pannello (transform parent blocca position:fixed) -->
+    <button id="library-tab-left" class="library-tab library-tab--left" title="Apri libreria" aria-label="Apri libreria da sinistra">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
-            <polyline id="library-tab-arrow" points="9 18 15 12 9 6"/>
+            <polyline id="library-tab-arrow-left" points="9 18 15 12 9 6"/>
+        </svg>
+    </button>
+
+    <!-- Tab libreria DESTRA — fisso -->
+    <button id="library-tab-right" class="library-tab library-tab--right" title="Apri libreria" aria-label="Apri libreria da destra">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
+            <polyline id="library-tab-arrow-right" points="15 18 9 12 15 6"/>
         </svg>
     </button>
 
