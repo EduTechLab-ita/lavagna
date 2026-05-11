@@ -1609,7 +1609,7 @@ button {
     justify-content: center;
     color: var(--text-muted);
     transition: background 0.2s, color 0.2s;
-    z-index: 200;
+    z-index: 300;           /* sopra library-panel (z-index: 250) — sempre visibili */
     touch-action: none;
 }
 .library-tab--left {

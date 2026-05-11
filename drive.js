@@ -970,10 +970,17 @@ class LibraryManager {
      * @param {number}      depth     - profondità corrente (per indentazione)
      */
     async renderTree(parentId, container, depth = 0) {
+        // Token anti-duplicazione: se una renderTree più recente parte sullo stesso
+        // container prima che questa finisca l'await Drive, questa si annulla.
+        const token = (container._rt = (container._rt || 0) + 1);
+
         const [folders, files] = await Promise.all([
             this.drive.listFolders(parentId),
             this.drive.listLessons(parentId)
         ]);
+
+        // Render annullato da una chiamata più recente sullo stesso container
+        if (container._rt !== token) return;
 
         // --- Cartelle ---
         for (const folder of folders) {
