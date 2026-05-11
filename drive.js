@@ -17,14 +17,29 @@
 // =============================================================================
 
 const FOLDER_COLORS = [
+    // Riga 1 — caldi
     '#ef4444', // rosso
     '#f97316', // arancione
+    '#f59e0b', // ambra
     '#eab308', // giallo
+    '#84cc16', // lime
+    // Riga 2 — freddi
     '#22c55e', // verde
+    '#14b8a6', // teal
+    '#06b6d4', // ciano
     '#3b82f6', // blu
+    '#6366f1', // indaco
+    // Riga 3 — altri
     '#8b5cf6', // viola
+    '#a855f7', // porpora
     '#ec4899', // rosa
-    '#64748b', // grigio (default)
+    '#f43f5e', // rosa-rosso
+    '#64748b', // grigio
+    '#94a3b8', // grigio chiaro
+    '#78716c', // marrone-grigio
+    '#92400e', // marrone
+    '#1e293b', // quasi-nero
+    '#0f766e', // verde scuro
 ];
 
 /**
@@ -1449,11 +1464,11 @@ class LibraryManager {
      */
     _createColorDot(folderId, itemEl = null) {
         const storageKey = 'folder-color-' + folderId;
-        const currentColor = localStorage.getItem(storageKey) || '#64748b';
+        const currentColor = localStorage.getItem(storageKey) || null;
 
         const dot = document.createElement('span');
-        dot.className = 'folder-color-dot';
-        dot.style.backgroundColor = currentColor;
+        dot.className = 'folder-color-dot' + (currentColor ? '' : ' no-color');
+        if (currentColor) dot.style.backgroundColor = currentColor;
         dot.title = 'Cambia colore cartella';
 
         dot.addEventListener('click', (e) => {
@@ -1471,43 +1486,57 @@ class LibraryManager {
      * @param {string}      storageKey
      */
     _showColorPopup(dotEl, folderId, storageKey, itemEl = null) {
-        // Chiudi eventuali popup già aperti
         document.querySelector('.folder-color-popup')?.remove();
 
-        const currentColor = localStorage.getItem(storageKey) || '#64748b';
+        const currentColor = localStorage.getItem(storageKey) || null;
 
         const popup = document.createElement('div');
         popup.className = 'folder-color-popup';
 
+        const applyColor = (color) => {
+            if (color) {
+                localStorage.setItem(storageKey, color);
+                dotEl.style.backgroundColor = color;
+                dotEl.classList.remove('no-color');
+                if (itemEl) itemEl.style.background = _hexToRgba(color, 0.15);
+            } else {
+                // Rimuovi colore
+                localStorage.removeItem(storageKey);
+                dotEl.style.backgroundColor = '';
+                dotEl.classList.add('no-color');
+                if (itemEl) itemEl.style.background = '';
+            }
+            popup.remove();
+        };
+
+        // ── Pulsante "Nessun colore" ───────────────────────────────────────
+        const noColor = document.createElement('div');
+        noColor.className = 'folder-color-swatch no-color-swatch' + (!currentColor ? ' selected' : '');
+        noColor.title = 'Nessun colore';
+        noColor.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="2" y1="2" x2="14" y2="14"/><line x1="14" y1="2" x2="2" y2="14"/>
+        </svg>`;
+        noColor.addEventListener('click', (e) => { e.stopPropagation(); applyColor(null); });
+        popup.appendChild(noColor);
+
+        // ── Swatches colori ───────────────────────────────────────────────
         for (const color of FOLDER_COLORS) {
             const swatch = document.createElement('div');
             swatch.className = 'folder-color-swatch' + (color === currentColor ? ' selected' : '');
             swatch.style.backgroundColor = color;
             swatch.title = color;
-
-            swatch.addEventListener('click', (e) => {
-                e.stopPropagation();
-                localStorage.setItem(storageKey, color);
-                dotEl.style.backgroundColor = color;
-                // Aggiorna sfondo riga cartella
-                if (itemEl) {
-                    itemEl.style.background = _hexToRgba(color, 0.15);
-                    itemEl.dataset.folderColorBg = color;
-                }
-                popup.remove();
-            });
-
+            swatch.addEventListener('click', (e) => { e.stopPropagation(); applyColor(color); });
             popup.appendChild(swatch);
         }
 
         document.body.appendChild(popup);
 
-        // Posiziona il popup vicino al cerchietto
+        // Posiziona il popup vicino al cerchietto (max 5 colonne = 5×24 + padding)
         const rect = dotEl.getBoundingClientRect();
-        popup.style.left = Math.min(rect.left, window.innerWidth - 116) + 'px';
+        const popupW = 150; // 5 colonne × ~28px
+        popup.style.left = Math.min(rect.left, window.innerWidth - popupW - 8) + 'px';
         popup.style.top  = (rect.bottom + 4) + 'px';
 
-        // Chiudi cliccando fuori
         const closeHandler = (e) => {
             if (!popup.contains(e.target) && e.target !== dotEl) {
                 popup.remove();
@@ -1803,7 +1832,9 @@ function _injectDriveStyles() {
     style.textContent = `
 /* ── Colori cartelle ── */
 .folder-color-dot {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 12px;
     height: 12px;
     border-radius: 50%;
@@ -1813,30 +1844,42 @@ function _injectDriveStyles() {
     transition: transform 0.1s;
     margin-right: 4px;
 }
+.folder-color-dot.no-color {
+    background: transparent;
+    border: 1px dashed rgba(255,255,255,0.25);
+}
 .folder-color-dot:hover { transform: scale(1.3); }
 .folder-color-popup {
     position: fixed;
     background: var(--bg-elevated, #1e293b);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 8px;
-    padding: 6px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    width: 100px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 8px;
+    display: grid;
+    grid-template-columns: repeat(5, 24px);
+    gap: 5px;
     z-index: 9999;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
 }
 .folder-color-swatch {
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
     cursor: pointer;
     border: 2px solid transparent;
     transition: border-color 0.1s, transform 0.1s;
 }
-.folder-color-swatch:hover { transform: scale(1.15); border-color: rgba(255,255,255,0.5); }
-.folder-color-swatch.selected { border-color: white; }
+.folder-color-swatch:hover { transform: scale(1.18); border-color: rgba(255,255,255,0.5); }
+.folder-color-swatch.selected { border-color: white; box-shadow: 0 0 0 1px rgba(255,255,255,0.4); }
+/* Swatch "nessun colore" */
+.no-color-swatch {
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.no-color-swatch:hover { color: rgba(255,255,255,0.8); }
 
 /* ── Struttura ad albero: linee verticali ── */
 .tree-subtree {
