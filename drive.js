@@ -296,7 +296,7 @@ class DriveManager {
             `'${folderId}' in parents and mimeType='application/json' and trashed=false`
         );
         const resp = await this._apiFetch(
-            `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime%20desc`
+            `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=name_natural`
         );
         return resp.files || [];
     }

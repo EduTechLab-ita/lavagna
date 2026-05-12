@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v22'; // v22 — Bézier smoothing: scrittura fluida su PC lenti (midpoint quadraticCurveTo)
+const CACHE_NAME = 'eduboard-v23'; // v23 — libreria: ordine nome naturale invece di modifiedTime desc
 const urlsToCache = [
   '.',
   './index.html',
