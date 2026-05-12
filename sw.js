@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v32'; // v32 — fix offset disegni: calcolato sincrono prima di img.onload
+const CACHE_NAME = 'eduboard-v33'; // v33 — disegni salvati come ritaglio foglio A4: zero spostamento tra sessioni
 const urlsToCache = [
   '.',
   './index.html',

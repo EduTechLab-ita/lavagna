@@ -4462,14 +4462,24 @@ class PageManager {
         const drawCanvas = document.getElementById('draw-canvas');
         const W = drawCanvas?.width || 0;
         const H = drawCanvas?.height || 0;
-        // Salva posizione foglio A4 al momento del salvataggio: serve per compensare
-        // lo spostamento quando la lezione viene riaperta su un canvas di dimensioni diverse
-        const pageRect = (W > 0 && typeof bgMgr !== 'undefined') ? bgMgr._getPageRect(W, H) : null;
+        // Salva SOLO il ritaglio del foglio A4 (non l'intero canvas).
+        // Al ripristino viene disegnato alla posizione corrente del foglio →
+        // nessuno spostamento indipendentemente dalle dimensioni del canvas.
+        let drawImageData = null;
+        if (drawCanvas && W > 0 && typeof bgMgr !== 'undefined') {
+            const r = bgMgr._getPageRect(W, H);
+            const off = document.createElement('canvas');
+            off.width  = r.pw;
+            off.height = r.ph;
+            off.getContext('2d').drawImage(drawCanvas, -r.px, -r.py);
+            drawImageData = off.toDataURL('image/png');
+        }
         return {
             canvasWidth: W,
-            pagePx: pageRect?.px ?? null,
-            pagePy: pageRect?.py ?? null,
-            drawImageData: drawCanvas && drawCanvas.width > 0 ? drawCanvas.toDataURL('image/png') : null,
+            pagePx: null,   // non più necessario (mantenuto per retrocompatibilità)
+            pagePy: null,
+            drawFormat: 'page',  // indica che drawImageData è il ritaglio del foglio A4
+            drawImageData,
             objects: JSON.parse(JSON.stringify(this.objectLayerRef.objects.map(o => {
                 // Serializza l'immagine come dataUrl per il salvataggio in memoria
                 try {
@@ -4498,16 +4508,22 @@ class PageManager {
         ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
         if (pageData.drawImageData) {
             const img = new Image();
-            // Offset calcolato ORA (sincrono), non dentro onload.
-            // Se il canvas cambiasse dimensione nel frattempo, l'offset sarebbe sbagliato.
-            let offsetX = 0, offsetY = 0;
-            if (pageData.pagePx != null && typeof bgMgr !== 'undefined') {
-                const W = drawCanvas.width, H = drawCanvas.height;
-                const curr = bgMgr._getPageRect(W, H);
-                offsetX = curr.px - pageData.pagePx;
-                offsetY = curr.py - pageData.pagePy;
+            if (pageData.drawFormat === 'page' && typeof bgMgr !== 'undefined') {
+                // Nuovo formato: drawImageData è il ritaglio del foglio A4.
+                // Calcola la posizione corrente del foglio e disegnaci l'immagine sopra.
+                const r = bgMgr._getPageRect(drawCanvas.width, drawCanvas.height);
+                img.onload = () => { ctx.drawImage(img, r.px, r.py); };
+            } else {
+                // Vecchio formato: drawImageData è l'intero canvas.
+                // Usa il meccanismo offset (pagePx/pagePy) per compensare dimensioni diverse.
+                let offsetX = 0, offsetY = 0;
+                if (pageData.pagePx != null && typeof bgMgr !== 'undefined') {
+                    const curr = bgMgr._getPageRect(drawCanvas.width, drawCanvas.height);
+                    offsetX = curr.px - pageData.pagePx;
+                    offsetY = curr.py - pageData.pagePy;
+                }
+                img.onload = () => { ctx.drawImage(img, offsetX, offsetY); };
             }
-            img.onload = () => { ctx.drawImage(img, offsetX, offsetY); };
             img.src = pageData.drawImageData;
         }
         // Ripristina objects
