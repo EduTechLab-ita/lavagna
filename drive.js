@@ -140,7 +140,8 @@ class DriveManager {
     async trySilentConnect(retries = 6) {
         if (typeof google === 'undefined' || !google.accounts) {
             if (retries > 0) {
-                setTimeout(() => this.trySilentConnect(retries - 1), 1500);
+                await new Promise(r => setTimeout(r, 1500));
+                return this.trySilentConnect(retries - 1);
             }
             return false;
         }
@@ -2178,6 +2179,8 @@ function initDrive() {
             if (ok) {
                 driveConnectBtn.update();
                 libraryMgr._updateDriveStatus();
+                const greeting = driveMgr.userName || driveMgr.userEmail;
+                if (greeting) toast('Drive connesso — bentornato, ' + greeting + '!', 'success');
                 setTimeout(() => _autoOpenLastLesson(), 1000);
             }
         });

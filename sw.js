@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v28'; // v28 — silent login Drive: connessione automatica alla riapertura del browser
+const CACHE_NAME = 'eduboard-v29'; // v29 — fix silent login: retry asincrono + toast conferma connessione
 const urlsToCache = [
   '.',
   './index.html',
