@@ -145,8 +145,11 @@ class DriveManager {
             return false;
         }
 
+        // Recupera l'email dall'ultima sessione per evitare il popup di selezione account
+        const hintEmail = this.userEmail || localStorage.getItem('eduboard_user_email') || '';
+
         return new Promise((resolve) => {
-            const client = google.accounts.oauth2.initTokenClient({
+            const clientConfig = {
                 client_id: this.CLIENT_ID,
                 scope:     this.SCOPE,
                 prompt:    '',
@@ -155,6 +158,17 @@ class DriveManager {
                         this.accessToken = tokenResponse.access_token;
                         this.tokenExpiry = Date.now() + (tokenResponse.expires_in * 1000);
                         this.connected   = true;
+
+                        // Recupera info utente se non le abbiamo (nuova sessione browser)
+                        if (!this.userEmail) {
+                            try {
+                                const info = await this._apiFetch('https://www.googleapis.com/oauth2/v2/userinfo');
+                                this.userEmail    = info.email || '';
+                                this.userName     = info.given_name || info.name || '';
+                                this.userPhotoUrl = info.picture || null;
+                            } catch (_) {}
+                        }
+
                         this._saveSession();
 
                         // Assicura che le cartelle esistano ancora
@@ -170,7 +184,9 @@ class DriveManager {
                         resolve(false);
                     }
                 }
-            });
+            };
+            if (hintEmail) clientConfig.hint = hintEmail;
+            const client = google.accounts.oauth2.initTokenClient(clientConfig);
             client.requestAccessToken({ prompt: '' });
         });
     }
@@ -221,6 +237,10 @@ class DriveManager {
                 bgFolderId:      this.bgFolderId,
                 connected:       this.connected
             }));
+            // Salva l'email in localStorage per il silent login alla riapertura del browser
+            if (this.userEmail) {
+                localStorage.setItem('eduboard_user_email', this.userEmail);
+            }
         } catch (_) {}
     }
 
@@ -2149,14 +2169,15 @@ function initDrive() {
         }, true); // capture=true → intercetta prima del listener in app.js
     }
 
-    // ── Rinnovo silenzioso token se sessione ripristinata ──────────────────
-    if (driveMgr.connected && !driveMgr.isConnected()) {
-        // Token scaduto: prova rinnovo silenzioso
+    // ── Silent login all'avvio ─────────────────────────────────────────────
+    // Se non siamo già connessi (token scaduto o nuova sessione browser),
+    // proviamo il silent login. Funziona se l'utente è loggato su Google
+    // nel browser e ha già autorizzato EduBoard in passato — nessun popup.
+    if (!driveMgr.isConnected() && localStorage.getItem('eduboard_user_email')) {
         driveMgr.trySilentConnect().then(ok => {
             if (ok) {
                 driveConnectBtn.update();
                 libraryMgr._updateDriveStatus();
-                // Auto-apri ultima lezione (con delay per dare tempo al DOM di caricarsi)
                 setTimeout(() => _autoOpenLastLesson(), 1000);
             }
         });

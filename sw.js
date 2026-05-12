@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v27'; // v27 — centerView agganciato a ResizeObserver: zoom corretto dopo chiusura pannello
+const CACHE_NAME = 'eduboard-v28'; // v28 — silent login Drive: connessione automatica alla riapertura del browser
 const urlsToCache = [
   '.',
   './index.html',
