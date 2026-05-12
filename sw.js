@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v30'; // v30 — token Drive in localStorage: auto-login senza modal GIS
+const CACHE_NAME = 'eduboard-v31'; // v31 — centerView reimposta sempre scale=fitScale: fix zoom 270% all'avvio
 const urlsToCache = [
   '.',
   './index.html',

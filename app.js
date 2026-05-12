@@ -2604,8 +2604,10 @@ class PanManager {
         if (!canvas || canvas.width === 0) return;
         const vW = window.innerWidth;
         const headerH = document.body.classList.contains('fullscreen-mode') ? 0 : 56;
-        const vH = window.innerHeight - headerH;
-        if (!this.scale) this.scale = this._computeFitScale();
+
+        // Reimposta sempre scale = fitScale (100%) — garantisce zoom corretto
+        // all'apertura lezione indipendentemente dallo scale precedente
+        this.scale = this._computeFitScale();
 
         // Calcola posizione pagina (py = MARGIN = W*0.04, costante)
         const W = canvas.width;
@@ -2620,8 +2622,7 @@ class PanManager {
         this._applyTransform();
         const badge = document.getElementById('zoom-badge');
         if (badge && !badge._editing) {
-            const fitScale = this._computeFitScale();
-            badge.textContent = Math.round(this.scale / fitScale * 100) + '%';
+            badge.textContent = '100%';
         }
     }
 
