@@ -1491,6 +1491,28 @@ button {
 
 .tree-subtree { }
 
+/* ── Drag handle riordino file lezioni ── */
+.drag-handle {
+    flex-shrink: 0;
+    width: 14px;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    opacity: 0;
+    cursor: grab;
+    touch-action: none;
+    transition: opacity 0.15s;
+    line-height: 1;
+    padding: 0 1px;
+}
+.tree-item:hover .drag-handle  { opacity: 0.45; }
+.drag-handle:hover             { opacity: 1 !important; }
+.drag-handle:active            { cursor: grabbing; }
+
+.tree-item.lesson.drag-over-before { border-top: 2px solid var(--accent); }
+.tree-item.lesson.drag-over-after  { border-bottom: 2px solid var(--accent); }
+.tree-item.lesson.dragging-reorder { opacity: 0.4; pointer-events: none; }
+
 /* Stati vuoto / loading / errore */
 .tree-loading,
 .tree-empty {

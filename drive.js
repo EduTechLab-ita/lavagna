@@ -758,6 +758,9 @@ class LibraryManager {
 
         // Stato cartelle espanse: sopravvive al refresh
         this._expandedFolders = new Set();
+
+        // Cache ordini per cartella: { [folderId]: { orderId: string|null } }
+        this._orderCache = {};
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -977,13 +980,21 @@ class LibraryManager {
         // container prima che questa finisca l'await Drive, questa si annulla.
         const token = (container._rt = (container._rt || 0) + 1);
 
-        const [folders, files] = await Promise.all([
+        const [folders, rawFiles, orderData] = await Promise.all([
             this.drive.listFolders(parentId),
-            this.drive.listLessons(parentId)
+            this.drive.listLessons(parentId),
+            this._loadOrder(parentId)
         ]);
 
         // Render annullato da una chiamata più recente sullo stesso container
         if (container._rt !== token) return;
+
+        // Filtra il file di controllo ordine e applica ordine personalizzato
+        this._orderCache[parentId] = { orderId: orderData.orderId };
+        const files = this._applyOrder(
+            rawFiles.filter(f => f.name !== '_order.json'),
+            orderData.order
+        );
 
         // --- Cartelle ---
         for (const folder of folders) {
@@ -1068,7 +1079,8 @@ class LibraryManager {
         for (const file of files) {
             const name = file.name.replace(/\.json$/, '');
             const item = this._createTreeItem('lesson', '📄', name, 0, depth + 1);
-            item.dataset.fileId = file.id; // necessario per _highlightCurrentLesson()
+            item.dataset.fileId  = file.id;  // necessario per _highlightCurrentLesson()
+            item.dataset.folderId = parentId; // necessario per il riordino
             container.appendChild(item);
 
             // Click su file: apre la lezione
@@ -1079,8 +1091,11 @@ class LibraryManager {
 
             this._addContextButtons(item, { id: file.id, name }, 'lesson');
 
-            // Drag-and-drop — i file sono solo draggable (non drop target)
+            // Drag-and-drop spostamento cartella — i file sono solo draggable (non drop target)
             this._makeDraggable(item, file.id, parentId, file.name, 'lesson');
+
+            // Drag handle per riordino nella stessa cartella
+            this._attachReorderHandle(item, file.id, parentId, container);
         }
     }
 
@@ -1391,6 +1406,14 @@ class LibraryManager {
             <span class="tree-icon">${icon}</span>
             <span class="tree-label">${this._esc(label)}</span>
             <span class="tree-actions"></span>`;
+        // Handle di riordino (solo per file lezione, non per cartelle)
+        if (type === 'lesson') {
+            const handle = document.createElement('span');
+            handle.className = 'drag-handle';
+            handle.title = 'Trascina per riordinare';
+            handle.textContent = '⠿';
+            item.insertBefore(handle, item.firstChild);
+        }
         return item;
     }
 
@@ -1628,6 +1651,121 @@ class LibraryManager {
                 toast('Errore spostamento: ' + err.message, 'error');
             }
         });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // RIORDINO FILE (drag & drop nella stessa cartella)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /** Riordina i file nel DOM e salva l'ordine su Drive. */
+    _reorderFiles(folderId, container, draggedId, targetId, insertBefore) {
+        const draggedEl = container.querySelector(`.tree-item.lesson[data-file-id="${draggedId}"]`);
+        const targetEl  = container.querySelector(`.tree-item.lesson[data-file-id="${targetId}"]`);
+        if (!draggedEl || !targetEl || draggedEl === targetEl) return;
+        if (insertBefore) {
+            container.insertBefore(draggedEl, targetEl);
+        } else {
+            container.insertBefore(draggedEl, targetEl.nextSibling);
+        }
+        // Legge il nuovo ordine dal DOM (solo file della stessa cartella)
+        const newOrder = [...container.querySelectorAll(`.tree-item.lesson[data-folder-id="${folderId}"]`)]
+            .map(el => el.dataset.fileId);
+        this._saveOrder(folderId, newOrder);
+    }
+
+    /** Salva l'ordine in _order.json nella cartella su Drive. */
+    async _saveOrder(folderId, fileIds) {
+        try {
+            const cache   = this._orderCache?.[folderId];
+            const orderId = cache?.orderId ?? null;
+            const payload = { v: 1, folderId, order: fileIds, updatedAt: new Date().toISOString() };
+            const newId   = await this.drive._uploadMultipart('_order.json', payload, orderId, folderId);
+            if (!this._orderCache) this._orderCache = {};
+            this._orderCache[folderId] = { orderId: newId || orderId };
+        } catch (err) {
+            console.warn('_saveOrder fallito:', err);
+        }
+    }
+
+    /** Legge _order.json dalla cartella su Drive. */
+    async _loadOrder(folderId) {
+        try {
+            const q    = encodeURIComponent(`'${folderId}' in parents and name='_order.json' and mimeType='application/json' and trashed=false`);
+            const resp = await this.drive._apiFetch(
+                `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1`
+            );
+            const found = (resp.files || [])[0];
+            if (!found) return { orderId: null, order: [] };
+            const raw = await this.drive._apiFetch(
+                `https://www.googleapis.com/drive/v3/files/${found.id}?alt=media`
+            );
+            return { orderId: found.id, order: Array.isArray(raw?.order) ? raw.order : [] };
+        } catch (_) {
+            return { orderId: null, order: [] };
+        }
+    }
+
+    /** Applica ordine personalizzato all'array di file. File nuovi (non in order) vanno in coda. */
+    _applyOrder(files, order) {
+        if (!order || !order.length) return files;
+        const map     = new Map(files.map(f => [f.id, f]));
+        const ordered = order.filter(id => map.has(id)).map(id => map.get(id));
+        const rest    = files.filter(f => !order.includes(f.id));
+        return [...ordered, ...rest];
+    }
+
+    /** Attacca la logica Pointer Events al drag-handle di un file lezione. */
+    _attachReorderHandle(item, fileId, folderId, container) {
+        const handle = item.querySelector('.drag-handle');
+        if (!handle) return;
+        let dragging = false;
+
+        const cleanup = () => {
+            dragging = false;
+            item.classList.remove('dragging-reorder');
+            item.setAttribute('draggable', 'true');
+            container.querySelectorAll('.drag-over-before, .drag-over-after')
+                .forEach(el => el.classList.remove('drag-over-before', 'drag-over-after'));
+        };
+
+        handle.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handle.setPointerCapture(e.pointerId);
+            dragging = true;
+            item.classList.add('dragging-reorder');
+            // Disabilita il DnD HTML5 dell'intera riga durante il riordino
+            item.setAttribute('draggable', 'false');
+        });
+
+        handle.addEventListener('pointermove', (e) => {
+            if (!dragging) return;
+            e.preventDefault();
+            // pointer-events:none su .dragging-reorder → elementFromPoint vede l'elemento sotto
+            const below  = document.elementFromPoint(e.clientX, e.clientY);
+            const target = below?.closest('.tree-item.lesson');
+            container.querySelectorAll('.drag-over-before, .drag-over-after')
+                .forEach(el => el.classList.remove('drag-over-before', 'drag-over-after'));
+            if (!target || target === item || target.dataset.folderId !== folderId) return;
+            const rect = target.getBoundingClientRect();
+            if (e.clientY < rect.top + rect.height / 2) {
+                target.classList.add('drag-over-before');
+            } else {
+                target.classList.add('drag-over-after');
+            }
+        });
+
+        handle.addEventListener('pointerup', (e) => {
+            if (!dragging) return;
+            const beforeTarget = container.querySelector('.drag-over-before');
+            const afterTarget  = container.querySelector('.drag-over-after');
+            cleanup();
+            const target = beforeTarget || afterTarget;
+            if (!target || target === item) return;
+            this._reorderFiles(folderId, container, fileId, target.dataset.fileId, !!beforeTarget);
+        });
+
+        handle.addEventListener('pointercancel', cleanup);
     }
 }
 

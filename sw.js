@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v24'; // v24 — fix zoom reset al caricamento + fix spostamento contenuti cambio viewport
+const CACHE_NAME = 'eduboard-v25'; // v25 — drag & drop riordino file libreria (Pointer Events, _order.json su Drive)
 const urlsToCache = [
   '.',
   './index.html',
