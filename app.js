@@ -373,7 +373,7 @@ class BackgroundManager {
 class BrushEngine {
 
     // Penna liscia — tratto netto e scorrevole
-    pen(ctx, x0, y0, x1, y1, size, color) {
+    pen(ctx, x0, y0, cpX, cpY, x1, y1, size, color) {
         ctx.save();
         ctx.globalCompositeOperation = 'source-over';
         ctx.strokeStyle = color;
@@ -383,22 +383,25 @@ class BrushEngine {
         ctx.globalAlpha = 1;
         ctx.beginPath();
         ctx.moveTo(x0, y0);
-        ctx.lineTo(x1, y1);
+        ctx.quadraticCurveTo(cpX, cpY, x1, y1);
         ctx.stroke();
         ctx.restore();
     }
 
     // Matita HB — tratto granuloso, leggermente irregolare
-    pencil(ctx, x0, y0, x1, y1, size, color) {
-        const dist = Math.hypot(x1 - x0, y1 - y0);
+    pencil(ctx, x0, y0, cpX, cpY, x1, y1, size, color) {
+        // Lunghezza approssimativa lungo la curva Bézier
+        const dist = Math.hypot(cpX - x0, cpY - y0) + Math.hypot(x1 - cpX, y1 - cpY);
         const steps = Math.max(1, Math.ceil(dist * 1.5));
         ctx.save();
         ctx.fillStyle = color;
         ctx.globalCompositeOperation = 'source-over';
         for (let i = 0; i <= steps; i++) {
             const t = i / steps;
-            const x = x0 + t * (x1 - x0);
-            const y = y0 + t * (y1 - y0);
+            const mt = 1 - t;
+            // Valuta curva Bézier quadratica: B(t) = mt²·P0 + 2·mt·t·CP + t²·P1
+            const x = mt * mt * x0 + 2 * mt * t * cpX + t * t * x1;
+            const y = mt * mt * y0 + 2 * mt * t * cpY + t * t * y1;
             // 4-6 punti per step, dispersi casualmente
             const numDots = Math.floor(size * 0.7) + 3;
             for (let d = 0; d < numDots; d++) {
@@ -416,7 +419,7 @@ class BrushEngine {
     }
 
     // Pastello morbido — sfumato con strati multipli (no filter:blur per performance)
-    pastel(ctx, x0, y0, x1, y1, size, color) {
+    pastel(ctx, x0, y0, cpX, cpY, x1, y1, size, color) {
         ctx.save();
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -435,14 +438,14 @@ class BrushEngine {
             ctx.lineWidth = w;
             ctx.beginPath();
             ctx.moveTo(x0, y0);
-            ctx.lineTo(x1, y1);
+            ctx.quadraticCurveTo(cpX, cpY, x1, y1);
             ctx.stroke();
         });
         ctx.restore();
     }
 
     // Evidenziatore — tratto largo e semitrasparente
-    marker(ctx, x0, y0, x1, y1, size, color) {
+    marker(ctx, x0, y0, cpX, cpY, x1, y1, size, color) {
         ctx.save();
         ctx.strokeStyle = color;
         ctx.lineWidth = size * 2.5;
@@ -452,7 +455,7 @@ class BrushEngine {
         ctx.globalCompositeOperation = 'source-over';
         ctx.beginPath();
         ctx.moveTo(x0, y0);
-        ctx.lineTo(x1, y1);
+        ctx.quadraticCurveTo(cpX, cpY, x1, y1);
         ctx.stroke();
         ctx.restore();
     }
@@ -1009,13 +1012,15 @@ class CanvasManager {
         this._saveUndo();
         CONFIG.lastX = x;
         CONFIG.lastY = y;
+        this._smoothMidX = x; // midpoint precedente per Bézier smoothing
+        this._smoothMidY = y;
         this._currentPoints = [{x, y}]; // primo punto per tracking vettoriale
 
         // Disegna il punto iniziale (dot)
         if (CONFIG.currentTool === 'eraser') {
             this.brush.eraser(this.ctx, x, y, CONFIG.currentSize * 2);
         } else {
-            this._drawSegment(x, y, x, y);
+            this._drawSegment(x, y, x, y, x, y);
         }
     }
 
@@ -1066,7 +1071,13 @@ class CanvasManager {
         if (CONFIG.currentTool === 'eraser') {
             this.brush.eraser(this.ctx, x, y, CONFIG.currentSize * 2);
         } else {
-            this._drawSegment(CONFIG.lastX, CONFIG.lastY, x, y);
+            // Bézier smoothing: usa il midpoint come endpoint e il punto corrente come controllo
+            // Questo elimina gli spigoli vivi tra segmenti su PC lenti (pochi eventi pointer)
+            const midX = (CONFIG.lastX + x) / 2;
+            const midY = (CONFIG.lastY + y) / 2;
+            this._drawSegment(this._smoothMidX, this._smoothMidY, CONFIG.lastX, CONFIG.lastY, midX, midY);
+            this._smoothMidX = midX;
+            this._smoothMidY = midY;
         }
 
         this._currentPoints.push({x, y}); // raccolta punti per tracking vettoriale
@@ -1118,16 +1129,16 @@ class CanvasManager {
         }
     }
 
-    _drawSegment(x0, y0, x1, y1) {
+    _drawSegment(x0, y0, cpX, cpY, x1, y1) {
         const tool  = CONFIG.currentTool;
         const color = CONFIG.currentColor;
         const size  = CONFIG.currentSize;
 
         switch (tool) {
-            case 'pen':    this.brush.pen(this.ctx, x0, y0, x1, y1, size, color);    break;
-            case 'pencil': this.brush.pencil(this.ctx, x0, y0, x1, y1, size, color); break;
-            case 'pastel': this.brush.pastel(this.ctx, x0, y0, x1, y1, size, color); break;
-            case 'marker': this.brush.marker(this.ctx, x0, y0, x1, y1, size, color); break;
+            case 'pen':    this.brush.pen(this.ctx, x0, y0, cpX, cpY, x1, y1, size, color);    break;
+            case 'pencil': this.brush.pencil(this.ctx, x0, y0, cpX, cpY, x1, y1, size, color); break;
+            case 'pastel': this.brush.pastel(this.ctx, x0, y0, cpX, cpY, x1, y1, size, color); break;
+            case 'marker': this.brush.marker(this.ctx, x0, y0, cpX, cpY, x1, y1, size, color); break;
         }
     }
 

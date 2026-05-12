@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v21'; // v21 — fix reset 100%: popup._closed blocca outsideClick dal riapplicare vecchio zoom
+const CACHE_NAME = 'eduboard-v22'; // v22 — Bézier smoothing: scrittura fluida su PC lenti (midpoint quadraticCurveTo)
 const urlsToCache = [
   '.',
   './index.html',
