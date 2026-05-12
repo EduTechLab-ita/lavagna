@@ -904,8 +904,21 @@ class LibraryManager {
         }
     }
 
+    /** Forza refresh completo (dopo salva/elimina/rinomina/sposta). */
+    _forceRefresh() {
+        this._lastBgRefresh = 0; // azzera il cooldown
+        this._treeLoaded = false; // forza "Caricamento..." per mostrare i dati aggiornati
+        this.refresh();
+    }
+
     /** Aggiornamento silenzioso da Drive in background dopo render da cache. */
     async _backgroundRefresh(cacheKey, savedScroll) {
+        // Non fare background refresh se è già stato fatto da meno di 3 minuti
+        // (evita flash visivo ad ogni apertura del pannello)
+        const lastBg = this._lastBgRefresh || 0;
+        if (Date.now() - lastBg < 3 * 60 * 1000) return;
+        this._lastBgRefresh = Date.now();
+
         // Cattura il token corrente: se refresh() viene chiamata di nuovo, il token cambia
         // e questo background refresh si fermerà prima di sovrascrivere il nuovo render.
         const myToken = this._bgRefreshToken || 0;
@@ -1149,7 +1162,7 @@ class LibraryManager {
         try {
             await this.drive.createFolder(name.trim(), parentId || this.drive.lessonsFolderId);
             toast('Cartella creata!', 'success');
-            this.refresh();
+            this._forceRefresh();
         } catch (err) {
             toast('Errore creazione cartella: ' + err.message, 'error');
         }
@@ -1353,7 +1366,7 @@ class LibraryManager {
             CONFIG.isDirty = false;
             window.autoSaveMgr?.reset();
             toast('Lezione salvata su Drive!', 'success');
-            this.refresh();
+            this._forceRefresh();
         } catch (err) {
             toast('Errore salvataggio: ' + err.message, 'error');
         }
@@ -1420,7 +1433,7 @@ class LibraryManager {
         try {
             await this.drive.renameItem(fileId, newName.trim());
             toast('Rinominato!', 'success');
-            this.refresh();
+            this._forceRefresh();
         } catch (err) {
             toast('Errore rinomina: ' + err.message, 'error');
         }
@@ -1433,7 +1446,7 @@ class LibraryManager {
         try {
             await this.drive.deleteItem(fileId);
             toast('"' + name + '" eliminato.', 'success');
-            this.refresh();
+            this._forceRefresh();
         } catch (err) {
             toast('Errore eliminazione: ' + err.message, 'error');
         }
@@ -1693,8 +1706,7 @@ class LibraryManager {
                 toast('Spostamento in corso...', 'info');
                 await this.drive.moveItem(dragData.id, folderId, dragData.parentId);
                 toast(`"${dragData.name}" spostato.`, 'success');
-                // Ricarica l'albero per riflettere la nuova struttura
-                this.refresh();
+                this._forceRefresh();
             } catch (err) {
                 toast('Errore spostamento: ' + err.message, 'error');
             }

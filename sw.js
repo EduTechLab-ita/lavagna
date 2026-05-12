@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v34'; // v34 — libreria pre-caricata all'avvio: apertura istantanea senza Caricamento...
+const CACHE_NAME = 'eduboard-v35'; // v35 — fix decentramento resize + libreria senza flash ad ogni apertura
 const urlsToCache = [
   '.',
   './index.html',

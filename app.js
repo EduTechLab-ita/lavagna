@@ -912,10 +912,15 @@ class CanvasManager {
                 panMgr.centerView();
             } else {
                 const ratioX = W / prevCanvasW;
-                panMgr.dx = prevDx * ratioX;
-                // NON scalare dy con ratioY: il py della pagina è fisso (W-based), scalare dy causerebbe shift
-                panMgr.dy = prevDy;
-                panMgr._applyTransform();
+                if (ratioX !== 1) {
+                    // Canvas cresciuto: ricalcola tutto da zero invece di scalare dx
+                    // (scalare dx proporzionalmente dà valori errati rispetto al foglio A4)
+                    panMgr.centerView();
+                } else {
+                    panMgr.dx = prevDx;
+                    panMgr.dy = prevDy;
+                    panMgr._applyTransform();
+                }
             }
         }
     }
