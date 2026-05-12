@@ -104,25 +104,22 @@ class BackgroundManager {
         this.render();
     }
 
-    // Restituisce dimensioni del "foglio A4" in pixel, centrato sul canvas
+    // Restituisce dimensioni del "foglio A4" in pixel, ancorato top-right
     _getPageRect(W, H) {
-        // A4: 297x210mm landscape, 210x297mm portrait
-        // Usiamo il 90% dell'area disponibile come riferimento
-        let ratio = this.orientation === 'portrait' ? (210 / 297) : (297 / 210);
+        const ratio = this.orientation === 'portrait' ? (210 / 297) : (297 / 210);
+        const MARGIN = Math.round(W * 0.04);
         let pw, ph;
         if (this.orientation === 'landscape') {
-            // Larghezza = 90% di W, altezza proporzionale
-            pw = W * 0.9;
-            ph = pw / ratio;
-            if (ph > H * 0.9) { ph = H * 0.9; pw = ph * ratio; }
+            pw = Math.round(W * 0.9);
+            ph = Math.round(pw / ratio);
         } else {
-            // Altezza = 90% di H, larghezza proporzionale
-            ph = H * 0.9;
-            pw = ph * ratio;
-            if (pw > W * 0.9) { pw = W * 0.9; ph = pw / ratio; }
+            // Portrait: usa W come base, non H
+            pw = Math.round(W * 0.55);
+            ph = Math.round(pw / ratio);
         }
-        const px = (W - pw) / 2;
-        const py = (H - ph) / 2;
+        // Ancora top-right: px e py NON dipendono da H → no shift al toggle fullscreen
+        const px = W - pw - MARGIN;  // angolo destro fisso a W - MARGIN
+        const py = MARGIN;             // angolo in alto fisso a MARGIN
         return { px, py, pw, ph };
     }
 
@@ -904,9 +901,9 @@ class CanvasManager {
                 panMgr.centerView();
             } else {
                 const ratioX = W / prevCanvasW;
-                const ratioY = H / prevCanvasH;
                 panMgr.dx = prevDx * ratioX;
-                panMgr.dy = prevDy * ratioY;
+                // NON scalare dy con ratioY: il py della pagina è fisso (W-based), scalare dy causerebbe shift
+                panMgr.dy = prevDy;
                 panMgr._applyTransform();
             }
         }
@@ -2589,10 +2586,18 @@ class PanManager {
         const vW = window.innerWidth;
         const headerH = document.body.classList.contains('fullscreen-mode') ? 0 : 56;
         const vH = window.innerHeight - headerH;
-        // Se non ancora inizializzato imposta lo scale di default (100% = fit page)
         if (!this.scale) this.scale = this._computeFitScale();
-        this.dx = (vW - canvas.width  * this.scale) / 2;
-        this.dy = (vH - canvas.height * this.scale) / 2;
+
+        // Calcola posizione pagina (py = MARGIN = W*0.04, costante)
+        const W = canvas.width;
+        const MARGIN = Math.round(W * 0.04);
+        const SCREEN_MARGIN = 20; // pixel dal bordo schermo
+
+        // Orizzontale: centra il canvas (la pagina finisce quasi al bordo destro)
+        this.dx = (vW - canvas.width * this.scale) / 2;
+        // Verticale: top della pagina a SCREEN_MARGIN px dal bordo superiore (NON centrare)
+        this.dy = SCREEN_MARGIN - MARGIN * this.scale;
+
         this._applyTransform();
         const badge = document.getElementById('zoom-badge');
         if (badge && !badge._editing) {
@@ -2713,21 +2718,37 @@ class PanManager {
     }
 
     _setupZoomBadge() {
-        // Attende che il DOM sia pronto (il badge è già in index.html)
         const init = () => {
             const badge = document.getElementById('zoom-badge');
             if (!badge) return;
-            badge.addEventListener('click', () => {
+
+            const showPopup = () => {
                 if (badge._editing) return;
                 badge._editing = true;
+
                 const fitScaleNow = this._computeFitScale();
-                const currentPct = fitScaleNow > 0 ? Math.round(this.scale / fitScaleNow * 100) : Math.round(this.scale * 100);
-                badge.innerHTML = `<input type="number" min="10" max="400" value="${currentPct}">%`;
-                const inp = badge.querySelector('input');
+                const currentPct = fitScaleNow > 0
+                    ? Math.round(this.scale / fitScaleNow * 100)
+                    : Math.round(this.scale * 100);
+
+                // Crea popup sopra il badge
+                const popup = document.createElement('div');
+                popup.id = 'zoom-popup';
+                popup.innerHTML = `
+                    <input id="zoom-input" type="text" inputmode="numeric"
+                        value="${currentPct}" maxlength="4" autocomplete="off">
+                    <span class="zoom-popup-pct">%</span>
+                    <button id="zoom-reset-btn" title="Adatta alla larghezza">100%</button>
+                `;
+                document.body.appendChild(popup);
+
+                const inp = popup.querySelector('#zoom-input');
+                const resetBtn = popup.querySelector('#zoom-reset-btn');
+
                 inp.focus();
                 inp.select();
-                const done = () => {
-                    const val = parseInt(inp.value, 10);
+
+                const applyZoom = (val) => {
                     if (!isNaN(val) && val >= 5 && val <= 500) {
                         const fitScale = this._computeFitScale();
                         this.scale = (val / 100) * fitScale;
@@ -2736,27 +2757,65 @@ class PanManager {
                             const vW2 = window.innerWidth;
                             const headerH2 = document.body.classList.contains('fullscreen-mode') ? 0 : 56;
                             const vH2 = window.innerHeight - headerH2;
-                            this.dx = (vW2 - cvs.width  * this.scale) / 2;
-                            this.dy = (vH2 - cvs.height * this.scale) / 2;
+                            this.dx = (vW2 - cvs.width * this.scale) / 2;
+                            const W2 = cvs.width;
+                            const MARGIN2 = Math.round(W2 * 0.04);
+                            this.dy = 20 - MARGIN2 * this.scale;
                         }
                         this._applyTransform();
                     }
+                };
+
+                const closePopup = () => {
+                    const val = parseInt(inp.value, 10);
+                    applyZoom(val);
                     const fitScale2 = this._computeFitScale();
                     badge.textContent = Math.round(this.scale / fitScale2 * 100) + '%';
                     badge._editing = false;
+                    popup.remove();
                 };
-                inp.addEventListener('blur', done);
+
+                resetBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.scale = this._computeFitScale();
+                    this.centerView();
+                    badge._editing = false;
+                    popup.remove();
+                });
+
+                inp.addEventListener('blur', (e) => {
+                    // Evita chiusura se si clicca il pulsante reset
+                    setTimeout(() => {
+                        if (document.getElementById('zoom-popup')) closePopup();
+                    }, 150);
+                });
+
                 inp.addEventListener('keydown', e => {
-                    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+                    if (e.key === 'Enter') { e.preventDefault(); closePopup(); }
                     if (e.key === 'Escape') {
-                        badge.textContent = Math.round(this.scale * 100) + '%';
                         badge._editing = false;
+                        const fitScale2 = this._computeFitScale();
+                        badge.textContent = Math.round(this.scale / fitScale2 * 100) + '%';
+                        popup.remove();
                     }
                 });
-                // Stoppa propagazione per non fare zoom involontario con la rotella
+
                 inp.addEventListener('wheel', e => e.stopPropagation());
-            });
+
+                // Chiudi popup se si clicca fuori
+                setTimeout(() => {
+                    document.addEventListener('pointerdown', function outsideClick(e) {
+                        if (!popup.contains(e.target) && e.target !== badge) {
+                            closePopup();
+                            document.removeEventListener('pointerdown', outsideClick);
+                        }
+                    });
+                }, 100);
+            };
+
+            badge.addEventListener('click', showPopup);
         };
+
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', init);
         } else {

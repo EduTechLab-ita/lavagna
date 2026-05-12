@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v17'; // v17 — cache-first stale-while-revalidate, bypass completo Google/OAuth
+const CACHE_NAME = 'eduboard-v18'; // v18 — fix fullscreen shift, ancora top-right, popup zoom badge
 const urlsToCache = [
   '.',
   './index.html',

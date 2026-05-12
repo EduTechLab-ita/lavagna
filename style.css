@@ -2145,17 +2145,6 @@ body:not(.has-page-bar) #zoom-badge {
 #zoom-badge:hover {
     color: #3b82f6;
 }
-#zoom-badge input {
-    background: transparent;
-    border: none;
-    outline: none;
-    color: rgba(71, 85, 105, 0.95);
-    font-size: 0.82rem;
-    font-weight: 500;
-    width: 3.5ch;
-    text-align: center;
-}
-
 /* =============================================
    DRIVE FAB — Floating Action Button
    ============================================= */
@@ -2380,4 +2369,56 @@ body:not(.has-page-bar) #zoom-badge {
 .mini-size-btn:hover:not(.active) {
     color: rgba(255,255,255,0.8);
     background: rgba(255,255,255,0.08);
+}
+
+/* Popup zoom — si apre sopra il badge */
+#zoom-popup {
+    position: fixed;
+    bottom: 48px;
+    right: 12px;
+    background: var(--surface, #1e293b);
+    border: 1px solid var(--border, #334155);
+    border-radius: 8px;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    z-index: 9999;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+#zoom-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text, #e2e8f0);
+    font-size: 0.9rem;
+    font-weight: 600;
+    width: 4ch;
+    text-align: right;
+    /* Nessuna freccia spinner */
+    -moz-appearance: textfield;
+}
+#zoom-input::-webkit-outer-spin-button,
+#zoom-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.zoom-popup-pct {
+    color: var(--text-muted, #94a3b8);
+    font-size: 0.85rem;
+}
+#zoom-reset-btn {
+    background: var(--accent, #3b82f6);
+    border: none;
+    border-radius: 5px;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    cursor: pointer;
+    margin-left: 4px;
+    white-space: nowrap;
+}
+#zoom-reset-btn:hover {
+    background: #2563eb;
 }
