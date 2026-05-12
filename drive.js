@@ -296,7 +296,7 @@ class DriveManager {
             `'${folderId}' in parents and mimeType='application/json' and trashed=false`
         );
         const resp = await this._apiFetch(
-            `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=name_natural`
+            `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=createdTime`
         );
         return resp.files || [];
     }
@@ -368,7 +368,10 @@ class DriveManager {
                 key:         lesson.bgKey || 'white',
                 imageBase64: lesson.bgImageBase64 || ''
             },
-            drawing:    lesson.drawingDataURL || '',
+            drawing:     lesson.drawingDataURL || '',
+            canvasWidth: lesson.canvasWidth || 0,
+            pagePx:      lesson.pagePx ?? null,
+            pagePy:      lesson.pagePy ?? null,
             ...(lesson.metadata || {})
         };
 
@@ -1183,7 +1186,15 @@ class LibraryManager {
                 img.onload = () => {
                     canvasMgr._saveUndo();
                     canvasMgr.ctx.clearRect(0, 0, canvasMgr.canvas.width, canvasMgr.canvas.height);
-                    canvasMgr.ctx.drawImage(img, 0, 0);
+                    // Compensa spostamento foglio A4 se il canvas ha dimensioni diverse dal salvataggio
+                    let offsetX = 0, offsetY = 0;
+                    if (lesson.pagePx != null && typeof bgMgr !== 'undefined') {
+                        const W = canvasMgr.canvas.width, H = canvasMgr.canvas.height;
+                        const curr = bgMgr._getPageRect(W, H);
+                        offsetX = curr.px - lesson.pagePx;
+                        offsetY = curr.py - lesson.pagePy;
+                    }
+                    canvasMgr.ctx.drawImage(img, offsetX, offsetY);
                 };
                 img.src = lesson.drawing;
             }
@@ -1210,23 +1221,8 @@ class LibraryManager {
             }, 500);
             // Memorizza come ultima lezione aperta per auto-open al prossimo avvio
             localStorage.setItem('eduboard_last_lesson', JSON.stringify({ fileId, fileName }));
-            // Ripristina posizione (pan+zoom) salvata con la lezione
-            const savedPos = localStorage.getItem('eduboard_view_' + fileId);
-            if (savedPos) {
-                try {
-                    const pos = JSON.parse(savedPos);
-                    if (typeof panMgr !== 'undefined' && panMgr && pos.dx !== undefined) {
-                        // Piccolo delay per assicurarsi che il canvas sia renderizzato
-                        // e che eventuali centerView() successivi non sovrascrivano
-                        setTimeout(() => {
-                            panMgr.dx = pos.dx;
-                            panMgr.dy = pos.dy;
-                            panMgr.scale = pos.scale || 1;
-                            panMgr._applyTransform();
-                        }, 100);
-                    }
-                } catch (_) {}
-            }
+            // Sempre centerView al caricamento: foglio A4 visibile dall'inizio, zoom reset
+            setTimeout(() => panMgr?.centerView(), 200);
             this.close();
         } catch (err) {
             window.autoSaveMgr?.endLoading();
@@ -1277,19 +1273,15 @@ class LibraryManager {
                 drawingDataURL: canvasMgr.getDataURL(),
                 bgKey:          bgMgr.currentBg,
                 bgImageBase64,
-                pages:          window.pageManager ? window.pageManager.serialize() : null
+                pages:          window.pageManager ? window.pageManager.serialize() : null,
+                canvasWidth: canvasMgr?.canvas?.width || 0,
+                pagePx: (typeof bgMgr !== 'undefined' && canvasMgr?.canvas) ? bgMgr._getPageRect(canvasMgr.canvas.width, canvasMgr.canvas.height).px : null,
+                pagePy: (typeof bgMgr !== 'undefined' && canvasMgr?.canvas) ? bgMgr._getPageRect(canvasMgr.canvas.width, canvasMgr.canvas.height).py : null
             });
 
-            // Traccia fileId corrente e salva posizione associata al nuovo fileId
+            // Traccia fileId corrente
             if (savedFileId) {
                 this.currentFileId = savedFileId;
-                if (typeof panMgr !== 'undefined' && panMgr) {
-                    localStorage.setItem('eduboard_view_' + savedFileId, JSON.stringify({
-                        dx: panMgr.dx,
-                        dy: panMgr.dy,
-                        scale: panMgr.scale
-                    }));
-                }
                 localStorage.setItem('eduboard_last_lesson', JSON.stringify({ fileId: savedFileId, fileName: name.trim() + '.json' }));
             }
 
@@ -1338,7 +1330,10 @@ class LibraryManager {
                         imageBase64: bgImageBase64
                     },
                     drawing: canvasMgr.getDataURL(),
-                    pages:   window.pageManager ? window.pageManager.serialize() : null
+                    pages:   window.pageManager ? window.pageManager.serialize() : null,
+                    canvasWidth: canvasMgr?.canvas?.width || 0,
+                    pagePx: (typeof bgMgr !== 'undefined' && canvasMgr?.canvas) ? bgMgr._getPageRect(canvasMgr.canvas.width, canvasMgr.canvas.height).px : null,
+                    pagePy: (typeof bgMgr !== 'undefined' && canvasMgr?.canvas) ? bgMgr._getPageRect(canvasMgr.canvas.width, canvasMgr.canvas.height).py : null
                 },
                 this.currentFileId  // PATCH sul file esistente
             );

@@ -4459,7 +4459,15 @@ class PageManager {
 
     _captureCurrentPage() {
         const drawCanvas = document.getElementById('draw-canvas');
+        const W = drawCanvas?.width || 0;
+        const H = drawCanvas?.height || 0;
+        // Salva posizione foglio A4 al momento del salvataggio: serve per compensare
+        // lo spostamento quando la lezione viene riaperta su un canvas di dimensioni diverse
+        const pageRect = (W > 0 && typeof bgMgr !== 'undefined') ? bgMgr._getPageRect(W, H) : null;
         return {
+            canvasWidth: W,
+            pagePx: pageRect?.px ?? null,
+            pagePy: pageRect?.py ?? null,
             drawImageData: drawCanvas && drawCanvas.width > 0 ? drawCanvas.toDataURL('image/png') : null,
             objects: JSON.parse(JSON.stringify(this.objectLayerRef.objects.map(o => {
                 // Serializza l'immagine come dataUrl per il salvataggio in memoria
@@ -4489,7 +4497,17 @@ class PageManager {
         ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
         if (pageData.drawImageData) {
             const img = new Image();
-            img.onload = () => ctx.drawImage(img, 0, 0);
+            img.onload = () => {
+                // Compensa spostamento foglio A4 se canvas ha dimensioni diverse dal salvataggio
+                let offsetX = 0, offsetY = 0;
+                if (pageData.pagePx != null && typeof bgMgr !== 'undefined') {
+                    const W = drawCanvas.width, H = drawCanvas.height;
+                    const curr = bgMgr._getPageRect(W, H);
+                    offsetX = curr.px - pageData.pagePx;
+                    offsetY = curr.py - pageData.pagePy;
+                }
+                ctx.drawImage(img, offsetX, offsetY);
+            };
             img.src = pageData.drawImageData;
         }
         // Ripristina objects
@@ -4820,14 +4838,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 3. Avviso modifiche non salvate alla chiusura finestra/tab
     window.addEventListener('beforeunload', (e) => {
-        // Salva posizione corrente prima di chiudere
-        if (typeof panMgr !== 'undefined' && panMgr && typeof libraryMgr !== 'undefined' && libraryMgr?.currentFileId) {
-            localStorage.setItem('eduboard_view_' + libraryMgr.currentFileId, JSON.stringify({
-                dx: panMgr.dx,
-                dy: panMgr.dy,
-                scale: panMgr.scale
-            }));
-        }
         // Blocca chiusura se auto-save in corso o in attesa
         if (window.autoSaveMgr?.isSaving() || window.autoSaveMgr?.hasPending()) {
             e.preventDefault();

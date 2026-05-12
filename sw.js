@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v23'; // v23 — libreria: ordine nome naturale invece di modifiedTime desc
+const CACHE_NAME = 'eduboard-v24'; // v24 — fix zoom reset al caricamento + fix spostamento contenuti cambio viewport
 const urlsToCache = [
   '.',
   './index.html',
