@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v31'; // v31 — centerView reimposta sempre scale=fitScale: fix zoom 270% all'avvio
+const CACHE_NAME = 'eduboard-v32'; // v32 — fix offset disegni: calcolato sincrono prima di img.onload
 const urlsToCache = [
   '.',
   './index.html',

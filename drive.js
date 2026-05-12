@@ -1222,17 +1222,17 @@ class LibraryManager {
             const hasPages = lesson.pages && Array.isArray(lesson.pages) && lesson.pages.length > 0;
             if (lesson.drawing && !hasPages) {
                 const img = new Image();
+                // Offset calcolato ORA (sincrono), non dentro onload
+                let offsetX = 0, offsetY = 0;
+                if (lesson.pagePx != null && typeof bgMgr !== 'undefined') {
+                    const W = canvasMgr.canvas.width, H = canvasMgr.canvas.height;
+                    const curr = bgMgr._getPageRect(W, H);
+                    offsetX = curr.px - lesson.pagePx;
+                    offsetY = curr.py - lesson.pagePy;
+                }
                 img.onload = () => {
                     canvasMgr._saveUndo();
                     canvasMgr.ctx.clearRect(0, 0, canvasMgr.canvas.width, canvasMgr.canvas.height);
-                    // Compensa spostamento foglio A4 se il canvas ha dimensioni diverse dal salvataggio
-                    let offsetX = 0, offsetY = 0;
-                    if (lesson.pagePx != null && typeof bgMgr !== 'undefined') {
-                        const W = canvasMgr.canvas.width, H = canvasMgr.canvas.height;
-                        const curr = bgMgr._getPageRect(W, H);
-                        offsetX = curr.px - lesson.pagePx;
-                        offsetY = curr.py - lesson.pagePy;
-                    }
                     canvasMgr.ctx.drawImage(img, offsetX, offsetY);
                 };
                 img.src = lesson.drawing;

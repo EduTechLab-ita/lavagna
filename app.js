@@ -4498,17 +4498,16 @@ class PageManager {
         ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
         if (pageData.drawImageData) {
             const img = new Image();
-            img.onload = () => {
-                // Compensa spostamento foglio A4 se canvas ha dimensioni diverse dal salvataggio
-                let offsetX = 0, offsetY = 0;
-                if (pageData.pagePx != null && typeof bgMgr !== 'undefined') {
-                    const W = drawCanvas.width, H = drawCanvas.height;
-                    const curr = bgMgr._getPageRect(W, H);
-                    offsetX = curr.px - pageData.pagePx;
-                    offsetY = curr.py - pageData.pagePy;
-                }
-                ctx.drawImage(img, offsetX, offsetY);
-            };
+            // Offset calcolato ORA (sincrono), non dentro onload.
+            // Se il canvas cambiasse dimensione nel frattempo, l'offset sarebbe sbagliato.
+            let offsetX = 0, offsetY = 0;
+            if (pageData.pagePx != null && typeof bgMgr !== 'undefined') {
+                const W = drawCanvas.width, H = drawCanvas.height;
+                const curr = bgMgr._getPageRect(W, H);
+                offsetX = curr.px - pageData.pagePx;
+                offsetY = curr.py - pageData.pagePy;
+            }
+            img.onload = () => { ctx.drawImage(img, offsetX, offsetY); };
             img.src = pageData.drawImageData;
         }
         // Ripristina objects
