@@ -1236,9 +1236,21 @@ class LibraryManager {
             }, 500);
             // Memorizza come ultima lezione aperta per auto-open al prossimo avvio
             localStorage.setItem('eduboard_last_lesson', JSON.stringify({ fileId, fileName }));
-            // Sempre centerView al caricamento: foglio A4 visibile dall'inizio, zoom reset
-            setTimeout(() => panMgr?.centerView(), 200);
+            // Chiude il pannello, poi aspetta il resize effettivo del canvas prima di centerView.
+            // Il pannello che si chiude allarga il viewport → il canvas si ridimensiona →
+            // solo DOPO il resize centerView calcola le proporzioni corrette.
             this.close();
+            const _ca = document.getElementById('canvas-area');
+            if (_ca && typeof ResizeObserver !== 'undefined' && panMgr) {
+                let _cvDone = false;
+                const _cvOnce = () => { if (_cvDone) return; _cvDone = true; panMgr.centerView(); };
+                const _ro = new ResizeObserver(() => { _ro.disconnect(); _cvOnce(); });
+                _ro.observe(_ca);
+                // Fallback: pannello già chiuso (nessun resize) o PC molto lento
+                setTimeout(() => { _ro.disconnect(); _cvOnce(); }, 500);
+            } else {
+                setTimeout(() => panMgr?.centerView(), 500);
+            }
         } catch (err) {
             window.autoSaveMgr?.endLoading();
             toast('Errore apertura lezione: ' + err.message, 'error');

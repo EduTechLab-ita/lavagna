@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v26'; // v26 — manifest: id+scope espliciti per app separata; icone PNG 192/512/32
+const CACHE_NAME = 'eduboard-v27'; // v27 — centerView agganciato a ResizeObserver: zoom corretto dopo chiusura pannello
 const urlsToCache = [
   '.',
   './index.html',
