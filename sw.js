@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v29'; // v29 — fix silent login: retry asincrono + toast conferma connessione
+const CACHE_NAME = 'eduboard-v30'; // v30 — token Drive in localStorage: auto-login senza modal GIS
 const urlsToCache = [
   '.',
   './index.html',

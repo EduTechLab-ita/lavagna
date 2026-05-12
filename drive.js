@@ -205,6 +205,8 @@ class DriveManager {
         this.lessonsFolderId = null;
         this.bgFolderId      = null;
         sessionStorage.removeItem('eduboard_drive_session');
+        localStorage.removeItem('eduboard_drive_session');
+        localStorage.removeItem('eduboard_user_email');
     }
 
     /** Restituisce true se il token è valido. */
@@ -222,40 +224,41 @@ class DriveManager {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // PERSISTENZA SESSIONE (sessionStorage)
+    // PERSISTENZA SESSIONE (sessionStorage + localStorage)
+    // Il token viene salvato in entrambi: sessionStorage (più sicuro, si cancella alla chiusura
+    // del tab) e localStorage (persiste tra sessioni, consente auto-login senza modal GIS).
+    // Il token dura 1 ora — se l'utente usa l'app regolarmente, è sempre valido.
     // ──────────────────────────────────────────────────────────────────────────
 
     _saveSession() {
-        try {
-            sessionStorage.setItem('eduboard_drive_session', JSON.stringify({
-                accessToken:     this.accessToken,
-                tokenExpiry:     this.tokenExpiry,
-                userEmail:       this.userEmail,
-                userName:        this.userName,
-                userPhotoUrl:    this.userPhotoUrl,
-                rootFolderId:    this.rootFolderId,
-                lessonsFolderId: this.lessonsFolderId,
-                bgFolderId:      this.bgFolderId,
-                connected:       this.connected
-            }));
-            // Salva l'email in localStorage per il silent login alla riapertura del browser
-            if (this.userEmail) {
-                localStorage.setItem('eduboard_user_email', this.userEmail);
-            }
-        } catch (_) {}
+        const data = JSON.stringify({
+            accessToken:     this.accessToken,
+            tokenExpiry:     this.tokenExpiry,
+            userEmail:       this.userEmail,
+            userName:        this.userName,
+            userPhotoUrl:    this.userPhotoUrl,
+            rootFolderId:    this.rootFolderId,
+            lessonsFolderId: this.lessonsFolderId,
+            bgFolderId:      this.bgFolderId,
+            connected:       this.connected
+        });
+        try { sessionStorage.setItem('eduboard_drive_session', data); } catch (_) {}
+        try { localStorage.setItem('eduboard_drive_session', data); } catch (_) {}
     }
 
     _loadSession() {
-        try {
-            const raw = sessionStorage.getItem('eduboard_drive_session');
-            if (!raw) return false;
-            const s = JSON.parse(raw);
-            if (!s.accessToken || Date.now() >= s.tokenExpiry) return false;
-            Object.assign(this, s);
-            return true;
-        } catch (_) {
-            return false;
+        // Prova prima sessionStorage (stessa sessione browser), poi localStorage (sessione precedente)
+        for (const store of [sessionStorage, localStorage]) {
+            try {
+                const raw = store.getItem('eduboard_drive_session');
+                if (!raw) continue;
+                const s = JSON.parse(raw);
+                if (!s.accessToken || Date.now() >= s.tokenExpiry) continue;
+                Object.assign(this, s);
+                return true;
+            } catch (_) {}
         }
+        return false;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -2170,21 +2173,9 @@ function initDrive() {
         }, true); // capture=true → intercetta prima del listener in app.js
     }
 
-    // ── Silent login all'avvio ─────────────────────────────────────────────
-    // Se non siamo già connessi (token scaduto o nuova sessione browser),
-    // proviamo il silent login. Funziona se l'utente è loggato su Google
-    // nel browser e ha già autorizzato EduBoard in passato — nessun popup.
-    if (!driveMgr.isConnected() && localStorage.getItem('eduboard_user_email')) {
-        driveMgr.trySilentConnect().then(ok => {
-            if (ok) {
-                driveConnectBtn.update();
-                libraryMgr._updateDriveStatus();
-                const greeting = driveMgr.userName || driveMgr.userEmail;
-                if (greeting) toast('Drive connesso — bentornato, ' + greeting + '!', 'success');
-                setTimeout(() => _autoOpenLastLesson(), 1000);
-            }
-        });
-    }
+    // Il token è ora salvato in localStorage: _loadSession() lo ritrova già al prossimo avvio.
+    // trySilentConnect() resta disponibile ma non viene chiamato automaticamente —
+    // il modal GIS che mostrava causava confusione nell'UI.
 
     console.log('EduBoard Drive — inizializzato.');
 }
