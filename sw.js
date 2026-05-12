@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v18'; // v18 — fix fullscreen shift, ancora top-right, popup zoom badge
+const CACHE_NAME = 'eduboard-v19'; // v19 — fix px centrato (ripristino compatibilità posizioni salvate)
 const urlsToCache = [
   '.',
   './index.html',

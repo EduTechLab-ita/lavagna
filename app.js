@@ -104,7 +104,7 @@ class BackgroundManager {
         this.render();
     }
 
-    // Restituisce dimensioni del "foglio A4" in pixel, ancorato top-right
+    // Restituisce dimensioni del "foglio A4" in pixel, centrato orizzontalmente
     _getPageRect(W, H) {
         const ratio = this.orientation === 'portrait' ? (210 / 297) : (297 / 210);
         const MARGIN = Math.round(W * 0.04);
@@ -112,14 +112,17 @@ class BackgroundManager {
         if (this.orientation === 'landscape') {
             pw = Math.round(W * 0.9);
             ph = Math.round(pw / ratio);
+            // Clamp: se ph supera H disponibile, riscala da H
+            if (ph > H * 0.9) { ph = Math.round(H * 0.9); pw = Math.round(ph * ratio); }
         } else {
             // Portrait: usa W come base, non H
             pw = Math.round(W * 0.55);
             ph = Math.round(pw / ratio);
         }
-        // Ancora top-right: px e py NON dipendono da H → no shift al toggle fullscreen
-        const px = W - pw - MARGIN;  // angolo destro fisso a W - MARGIN
-        const py = MARGIN;             // angolo in alto fisso a MARGIN
+        // px centrato orizzontalmente (non dipende da H → stabile al toggle fullscreen)
+        const px = Math.round((W - pw) / 2);
+        // py fisso in alto (non dipende da H → nessuno shift al toggle fullscreen)
+        const py = MARGIN;
         return { px, py, pw, ph };
     }
 
