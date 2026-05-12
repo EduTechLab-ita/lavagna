@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v25'; // v25 — drag & drop riordino file libreria (Pointer Events, _order.json su Drive)
+const CACHE_NAME = 'eduboard-v26'; // v26 — manifest: id+scope espliciti per app separata; icone PNG 192/512/32
 const urlsToCache = [
   '.',
   './index.html',

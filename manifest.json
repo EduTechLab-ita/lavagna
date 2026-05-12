@@ -1,4 +1,6 @@
 {
+  "id": "/lavagna/",
+  "scope": "./",
   "name": "EduBoard - Lavagna Digitale Interattiva",
   "short_name": "EduBoard",
   "description": "Lavagna digitale professionale per la scuola con strumenti avanzati, sfondi educativi e gestione progetti intelligente",
@@ -18,7 +20,8 @@
     {
       "src": "./icon-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
   "shortcuts": [
