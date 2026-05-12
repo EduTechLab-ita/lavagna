@@ -866,12 +866,17 @@ class CanvasManager {
         const vW = window.innerWidth;
         const headerH = document.body.classList.contains('fullscreen-mode') ? 0 : 56;
         const vH = window.innerHeight - headerH;
-        const W = vW * 3;
-        const H = vH * 3;
 
         const prevCanvasW = this.canvas.width;
         const prevCanvasH = this.canvas.height;
         const isFirstResize = prevCanvasW === 0;
+
+        // Il canvas NON deve mai rimpicciolirsi: passare da fullscreen a normale
+        // riduce vH di ~280px (56px header × 3), tagliando i disegni in basso.
+        // Math.max garantisce che il contenuto non venga mai perso.
+        const W = Math.max(vW * 3, prevCanvasW);
+        const H = Math.max(vH * 3, prevCanvasH);
+
         const savedURL = prevCanvasW > 0 ? this.canvas.toDataURL() : null;
         const prevDx = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.dx : 0;
         const prevDy = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.dy : 0;

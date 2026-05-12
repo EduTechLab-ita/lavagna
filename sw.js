@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v19'; // v19 — fix px centrato (ripristino compatibilità posizioni salvate)
+const CACHE_NAME = 'eduboard-v20'; // v20 — canvas mai rimpicciolisce: no taglio contenuto al toggle fullscreen
 const urlsToCache = [
   '.',
   './index.html',
