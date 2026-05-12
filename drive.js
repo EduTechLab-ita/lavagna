@@ -826,6 +826,15 @@ class LibraryManager {
 
         this._updateDriveStatus();
         const savedScroll = this.treeEl.scrollTop;
+
+        // Se l'albero è già stato caricato almeno una volta, NON mostrare "Caricamento..."
+        // — aggiorna in background senza disturbare l'utente.
+        if (this._treeLoaded && this.treeEl.hasChildNodes()) {
+            this._refreshLock = false;
+            this._backgroundRefresh('eduboard-lib-cache', savedScroll);
+            return;
+        }
+
         this.treeEl.innerHTML = '<div class="tree-loading">Caricamento...</div>';
 
         if (!this.drive.isConnected()) {
@@ -870,6 +879,7 @@ class LibraryManager {
             // Renderizza subito da cache, poi aggiorna da Drive in background
             try {
                 await _renderFromData();
+                this._treeLoaded = true;
             } catch (err) {
                 this.treeEl.innerHTML = `<div class="tree-empty tree-error">Errore: ${err.message}</div>`;
             }
@@ -882,6 +892,7 @@ class LibraryManager {
             // Cache mancante o scaduta: fetch Drive normalmente
             try {
                 await _renderFromData();
+                this._treeLoaded = true;
                 // Salva in cache dopo render riuscito
                 try {
                     localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now() }));
@@ -908,6 +919,7 @@ class LibraryManager {
             if (!this.treeEl.hasChildNodes()) {
                 this.treeEl.innerHTML = '<div class="tree-empty">Nessuna lezione salvata.</div>';
             }
+            this._treeLoaded = true;
             // Aggiorna timestamp cache dopo fetch riuscito
             try {
                 localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now() }));
@@ -1968,7 +1980,13 @@ class DriveConnectButton {
                 const libraryPanel = document.getElementById('library-panel');
                 if (libraryPanel) {
                     libraryPanel.classList.add('open');
-                    if (typeof libraryMgr !== 'undefined' && libraryMgr) libraryMgr.refresh();
+                    if (typeof libraryMgr !== 'undefined' && libraryMgr) {
+                        if (libraryMgr._treeLoaded) {
+                            libraryMgr._backgroundRefresh('eduboard-lib-cache', libraryMgr.treeEl?.scrollTop || 0);
+                        } else {
+                            libraryMgr.refresh();
+                        }
+                    }
                 }
             });
             document.getElementById('fab-panel-disconnect')?.addEventListener('click', async () => {
@@ -2113,8 +2131,11 @@ function initDrive() {
     const restored = driveMgr._loadSession();
     if (restored) {
         driveConnectBtn.update();
-        // BUG 4 fix: se il token è ancora valido, auto-apri l'ultima lezione subito
         if (driveMgr.isConnected()) {
+            // Pre-carica la libreria in background all'avvio (senza aprire il pannello)
+            // → quando l'utente la apre per la prima volta, è già pronta
+            setTimeout(() => libraryMgr.refresh(), 800);
+            // Apri ultima lezione
             setTimeout(() => _autoOpenLastLesson(), 1200);
         }
     }
@@ -2142,7 +2163,14 @@ function initDrive() {
                 panel.dataset.side = side;
                 panel.classList.toggle('from-right', side === 'right');
                 panel.classList.add('open');
-                if (typeof libraryMgr !== 'undefined' && libraryMgr) libraryMgr.refresh();
+                if (typeof libraryMgr !== 'undefined' && libraryMgr) {
+                    // Se già caricata: mostra subito senza "Caricamento...", poi aggiorna in bg
+                    if (libraryMgr._treeLoaded) {
+                        libraryMgr._backgroundRefresh('eduboard-lib-cache', libraryMgr.treeEl?.scrollTop || 0);
+                    } else {
+                        libraryMgr.refresh();
+                    }
+                }
             }
             _syncLibraryTabArrows(panel);
         });

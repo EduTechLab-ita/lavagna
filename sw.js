@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v33'; // v33 — disegni salvati come ritaglio foglio A4: zero spostamento tra sessioni
+const CACHE_NAME = 'eduboard-v34'; // v34 — libreria pre-caricata all'avvio: apertura istantanea senza Caricamento...
 const urlsToCache = [
   '.',
   './index.html',
