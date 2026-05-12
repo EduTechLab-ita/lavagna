@@ -2775,6 +2775,8 @@ class PanManager {
                 };
 
                 const closePopup = () => {
+                    if (popup._closed) return;  // già chiuso (es. da resetBtn)
+                    popup._closed = true;
                     const val = parseInt(inp.value, 10);
                     applyZoom(val);
                     const fitScale2 = this._computeFitScale();
@@ -2785,6 +2787,7 @@ class PanManager {
 
                 resetBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    popup._closed = true;  // blocca outsideClick/blur dal riapplicare il vecchio zoom
                     this.scale = this._computeFitScale();
                     this.centerView();
                     badge._editing = false;
@@ -2794,13 +2797,14 @@ class PanManager {
                 inp.addEventListener('blur', (e) => {
                     // Evita chiusura se si clicca il pulsante reset
                     setTimeout(() => {
-                        if (document.getElementById('zoom-popup')) closePopup();
+                        if (!popup._closed && document.getElementById('zoom-popup')) closePopup();
                     }, 150);
                 });
 
                 inp.addEventListener('keydown', e => {
                     if (e.key === 'Enter') { e.preventDefault(); closePopup(); }
                     if (e.key === 'Escape') {
+                        popup._closed = true;
                         badge._editing = false;
                         const fitScale2 = this._computeFitScale();
                         badge.textContent = Math.round(this.scale / fitScale2 * 100) + '%';
@@ -2814,7 +2818,7 @@ class PanManager {
                 setTimeout(() => {
                     document.addEventListener('pointerdown', function outsideClick(e) {
                         if (!popup.contains(e.target) && e.target !== badge) {
-                            closePopup();
+                            if (!popup._closed) closePopup();  // non riapplicare se già chiuso da resetBtn
                             document.removeEventListener('pointerdown', outsideClick);
                         }
                     });

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v20'; // v20 — canvas mai rimpicciolisce: no taglio contenuto al toggle fullscreen
+const CACHE_NAME = 'eduboard-v21'; // v21 — fix reset 100%: popup._closed blocca outsideClick dal riapplicare vecchio zoom
 const urlsToCache = [
   '.',
   './index.html',
