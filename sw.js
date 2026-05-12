@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v35'; // v35 — fix decentramento resize + libreria senza flash ad ogni apertura
+const CACHE_NAME = 'eduboard-v36'; // v36 — fix SW bloccato: sw.js e index.html mai in cache → aggiornamenti sempre visibili
 const urlsToCache = [
   '.',
   './index.html',
@@ -80,6 +80,12 @@ self.addEventListener('fetch', (event) => {
     url.includes('drive.google.com') ||
     url.includes('script.google.com')
   ) {
+    return;
+  }
+
+  // CRITICO: mai intercettare sw.js e index.html — devono sempre arrivare dal network
+  // così il browser può rilevare nuove versioni del SW e dell'app senza rimanere bloccato.
+  if (url.includes('sw.js') || url.includes('index.html') || url.endsWith('/')) {
     return;
   }
 
