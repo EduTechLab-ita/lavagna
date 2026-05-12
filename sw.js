@@ -96,7 +96,8 @@ self.addEventListener('fetch', (event) => {
         // Risposta in cache disponibile: ritornala subito e aggiorna in background
         fetch(request).then((r) => {
           if (r.ok) {
-            caches.open(CACHE_NAME).then((c) => c.put(request, r));
+            const rClone = r.clone(); // clona PRIMA che il body venga consumato
+            caches.open(CACHE_NAME).then((c) => c.put(request, rClone));
           }
         }).catch(() => {
           // Silenzioso: l'aggiornamento in background fallisce se offline, non è un problema
@@ -107,9 +108,8 @@ self.addEventListener('fetch', (event) => {
       // Nessuna cache: fetch dalla rete e metti in cache la risposta
       return fetch(request).then((r) => {
         if (r.ok) {
-          caches.open(CACHE_NAME).then((c) => {
-            c.put(request.clone ? request.clone() : request, r.clone());
-          });
+          const rClone = r.clone(); // clona PRIMA di return r
+          caches.open(CACHE_NAME).then((c) => c.put(request, rClone));
         }
         return r;
       });
