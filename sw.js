@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v38'; // v38 — sfondo infinito stile OneNote: pattern su tutto il canvas, cornice tratteggiata bordo stampa A4
+const CACHE_NAME = 'eduboard-v39'; // v39 — body bianco: niente bordo grigio intorno al canvas quando si fa zoom indietro
 const urlsToCache = [
   '.',
   './index.html',

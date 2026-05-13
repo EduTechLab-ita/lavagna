@@ -43,7 +43,7 @@ html {
 
 body {
     font-family: 'Inter', sans-serif;
-    background-color: #f8fafc;
+    background-color: #ffffff; /* bianco: si fonde con il canvas quando si fa zoom indietro */
     color: var(--text);
     display: flex;
     flex-direction: column;
