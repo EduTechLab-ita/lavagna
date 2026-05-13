@@ -131,12 +131,10 @@ class BackgroundManager {
         const W = this.canvas.width;
         const H = this.canvas.height;
 
-        // Area esterna al foglio: grigio chiarissimo
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(0, 0, W, H);
-
         if (this.uploadedImage) {
-            // Disegna il foglio con ombra e l'immagine come cover
+            // Immagine di sfondo: mantieni il foglio A4 classico con ombra
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, W, H);
             const { px, py, pw, ph } = this._getPageRect(W, H);
             ctx.save();
             ctx.shadowColor = 'rgba(0,0,0,0.18)';
@@ -146,10 +144,7 @@ class BackgroundManager {
             ctx.fillStyle = this.bgColor;
             ctx.fillRect(px, py, pw, ph);
             ctx.restore();
-
             const img = this.uploadedImage;
-            // Contain top-left: se l'immagine supera il foglio la scala proporzionalmente
-            // per stare dentro (contain), poi la ancora all'angolo top-left. Mai cover, mai centrato.
             let drawW = img.width;
             let drawH = img.height;
             if (drawW > pw || drawH > ph) {
@@ -168,65 +163,39 @@ class BackgroundManager {
             return;
         }
 
-        // Disegna il foglio A4 centrato con ombra
-        const { px, py, pw, ph } = this._getPageRect(W, H);
-        ctx.save();
-        ctx.shadowColor = 'rgba(0,0,0,0.18)';
-        ctx.shadowBlur = 18;
-        ctx.shadowOffsetX = 3;
-        ctx.shadowOffsetY = 3;
-        ctx.fillStyle = this.bgColor;
-        ctx.fillRect(px, py, pw, ph);
-        ctx.restore();
+        // Sfondi predefiniti (white, righe, quadretti, ecc.): bianco infinito stile OneNote.
+        // Il pattern si estende su tutto il canvas — niente rettangolo foglio separato.
+        ctx.fillStyle = this.bgColor || '#ffffff';
+        ctx.fillRect(0, 0, W, H);
 
-        // Sfondi predefiniti disegnati dentro il foglio
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(px, py, pw, ph);
-        ctx.clip();
+        if (this.currentBg !== 'white') {
+            ctx.strokeStyle = '#94a3b8'; // slate-400 — visibile ma non invadente
+            ctx.lineWidth = 1;
 
-        ctx.strokeStyle = '#94a3b8'; // slate-400 — visibile ma non invadente
-        ctx.lineWidth = 1;
-
-        switch (this.currentBg) {
-            case 'lines-8': // 8mm ≈ 30px a 96dpi
-                this._drawLines(ctx, px, py, pw, ph, 30);
-                break;
-            case 'lines-5': // 5mm ≈ 19px
-                this._drawLines(ctx, px, py, pw, ph, 19);
-                break;
-            case 'lines-3': // 3mm ≈ 11px
-                this._drawLines(ctx, px, py, pw, ph, 11);
-                break;
-            case 'grid-10': // quadretti 10mm ≈ 38px
-                this._drawGrid(ctx, px, py, pw, ph, 38);
-                break;
-            case 'grid-5': // quadretti 5mm ≈ 19px
-                this._drawGrid(ctx, px, py, pw, ph, 19);
-                break;
-            case 'dots':
-                this._drawDots(ctx, px, py, pw, ph, 20);
-                break;
-            case 'staff': // pentagramma musicale
-                this._drawStaff(ctx, px, py, pw, ph);
-                break;
-            // Feature 4 — Righe Primaria
-            case 'lines-15-aux': // 1a elementare — 3 zone grande-piccola-grande
-                this._drawLinesThreeZone(ctx, px, py, pw, ph, 36, 20);
-                break;
-            case 'lines-12-aux': // 2a elementare — 12mm con righino
-                this._drawLinesWithAux(ctx, px, py, pw, ph, 48, 24);
-                break;
-            case 'lines-9': // 3a elementare — 9mm
-                this._drawLines(ctx, px, py, pw, ph, 36);
-                break;
-            case 'lines-7': // 4a elementare — 7mm
-                this._drawLines(ctx, px, py, pw, ph, 28);
-                break;
-            // 'white': solo bianco (già fatto sopra)
+            switch (this.currentBg) {
+                case 'lines-8':      this._drawLines(ctx, 0, 0, W, H, 30);             break;
+                case 'lines-5':      this._drawLines(ctx, 0, 0, W, H, 19);             break;
+                case 'lines-3':      this._drawLines(ctx, 0, 0, W, H, 11);             break;
+                case 'grid-10':      this._drawGrid(ctx, 0, 0, W, H, 38);              break;
+                case 'grid-5':       this._drawGrid(ctx, 0, 0, W, H, 19);              break;
+                case 'dots':         this._drawDots(ctx, 0, 0, W, H, 20);              break;
+                case 'staff':        this._drawStaff(ctx, 0, 0, W, H);                 break;
+                case 'lines-15-aux': this._drawLinesThreeZone(ctx, 0, 0, W, H, 36, 20); break;
+                case 'lines-12-aux': this._drawLinesWithAux(ctx, 0, 0, W, H, 48, 24); break;
+                case 'lines-9':      this._drawLines(ctx, 0, 0, W, H, 36);             break;
+                case 'lines-7':      this._drawLines(ctx, 0, 0, W, H, 28);             break;
+            }
         }
 
-        ctx.restore(); // chiude il clip del foglio
+        // Cornice tratteggiata leggera per indicare il bordo di stampa A4
+        const { px, py, pw, ph } = this._getPageRect(W, H);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)'; // slate-400 semitrasparente
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([10, 6]);
+        ctx.strokeRect(px, py, pw, ph);
+        ctx.setLineDash([]);
+        ctx.restore();
     }
 
     _drawLines(ctx, px, py, pw, ph, spacing) {

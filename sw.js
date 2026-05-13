@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v37'; // v37 — getCoalescedEvents (scrittura fluida PC lento), _computeFitScale portrait fix
+const CACHE_NAME = 'eduboard-v38'; // v38 — sfondo infinito stile OneNote: pattern su tutto il canvas, cornice tratteggiata bordo stampa A4
 const urlsToCache = [
   '.',
   './index.html',
