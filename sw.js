@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v36'; // v36 — fix SW bloccato: sw.js e index.html mai in cache → aggiornamenti sempre visibili
+const CACHE_NAME = 'eduboard-v37'; // v37 — getCoalescedEvents (scrittura fluida PC lento), _computeFitScale portrait fix
 const urlsToCache = [
   '.',
   './index.html',

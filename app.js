@@ -959,7 +959,10 @@ class CanvasManager {
 
         el.addEventListener('pointermove', e => {
             if (e.pointerType === 'touch' && e.isPrimary === false) return;
-            this._onMove(e);
+            // getCoalescedEvents: restituisce tutti i campioni hardware accumulati dal browser
+            // (anche su PC lenti), evitando salti/scatti quando gli eventi arrivano rarefatti
+            const evts = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+            for (const ev of evts) this._onMove(ev);
         }, { passive: false });
 
         el.addEventListener('pointerup', e => {
@@ -2595,13 +2598,18 @@ class PanManager {
         this._applyTransform();
     }
 
-    // 100% = pagina larga ~90% della viewport.
-    // NON usa H → valore costante tra fullscreen e normale.
+    // 100% = foglio largo quanto la viewport (con 20px di margine per lato).
+    // Usa la larghezza reale del foglio A4 (landscape: W*0.9, portrait: W*0.55).
     _computeFitScale() {
         const vW = window.innerWidth;
         const canvas = document.getElementById('draw-canvas');
         if (!canvas || canvas.width === 0) return 1 / (3 * 0.9);
-        return vW / (canvas.width * 0.9);
+        const W = canvas.width;
+        const H = canvas.height;
+        const { pw } = (typeof bgMgr !== 'undefined' && bgMgr)
+            ? bgMgr._getPageRect(W, H)
+            : { pw: Math.round(W * 0.9) };
+        return (vW - 40) / pw; // 40px = 20px margine per lato
     }
 
     centerView() {
