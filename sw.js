@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v39'; // v39 — body bianco: niente bordo grigio intorno al canvas quando si fa zoom indietro
+const CACHE_NAME = 'eduboard-v40'; // v40 — sfondo CSS infinito: righe/quadretti su body sincronizzato con pan+zoom, nessun bordo visibile
 const urlsToCache = [
   '.',
   './index.html',

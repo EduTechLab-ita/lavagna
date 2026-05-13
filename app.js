@@ -126,6 +126,88 @@ class BackgroundManager {
         return { px, py, pw, ph };
     }
 
+    // Configurazione pattern CSS per gli sfondi semplici (righe, quadretti, dots).
+    // Restituisce null per pattern complessi (elementare, pentagramma) → rimangono su canvas.
+    _cssPatternConfig() {
+        const map = {
+            'lines-8':  { type: 'lines', spacing: 30,  color: '#94a3b8' },
+            'lines-5':  { type: 'lines', spacing: 19,  color: '#94a3b8' },
+            'lines-3':  { type: 'lines', spacing: 11,  color: '#94a3b8' },
+            'grid-10':  { type: 'grid',  spacing: 38,  colorH: '#bfdbfe', colorV: '#dbeafe' },
+            'grid-5':   { type: 'grid',  spacing: 19,  colorH: '#bfdbfe', colorV: '#dbeafe' },
+            'dots':     { type: 'dots',  spacing: 20,  color: '#94a3b8' },
+            'lines-9':  { type: 'lines', spacing: 36,  color: '#94a3b8' },
+            'lines-7':  { type: 'lines', spacing: 28,  color: '#94a3b8' },
+        };
+        return map[this.currentBg] || null;
+    }
+
+    // Aggiorna il CSS background del body in sincronia con pan+zoom del canvas.
+    // Chiamato da PanManager._applyTransform() ad ogni pan/zoom.
+    refreshBodyPattern(dx, dy, scale) {
+        if (this.uploadedImage) { this._clearBodyPattern(); return; }
+        const cfg = this._cssPatternConfig();
+        if (!cfg) { this._clearBodyPattern(); return; }
+
+        const bg = this.bgColor || '#ffffff';
+        const ss = cfg.spacing * scale; // spacing scalato in px schermo
+        const modPos = (v) => ((v % ss) + ss) % ss; // sempre positivo
+
+        document.body.style.backgroundColor = bg;
+
+        if (cfg.type === 'lines') {
+            document.body.style.backgroundImage =
+                `repeating-linear-gradient(0deg, transparent 0px, transparent ${ss - 1}px, ${cfg.color} ${ss - 1}px, ${cfg.color} ${ss}px)`;
+            document.body.style.backgroundSize   = `100% ${ss}px`;
+            document.body.style.backgroundPosition = `0px ${modPos(dy)}px`;
+        } else if (cfg.type === 'grid') {
+            document.body.style.backgroundImage =
+                `repeating-linear-gradient(90deg, transparent 0px, transparent ${ss-1}px, ${cfg.colorV} ${ss-1}px, ${cfg.colorV} ${ss}px),` +
+                `repeating-linear-gradient(0deg,  transparent 0px, transparent ${ss-1}px, ${cfg.colorH} ${ss-1}px, ${cfg.colorH} ${ss}px)`;
+            document.body.style.backgroundSize     = `${ss}px ${ss}px`;
+            document.body.style.backgroundPosition = `${modPos(dx)}px ${modPos(dy)}px`;
+        } else if (cfg.type === 'dots') {
+            const r = Math.max(1, ss / 13);
+            const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${ss}' height='${ss}'><circle cx='${ss/2}' cy='${ss/2}' r='${r}' fill='${cfg.color}'/></svg>`;
+            document.body.style.backgroundImage    = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+            document.body.style.backgroundSize     = `${ss}px ${ss}px`;
+            document.body.style.backgroundPosition = `${modPos(dx)}px ${modPos(dy)}px`;
+        }
+    }
+
+    _clearBodyPattern() {
+        document.body.style.backgroundImage   = 'none';
+        document.body.style.backgroundColor  = '#ffffff';
+        document.body.style.backgroundSize   = '';
+        document.body.style.backgroundPosition = '';
+    }
+
+    // Ridisegna le righe sul canvas (usato prima dell'export PNG, che legge il canvas).
+    renderForCapture() {
+        const ctx = this.ctx;
+        const W = this.canvas.width;
+        const H = this.canvas.height;
+        ctx.fillStyle = this.bgColor || '#ffffff';
+        ctx.fillRect(0, 0, W, H);
+        if (this.currentBg !== 'white') {
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 1;
+            switch (this.currentBg) {
+                case 'lines-8':  this._drawLines(ctx, 0, 0, W, H, 30); break;
+                case 'lines-5':  this._drawLines(ctx, 0, 0, W, H, 19); break;
+                case 'lines-3':  this._drawLines(ctx, 0, 0, W, H, 11); break;
+                case 'grid-10':  this._drawGrid(ctx, 0, 0, W, H, 38);  break;
+                case 'grid-5':   this._drawGrid(ctx, 0, 0, W, H, 19);  break;
+                case 'dots':     this._drawDots(ctx, 0, 0, W, H, 20);  break;
+                case 'staff':    this._drawStaff(ctx, 0, 0, W, H);     break;
+                case 'lines-15-aux': this._drawLinesThreeZone(ctx, 0, 0, W, H, 36, 20); break;
+                case 'lines-12-aux': this._drawLinesWithAux(ctx, 0, 0, W, H, 48, 24);   break;
+                case 'lines-9':  this._drawLines(ctx, 0, 0, W, H, 36); break;
+                case 'lines-7':  this._drawLines(ctx, 0, 0, W, H, 28); break;
+            }
+        }
+    }
+
     render() {
         const ctx = this.ctx;
         const W = this.canvas.width;
@@ -133,6 +215,7 @@ class BackgroundManager {
 
         if (this.uploadedImage) {
             // Immagine di sfondo: mantieni il foglio A4 classico con ombra
+            this._clearBodyPattern();
             ctx.fillStyle = '#f8fafc';
             ctx.fillRect(0, 0, W, H);
             const { px, py, pw, ph } = this._getPageRect(W, H);
@@ -163,34 +246,40 @@ class BackgroundManager {
             return;
         }
 
-        // Sfondi predefiniti (white, righe, quadretti, ecc.): bianco infinito stile OneNote.
-        // Il pattern si estende su tutto il canvas — niente rettangolo foglio separato.
+        if (this._cssPatternConfig()) {
+            // Pattern semplice (righe, quadretti, dots): bg-canvas trasparente.
+            // Il pattern è sul CSS del body (infinito) — sincronizzato da PanManager.
+            ctx.clearRect(0, 0, W, H);
+            // Cornice tratteggiata per il bordo di stampa A4
+            const { px, py, pw, ph } = this._getPageRect(W, H);
+            ctx.save();
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([10, 6]);
+            ctx.strokeRect(px, py, pw, ph);
+            ctx.setLineDash([]);
+            ctx.restore();
+            return;
+        }
+
+        // Sfondo bianco o pattern complesso (elementare, pentagramma): bianco su tutto il canvas
         ctx.fillStyle = this.bgColor || '#ffffff';
         ctx.fillRect(0, 0, W, H);
 
         if (this.currentBg !== 'white') {
-            ctx.strokeStyle = '#94a3b8'; // slate-400 — visibile ma non invadente
+            ctx.strokeStyle = '#94a3b8';
             ctx.lineWidth = 1;
-
             switch (this.currentBg) {
-                case 'lines-8':      this._drawLines(ctx, 0, 0, W, H, 30);             break;
-                case 'lines-5':      this._drawLines(ctx, 0, 0, W, H, 19);             break;
-                case 'lines-3':      this._drawLines(ctx, 0, 0, W, H, 11);             break;
-                case 'grid-10':      this._drawGrid(ctx, 0, 0, W, H, 38);              break;
-                case 'grid-5':       this._drawGrid(ctx, 0, 0, W, H, 19);              break;
-                case 'dots':         this._drawDots(ctx, 0, 0, W, H, 20);              break;
-                case 'staff':        this._drawStaff(ctx, 0, 0, W, H);                 break;
+                case 'staff':        this._drawStaff(ctx, 0, 0, W, H);                  break;
                 case 'lines-15-aux': this._drawLinesThreeZone(ctx, 0, 0, W, H, 36, 20); break;
-                case 'lines-12-aux': this._drawLinesWithAux(ctx, 0, 0, W, H, 48, 24); break;
-                case 'lines-9':      this._drawLines(ctx, 0, 0, W, H, 36);             break;
-                case 'lines-7':      this._drawLines(ctx, 0, 0, W, H, 28);             break;
+                case 'lines-12-aux': this._drawLinesWithAux(ctx, 0, 0, W, H, 48, 24);   break;
             }
         }
 
-        // Cornice tratteggiata leggera per indicare il bordo di stampa A4
+        // Cornice tratteggiata per il bordo di stampa A4
         const { px, py, pw, ph } = this._getPageRect(W, H);
         ctx.save();
-        ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)'; // slate-400 semitrasparente
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([10, 6]);
         ctx.strokeRect(px, py, pw, ph);
@@ -1268,7 +1357,8 @@ class CanvasManager {
     }
 
     exportPNG() {
-        // Componi bg + draw in un canvas temporaneo per l'export
+        // Assicura che le righe/quadretti CSS siano sul canvas per l'export
+        this.bgMgr.renderForCapture();
         const tmp = document.createElement('canvas');
         tmp.width  = this.canvas.width;
         tmp.height = this.canvas.height;
@@ -1280,6 +1370,8 @@ class CanvasManager {
         a.href = url;
         a.download = (CONFIG.projectName || 'eduboard') + '.png';
         a.click();
+        // Ripristina bg-canvas trasparente dopo l'export
+        this.bgMgr.render();
     }
 
     getDataURL() {
@@ -2695,6 +2787,10 @@ class PanManager {
         if (area) {
             area.style.transform = `translate(${this.dx}px, ${this.dy}px) scale(${this.scale})`;
             area.style.transformOrigin = '0 0';
+        }
+        // Sincronizza il pattern CSS del body con pan+zoom (sfondo infinito)
+        if (typeof bgMgr !== 'undefined' && bgMgr) {
+            bgMgr.refreshBodyPattern(this.dx, this.dy, this.scale);
         }
     }
 
