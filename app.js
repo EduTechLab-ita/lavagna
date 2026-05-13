@@ -392,6 +392,7 @@ class BackgroundManager {
         this.currentBg = bgKey;
         this.uploadedImage = null;
         this.render();
+        this._syncBodyNow();
         CONFIG.currentBg = bgKey;
         CONFIG.isDirty = true;
         window.autoSaveMgr?.onDirty();
@@ -401,6 +402,7 @@ class BackgroundManager {
         this.uploadedImage = imgElement;
         this.currentBg = 'image';
         this.render();
+        this._syncBodyNow();
         CONFIG.isDirty = true;
         window.autoSaveMgr?.onDirty();
     }
@@ -420,6 +422,14 @@ class BackgroundManager {
     setBgColor(color) {
         this.bgColor = color;
         this.render();
+        this._syncBodyNow();
+    }
+
+    // Aggiorna subito il body CSS usando la posizione corrente del panMgr
+    _syncBodyNow() {
+        if (typeof panMgr !== 'undefined' && panMgr) {
+            this.refreshBodyPattern(panMgr.dx, panMgr.dy, panMgr.scale);
+        }
     }
 }
 
