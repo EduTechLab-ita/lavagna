@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v41'; // v40 — sfondo CSS infinito: righe/quadretti su body sincronizzato con pan+zoom, nessun bordo visibile
+const CACHE_NAME = 'eduboard-v42'; // v42 — fix sfondo aggiornamento immediato, spacing LIM, oggetti allineati ai disegni
 const urlsToCache = [
   '.',
   './index.html',

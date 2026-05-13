@@ -130,14 +130,14 @@ class BackgroundManager {
     // Restituisce null per pattern complessi (elementare, pentagramma) → rimangono su canvas.
     _cssPatternConfig() {
         const map = {
-            'lines-8':  { type: 'lines', spacing: 30,  color: '#94a3b8' },
-            'lines-5':  { type: 'lines', spacing: 19,  color: '#94a3b8' },
-            'lines-3':  { type: 'lines', spacing: 11,  color: '#94a3b8' },
-            'grid-10':  { type: 'grid',  spacing: 38,  colorH: '#bfdbfe', colorV: '#dbeafe' },
-            'grid-5':   { type: 'grid',  spacing: 19,  colorH: '#bfdbfe', colorV: '#dbeafe' },
-            'dots':     { type: 'dots',  spacing: 20,  color: '#94a3b8' },
-            'lines-9':  { type: 'lines', spacing: 36,  color: '#94a3b8' },
-            'lines-7':  { type: 'lines', spacing: 28,  color: '#94a3b8' },
+            'lines-8':  { type: 'lines', spacing: 45,  color: '#94a3b8' },
+            'lines-5':  { type: 'lines', spacing: 30,  color: '#94a3b8' },
+            'lines-3':  { type: 'lines', spacing: 17,  color: '#94a3b8' },
+            'grid-10':  { type: 'grid',  spacing: 57,  colorH: '#bfdbfe', colorV: '#dbeafe' },
+            'grid-5':   { type: 'grid',  spacing: 30,  colorH: '#bfdbfe', colorV: '#dbeafe' },
+            'dots':     { type: 'dots',  spacing: 30,  color: '#94a3b8' },
+            'lines-9':  { type: 'lines', spacing: 54,  color: '#94a3b8' },
+            'lines-7':  { type: 'lines', spacing: 42,  color: '#94a3b8' },
         };
         return map[this.currentBg] || null;
     }
@@ -193,17 +193,17 @@ class BackgroundManager {
             ctx.strokeStyle = '#94a3b8';
             ctx.lineWidth = 1;
             switch (this.currentBg) {
-                case 'lines-8':  this._drawLines(ctx, 0, 0, W, H, 30); break;
-                case 'lines-5':  this._drawLines(ctx, 0, 0, W, H, 19); break;
-                case 'lines-3':  this._drawLines(ctx, 0, 0, W, H, 11); break;
-                case 'grid-10':  this._drawGrid(ctx, 0, 0, W, H, 38);  break;
-                case 'grid-5':   this._drawGrid(ctx, 0, 0, W, H, 19);  break;
-                case 'dots':     this._drawDots(ctx, 0, 0, W, H, 20);  break;
+                case 'lines-8':  this._drawLines(ctx, 0, 0, W, H, 45); break;
+                case 'lines-5':  this._drawLines(ctx, 0, 0, W, H, 30); break;
+                case 'lines-3':  this._drawLines(ctx, 0, 0, W, H, 17); break;
+                case 'grid-10':  this._drawGrid(ctx, 0, 0, W, H, 57);  break;
+                case 'grid-5':   this._drawGrid(ctx, 0, 0, W, H, 30);  break;
+                case 'dots':     this._drawDots(ctx, 0, 0, W, H, 30);  break;
                 case 'staff':    this._drawStaff(ctx, 0, 0, W, H);     break;
                 case 'lines-15-aux': this._drawLinesThreeZone(ctx, 0, 0, W, H, 36, 20); break;
                 case 'lines-12-aux': this._drawLinesWithAux(ctx, 0, 0, W, H, 48, 24);   break;
-                case 'lines-9':  this._drawLines(ctx, 0, 0, W, H, 36); break;
-                case 'lines-7':  this._drawLines(ctx, 0, 0, W, H, 28); break;
+                case 'lines-9':  this._drawLines(ctx, 0, 0, W, H, 54); break;
+                case 'lines-7':  this._drawLines(ctx, 0, 0, W, H, 42); break;
             }
         }
     }
@@ -429,6 +429,8 @@ class BackgroundManager {
     _syncBodyNow() {
         if (typeof panMgr !== 'undefined' && panMgr) {
             this.refreshBodyPattern(panMgr.dx, panMgr.dy, panMgr.scale);
+            // Forza il browser a comporre il nuovo stile subito (senza scroll)
+            void document.body.offsetHeight;
         }
     }
 }
@@ -4562,14 +4564,18 @@ class PageManager {
             off.getContext('2d').drawImage(drawCanvas, -r.px, -r.py);
             drawImageData = off.toDataURL('image/png');
         }
+        // Calcola offset foglio per salvare coordinate oggetti relative al foglio A4
+        const objR = (W > 0 && typeof bgMgr !== 'undefined') ? bgMgr._getPageRect(W, H) : { px: 0, py: 0 };
         return {
             canvasWidth: W,
             pagePx: null,   // non più necessario (mantenuto per retrocompatibilità)
             pagePy: null,
-            drawFormat: 'page',  // indica che drawImageData è il ritaglio del foglio A4
+            drawFormat: 'page',     // drawImageData è il ritaglio del foglio A4
+            objectFormat: 'page-relative',  // coordinate oggetti relative al foglio A4
             drawImageData,
             objects: JSON.parse(JSON.stringify(this.objectLayerRef.objects.map(o => {
                 // Serializza l'immagine come dataUrl per il salvataggio in memoria
+                // Coordinate salvate relative al foglio A4 (come i disegni)
                 try {
                     const tmp = document.createElement('canvas');
                     const srcW = o.img.naturalWidth || o.img.width || o.w;
@@ -4577,7 +4583,8 @@ class PageManager {
                     tmp.width = srcW;
                     tmp.height = srcH;
                     tmp.getContext('2d').drawImage(o.img, 0, 0);
-                    return { ...o, img: null, dataUrl: tmp.toDataURL() };
+                    return { ...o, img: null, dataUrl: tmp.toDataURL(),
+                        x: o.x - objR.px, y: o.y - objR.py };
                 } catch (_) {
                     return { ...o, img: null, dataUrl: null };
                 }
@@ -4615,12 +4622,16 @@ class PageManager {
             img.src = pageData.drawImageData;
         }
         // Ripristina objects
+        // Se salvati con objectFormat:'page-relative', riconverti in coordinate assolute canvas
         this.objectLayerRef.objects = [];
+        const usePageCoords = pageData.objectFormat === 'page-relative' && typeof bgMgr !== 'undefined';
+        const objOffset = usePageCoords ? bgMgr._getPageRect(drawCanvas.width, drawCanvas.height) : { px: 0, py: 0 };
         const loadPromises = (pageData.objects || []).map(o => new Promise(resolve => {
             if (!o.dataUrl) { resolve(); return; }
             const img = new Image();
             img.onload = () => {
-                this.objectLayerRef.objects.push({ ...o, img });
+                this.objectLayerRef.objects.push({ ...o, img,
+                    x: o.x + objOffset.px, y: o.y + objOffset.py });
                 resolve();
             };
             img.onerror = resolve;
