@@ -200,14 +200,24 @@
     <div class="card-text">Controllo del codice sessione</div>
   </div>
 
-  <!-- SCHERMATA: Nessun codice QR → schermata installazione -->
+  <!-- SCHERMATA: Nessun codice QR → installa l'app e memorizza account -->
   <div id="screen-no-code" class="card hidden">
     <div class="card-icon">📲</div>
     <div class="card-title">Installa EduBoard Connect</div>
-    <div class="card-text">Aggiungi questa pagina alla schermata Home del tuo telefono.<br><br>
-      <strong>iPhone:</strong> tocca 🔗 Condividi → "Aggiungi a Home"<br>
-      <strong>Android:</strong> tocca ⋮ Menu → "Installa app" o "Aggiungi a schermata Home"</div>
-    <button class="btn btn-primary" style="margin-top:20px" onclick="markInstalled()">✓ Ho aggiunto l'app all'Home</button>
+    <div class="card-text">
+      <strong>1.</strong> Aggiungi questa pagina alla schermata Home:<br>
+      <em>iPhone:</em> 🔗 Condividi → "Aggiungi a Home"<br>
+      <em>Android:</em> ⋮ Menu → "Installa app"<br><br>
+      <strong>2.</strong> Poi premi il bottone qui sotto per memorizzare il tuo account — la prossima volta non dovrai reinserire le credenziali.
+    </div>
+    <button class="btn btn-primary" style="margin-top:20px" id="btn-memorize" onclick="handleMemorize()">Memorizza il mio account Google</button>
+  </div>
+
+  <!-- SCHERMATA: Nessun codice ma login avvenuto → account memorizzato -->
+  <div id="screen-memorized" class="card hidden">
+    <div class="success-circle">✓</div>
+    <div class="card-title">Account memorizzato!</div>
+    <div class="card-text">D'ora in poi scansiona il QR sulla lavagna per connetterti in un tap, senza reinserire le credenziali.</div>
   </div>
 
   <!-- SCHERMATA: Ha il codice ma non ha mai installato l'app -->
@@ -215,8 +225,8 @@
     <div class="card-icon">⚠️</div>
     <div class="card-title">App non installata</div>
     <div class="card-text">Per connetterti tramite QR code devi prima installare <strong>EduBoard Connect</strong> sul telefono.<br><br>
-      Scansiona il secondo QR sulla lavagna (quello in basso) per le istruzioni di installazione.<br><br>
-      In alternativa puoi connetterti direttamente dal PC cliccando <em>"Connetti manualmente dal PC"</em> nella lavagna.</div>
+      Scansiona il secondo QR sulla lavagna per le istruzioni di installazione.<br><br>
+      In alternativa connettiti direttamente dal PC con <em>"Connetti manualmente dal PC"</em>.</div>
   </div>
 
   <!-- SCHERMATA: Account salvato -->
@@ -285,8 +295,8 @@
 
     // ─── UTILITY SCHERMATE ───────────────────────────────────────────────────────
     const screens = [
-      'screen-loading', 'screen-no-code', 'screen-not-installed', 'screen-saved',
-      'screen-login', 'screen-connecting', 'screen-success',
+      'screen-loading', 'screen-no-code', 'screen-memorized', 'screen-not-installed',
+      'screen-saved', 'screen-login', 'screen-connecting', 'screen-success',
       'screen-error', 'screen-expired'
     ];
 
@@ -363,12 +373,13 @@
     // ─── CALLBACK TOKEN ───────────────────────────────────────────────────────────
     async function onTokenReceived(response) {
       if (response.error) {
-        // L'utente ha annullato o c'è stato un errore OAuth
         const btn1 = document.getElementById('btn-continue');
         const btn2 = document.getElementById('btn-login');
+        const btn3 = document.getElementById('btn-memorize');
         if (btn1) btn1.disabled = false;
         if (btn2) btn2.disabled = false;
-
+        if (btn3) btn3.disabled = false;
+        memorizeMode = false;
         if (response.error !== 'access_denied') {
           showError('Autenticazione non riuscita: ' + response.error + '. Riprova.');
         }
@@ -376,6 +387,20 @@
       }
 
       const accessToken = response.access_token;
+
+      // Modalità memorizzazione: salva solo l'email, non connette nessuna sessione
+      if (memorizeMode) {
+        memorizeMode = false;
+        try {
+          const userInfo = await fetchUserInfo(accessToken);
+          localStorage.setItem(STORAGE_KEY, userInfo.email);
+          showScreen('screen-memorized');
+        } catch (err) {
+          showError('Impossibile recuperare il tuo account. Riprova.');
+        }
+        return;
+      }
+
       showScreen('screen-connecting');
 
       try {
@@ -457,6 +482,16 @@
       }
 
       return data;
+    }
+
+    // ─── MEMORIZZA ACCOUNT (da schermata installazione, senza codice sessione) ──
+    let memorizeMode = false;
+
+    function handleMemorize() {
+      const btn = document.getElementById('btn-memorize');
+      if (btn) btn.disabled = true;
+      memorizeMode = true;
+      waitForGIS(null, () => gisClient.requestAccessToken());
     }
 
     function showLoginOrSaved() {

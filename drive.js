@@ -220,28 +220,32 @@ class DriveManager {
         if (window.driveConnectBtn) window.driveConnectBtn.update();
         if (typeof toast === 'function') toast(`✓ Drive connesso come ${email}`);
 
-        // 2. Arricchimento asincrono: nome e foto prima (UI subito), poi cartelle
-        try {
-            const info = await this._apiFetch('https://www.googleapis.com/oauth2/v2/userinfo');
+        // 2. Fetch nome+foto con fetch diretto (bypass _apiFetch — più robusto con token esterno)
+        fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: 'Bearer ' + token }
+        })
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(info => {
             this.userName     = info.given_name || info.name || '';
-            this.userPhotoUrl = info.picture || null;
-            // Aggiorna UI con nome e foto immediatamente, indipendentemente dalle cartelle
+            this.userPhotoUrl = info.picture    || null;
             this._saveSession();
             if (window.driveConnectBtn) window.driveConnectBtn.update();
-        } catch (err) {
-            console.warn('[EduBoardConnect] userinfo fetch failed:', err.message);
-        }
-        // Cartelle, libreria e ultima lezione in background (errori non critici)
-        try {
-            await this._ensureRootFolder();
-            await this._ensureLessonsFolder();
-            await this._ensureBgFolder();
-            this._saveSession();
+        })
+        .catch(err => console.warn('[EduBoardConnect] userinfo:', err));
+
+        // 3. Cartelle Drive in background, poi libreria e ultima lezione
+        (async () => {
+            try {
+                await this._ensureRootFolder();
+                await this._ensureLessonsFolder();
+                await this._ensureBgFolder();
+                this._saveSession();
+            } catch (err) {
+                console.warn('[EduBoardConnect] folders:', err.message);
+            }
             if (window.libraryMgr) window.libraryMgr.refresh();
             _autoOpenLastLesson();
-        } catch (err) {
-            console.warn('[EduBoardConnect] folder setup failed:', err.message);
-        }
+        })();
     }
 
     /** Restituisce true se il token è valido. */

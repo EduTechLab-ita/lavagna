@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v61'; // v61 — fix foto/nome: update() con foto PRIMA delle operazioni cartelle
+const CACHE_NAME = 'eduboard-v62'; // v62 — userinfo via fetch diretto; mini app: memorizza account
 const urlsToCache = [
   '.',
   './index.html',
