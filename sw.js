@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v50'; // v49 — toolbar maxwidth 1200px (Cancella visibile), trattini A4 più scuri, label basso-sinistra, ctrl spotlight/tendina senza sfondo nero
+const CACHE_NAME = 'eduboard-v51'; // v51 — EduBoard Connect: QR pairing Drive via telefono
 const urlsToCache = [
   '.',
   './index.html',
@@ -8,7 +8,8 @@ const urlsToCache = [
   './geometry.js',
   './manifest.json',
   './icon-192x192.png',
-  './icon-512x512.png'
+  './icon-512x512.png',
+  './connect.html'
 ];
 
 // Installazione del Service Worker

@@ -2670,3 +2670,107 @@ body:not(.has-page-bar) #zoom-badge {
 }
 #tendina-ctrl button:hover { background: rgba(30,40,70,0.95); }
 #tendina-ctrl span { display: none; }
+
+/* ============================================================
+   EduBoard Connect — pannello QR connessione Drive
+   ============================================================ */
+#ec-panel {
+    position: fixed;
+    bottom: 84px;
+    right: 20px;
+    width: 260px;
+    background: rgba(15, 23, 42, 0.97);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px;
+    padding: 20px 16px 16px;
+    z-index: 8000;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    color: #fff;
+    font-family: system-ui, sans-serif;
+    animation: ec-slidein 0.25s ease;
+}
+@keyframes ec-slidein {
+    from { opacity: 0; transform: translateY(16px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.ec-header { text-align: center; }
+.ec-title   { display: block; font-weight: 700; font-size: 15px; }
+.ec-subtitle { display: block; font-size: 11px; color: #94a3b8; margin-top: 2px; }
+.ec-qr {
+    width: 200px; height: 200px;
+    border-radius: 12px;
+    background: #fff;
+    padding: 6px;
+    box-sizing: border-box;
+}
+.ec-code {
+    font-size: 11px;
+    color: #64748b;
+    letter-spacing: 2px;
+    font-family: monospace;
+}
+.ec-status {
+    font-size: 12px;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.ec-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #f59e0b;
+    animation: ec-pulse 1.2s ease-in-out infinite;
+    flex-shrink: 0;
+}
+@keyframes ec-pulse {
+    0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+}
+.ec-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+}
+.ec-btn-install {
+    background: rgba(59,130,246,0.2);
+    border: 1px solid rgba(59,130,246,0.4);
+    color: #93c5fd;
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+    width: 100%;
+}
+.ec-btn-install:hover { background: rgba(59,130,246,0.35); }
+.ec-btn-skip {
+    background: transparent;
+    border: none;
+    color: #475569;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 4px;
+    text-align: center;
+}
+.ec-btn-skip:hover { color: #94a3b8; }
+
+#ec-install-panel {
+    position: fixed;
+    bottom: 84px;
+    right: 290px;
+    width: 220px;
+    background: rgba(15,23,42,0.97);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 16px;
+    padding: 16px;
+    z-index: 8001;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    color: #fff;
+    font-family: system-ui, sans-serif;
+    font-size: 13px;
+}
