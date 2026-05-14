@@ -211,9 +211,11 @@ class DriveManager {
 
     // Chiamato da EduBoardConnect quando il telefono invia il token
     _onExternalToken(token, email) {
-        this._token = token;
-        this._email = email;
-        this._connected = true;
+        this.accessToken  = token;
+        this.userEmail    = email;
+        this.connected    = true;
+        this.tokenExpiry  = Date.now() + 3600 * 1000; // 1 ora
+        this._saveSession();
         // Notifica il bottone FAB
         if (window.driveConnectBtn) window.driveConnectBtn.update();
         // Toast di conferma

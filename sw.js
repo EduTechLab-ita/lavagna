@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v56'; // v56 — QR via qrserver.com API (img), rimossa libreria qrcodejs
+const CACHE_NAME = 'eduboard-v57'; // v57 — fix _onExternalToken: nomi proprietà corretti + _saveSession()
 const urlsToCache = [
   '.',
   './index.html',
