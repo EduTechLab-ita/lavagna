@@ -2700,12 +2700,28 @@ body:not(.has-page-bar) #zoom-badge {
 .ec-header { text-align: center; }
 .ec-title   { display: block; font-weight: 700; font-size: 15px; }
 .ec-subtitle { display: block; font-size: 11px; color: #94a3b8; margin-top: 2px; }
-.ec-qr {
-    width: 200px; height: 200px;
+.ec-qr-wrap {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    flex-shrink: 0;
+}
+.ec-qr-canvas {
     border-radius: 12px;
     background: #fff;
-    padding: 6px;
-    box-sizing: border-box;
+    display: block;
+}
+.ec-qr-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.92);
+    border-radius: 12px;
+    color: #0f172a;
+    font-size: 13px;
+    font-weight: 500;
 }
 .ec-code {
     font-size: 11px;
@@ -2749,15 +2765,19 @@ body:not(.has-page-bar) #zoom-badge {
 }
 .ec-btn-install:hover { background: rgba(59,130,246,0.35); }
 .ec-btn-skip {
-    background: transparent;
-    border: none;
-    color: #475569;
-    font-size: 11px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.18);
+    color: #cbd5e1;
+    font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
-    padding: 4px;
+    padding: 10px 12px;
+    border-radius: 10px;
     text-align: center;
+    transition: background 0.2s;
+    width: 100%;
 }
-.ec-btn-skip:hover { color: #94a3b8; }
+.ec-btn-skip:hover { background: rgba(255,255,255,0.14); color: #fff; }
 
 #ec-install-panel {
     position: fixed;

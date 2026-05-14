@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v51'; // v51 — EduBoard Connect: QR pairing Drive via telefono
+const CACHE_NAME = 'eduboard-v52'; // v51 — EduBoard Connect: QR pairing Drive via telefono
 const urlsToCache = [
   '.',
   './index.html',
