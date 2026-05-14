@@ -2170,7 +2170,7 @@ class EduBoardConnect {
                 <span class="ec-subtitle">Scansiona con EduBoard Connect</span>
             </div>
             <div class="ec-qr-wrap">
-                <canvas class="ec-qr-canvas" width="200" height="200"></canvas>
+                <div id="ec-qr-canvas" class="ec-qr-canvas"></div>
                 <div class="ec-qr-loading" id="ec-qr-loading">⏳ Generazione QR...</div>
             </div>
             <div class="ec-code" id="ec-code">—</div>
@@ -2200,14 +2200,16 @@ class EduBoardConnect {
             const codeEl = document.getElementById('ec-code');
             if (codeEl) codeEl.textContent = this._code;
 
-            // Genera QR via libreria JS (nessuna API esterna)
-            const canvas = panel.querySelector('.ec-qr-canvas');
+            // Genera QR via libreria JS locale (nessuna API esterna)
+            const qrEl = document.getElementById('ec-qr-canvas');
             const loadingEl = document.getElementById('ec-qr-loading');
-            if (canvas && typeof QRCode !== 'undefined') {
-                QRCode.toCanvas(canvas, connectUrl, { width: 200, margin: 2,
-                    color: { dark: '#0f172a', light: '#ffffff' } }, (err) => {
-                    if (!err && loadingEl) loadingEl.style.display = 'none';
+            if (qrEl && typeof QRCode !== 'undefined') {
+                new QRCode(qrEl, {
+                    text: connectUrl, width: 200, height: 200,
+                    colorDark: '#0f172a', colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M
                 });
+                if (loadingEl) loadingEl.style.display = 'none';
             }
 
             // Aggiorna status
@@ -2271,13 +2273,17 @@ class EduBoardConnect {
         p.id = 'ec-install-panel';
         p.innerHTML = `
             <div style="font-weight:600;margin-bottom:8px">📲 Installa EduBoard Connect</div>
-            <canvas id="ec-install-canvas" width="180" height="180" style="display:block;margin:8px auto;border-radius:8px;background:#fff"></canvas>
+            <div id="ec-install-canvas" style="display:flex;justify-content:center;margin:8px auto;"></div>
             <div style="font-size:12px;color:#94a3b8;text-align:center">Scansiona per aprire la mini-app<br>poi "Aggiungi alla schermata Home"</div>
             <button onclick="this.closest('#ec-install-panel').remove()" style="margin-top:10px;width:100%;background:rgba(255,255,255,0.1);border:none;color:#fff;padding:8px;border-radius:8px;cursor:pointer">Chiudi</button>`;
         document.body.appendChild(p);
         this._installPanel = p;
         const c = document.getElementById('ec-install-canvas');
-        if (c && typeof QRCode !== 'undefined') QRCode.toCanvas(c, installUrl, { width: 180, margin: 2 }, () => {});
+        if (c && typeof QRCode !== 'undefined') new QRCode(c, {
+            text: installUrl, width: 180, height: 180,
+            colorDark: '#0f172a', colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+        });
     }
 }
 

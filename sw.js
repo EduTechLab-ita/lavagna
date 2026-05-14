@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v52'; // v51 — EduBoard Connect: QR pairing Drive via telefono
+const CACHE_NAME = 'eduboard-v53'; // v51 — EduBoard Connect: QR pairing Drive via telefono
 const urlsToCache = [
   '.',
   './index.html',
@@ -9,7 +9,8 @@ const urlsToCache = [
   './manifest.json',
   './icon-192x192.png',
   './icon-512x512.png',
-  './connect.html'
+  './connect.html',
+  './qrcode.min.js'
 ];
 
 // Installazione del Service Worker
