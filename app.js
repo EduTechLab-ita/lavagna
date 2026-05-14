@@ -1024,16 +1024,22 @@ class CanvasManager {
         this._twoFingerMode  = false;
         this._twoFingerStart = null;
 
-        // touch-action:none è nel CSS dell'overlay → previene scroll nativo senza setPointerCapture
-        // NON usare setPointerCapture: su LIM provoca pointercancel immediato → tratto interrotto
+        // ── Regola FONDAMENTALE ───────────────────────────────────────────────────
+        // _activePointers traccia SOLO i pointer che hanno fatto pointerdown.
+        // pointermove aggiorna la posizione SOLO se il pointer è già nella mappa
+        // (evita di aggiungere pointer "hover" o mouse passante → bug twoFingerMode).
+        // pointerup viene ascoltato su document per catturare i rilasci anche
+        // quando il dito esce dall'overlay senza setPointerCapture.
+        // ─────────────────────────────────────────────────────────────────────────
+
         el.addEventListener('pointerdown', e => {
             e.preventDefault();
             this._activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
             if (this._activePointers.size >= 2 && typeof panMgr !== 'undefined') {
-                // Modalità 2 dita: pan + zoom, qualunque sia il pointerType
+                // Modalità 2 dita: pan + zoom
                 this._twoFingerMode = true;
-                CONFIG.isDrawing = false; // annulla eventuale tratto in corso
+                CONFIG.isDrawing = false;
                 const pts = Array.from(this._activePointers.values());
                 this._twoFingerStart = {
                     dx:    panMgr.dx,
@@ -1049,7 +1055,10 @@ class CanvasManager {
         }, { passive: false });
 
         el.addEventListener('pointermove', e => {
-            this._activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            // Aggiorna SOLO pointer già tracciati — il mouse in hover NON viene aggiunto
+            if (this._activePointers.has(e.pointerId)) {
+                this._activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            }
 
             if (this._twoFingerMode && this._activePointers.size >= 2 &&
                 typeof panMgr !== 'undefined' && this._twoFingerStart) {
@@ -1059,7 +1068,6 @@ class CanvasManager {
                 const newDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y) || 1;
                 const sf = this._twoFingerStart;
                 const newScale = Math.max(0.2, Math.min(4, sf.scale * (newDist / sf.dist)));
-                // Zoom centrato sul midpoint iniziale + pan del midpoint
                 panMgr.dx    = sf.midX - (sf.midX - sf.dx) * (newScale / sf.scale) + (newMidX - sf.midX);
                 panMgr.dy    = sf.midY - (sf.midY - sf.dy) * (newScale / sf.scale) + (newMidY - sf.midY);
                 panMgr.scale = newScale;
@@ -1068,15 +1076,16 @@ class CanvasManager {
                 return;
             }
 
-            // Singolo dito/penna: gestione normale
+            if (!this._activePointers.has(e.pointerId)) return; // ignora hover
             if (e.pointerType === 'touch' && e.isPrimary === false) return;
-            // getCoalescedEvents: restituisce tutti i campioni hardware accumulati dal browser
-            // (anche su PC lenti), evitando salti/scatti quando gli eventi arrivano rarefatti
             const evts = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
             for (const ev of evts) this._onMove(ev);
         }, { passive: false });
 
-        el.addEventListener('pointerup', e => {
+        // Listener su document per catturare pointerup anche fuori dall'overlay
+        // (senza setPointerCapture il browser non garantisce pointerup sull'elemento)
+        const _onDocUp = (e) => {
+            if (!this._activePointers.has(e.pointerId)) return; // non era tracciato
             this._activePointers.delete(e.pointerId);
             if (this._twoFingerMode) {
                 if (this._activePointers.size < 2) {
@@ -1088,16 +1097,20 @@ class CanvasManager {
             }
             if (e.pointerType === 'touch' && e.isPrimary === false) return;
             this._onEnd(e);
-        });
+        };
 
-        el.addEventListener('pointercancel', e => {
+        const _onDocCancel = (e) => {
+            if (!this._activePointers.has(e.pointerId)) return;
             this._activePointers.delete(e.pointerId);
             if (this._twoFingerMode && this._activePointers.size < 2) {
                 this._twoFingerMode  = false;
                 this._twoFingerStart = null;
             }
-            this._onEnd(e);
-        });
+            CONFIG.isDrawing = false;
+        };
+
+        document.addEventListener('pointerup',     _onDocUp);
+        document.addEventListener('pointercancel', _onDocCancel);
     }
 
     _onStart(e) {
