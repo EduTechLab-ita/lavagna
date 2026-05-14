@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v60'; // v60 — fix F5: UI aggiornata subito dopo connect; connect.html semplificato
+const CACHE_NAME = 'eduboard-v61'; // v61 — fix foto/nome: update() con foto PRIMA delle operazioni cartelle
 const urlsToCache = [
   '.',
   './index.html',

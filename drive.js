@@ -220,20 +220,27 @@ class DriveManager {
         if (window.driveConnectBtn) window.driveConnectBtn.update();
         if (typeof toast === 'function') toast(`✓ Drive connesso come ${email}`);
 
-        // 2. Arricchimento asincrono: nome, foto, cartelle, libreria, ultima lezione
+        // 2. Arricchimento asincrono: nome e foto prima (UI subito), poi cartelle
         try {
             const info = await this._apiFetch('https://www.googleapis.com/oauth2/v2/userinfo');
             this.userName     = info.given_name || info.name || '';
             this.userPhotoUrl = info.picture || null;
+            // Aggiorna UI con nome e foto immediatamente, indipendentemente dalle cartelle
+            this._saveSession();
+            if (window.driveConnectBtn) window.driveConnectBtn.update();
+        } catch (err) {
+            console.warn('[EduBoardConnect] userinfo fetch failed:', err.message);
+        }
+        // Cartelle, libreria e ultima lezione in background (errori non critici)
+        try {
             await this._ensureRootFolder();
             await this._ensureLessonsFolder();
             await this._ensureBgFolder();
             this._saveSession();
-            if (window.driveConnectBtn) window.driveConnectBtn.update(); // aggiorna con la foto
             if (window.libraryMgr) window.libraryMgr.refresh();
             _autoOpenLastLesson();
         } catch (err) {
-            console.warn('[EduBoardConnect] Post-connect enrichment:', err.message);
+            console.warn('[EduBoardConnect] folder setup failed:', err.message);
         }
     }
 
