@@ -1174,7 +1174,8 @@ class GeometryManager {
                 mgr._saveUndo();
                 CONFIG.lastX = x;
                 CONFIG.lastY = y;
-                mgr._drawSegment(x, y, x, y);
+                // _drawSegment(x0,y0, cpX,cpY, x1,y1) — 6 argomenti richiesti
+                mgr._drawSegment(x, y, x, y, x, y);
                 return;
             }
             origStart(e);
@@ -1191,7 +1192,8 @@ class GeometryManager {
                 ['pen', 'pencil', 'pastel', 'marker'].includes(CONFIG.currentTool)) {
                 const raw = mgr.getCoords(e);
                 const { x, y } = geo.ruler.snapToRuler(raw.x, raw.y);
-                mgr._drawSegment(CONFIG.lastX, CONFIG.lastY, x, y);
+                // Segmento dritto: control point = punto di partenza → nessuna curvatura
+                mgr._drawSegment(CONFIG.lastX, CONFIG.lastY, CONFIG.lastX, CONFIG.lastY, x, y);
                 CONFIG.lastX = x;
                 CONFIG.lastY = y;
                 return;

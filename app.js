@@ -2848,11 +2848,15 @@ class PanManager {
                 const newScale = Math.max(0.2, Math.min(4,
                     this._pinch.initialScale * (newDist / this._pinch.initialDist)));
 
-                // Pivot sul centro del pinch iniziale
+                // Nuovo midpoint (per il pan insieme allo zoom)
+                const newMidX = (t1.clientX + t2.clientX) / 2;
+                const newMidY = (t1.clientY + t2.clientY) / 2;
                 const pivotX = this._pinch.midX;
                 const pivotY = this._pinch.midY;
-                this.dx = pivotX - (pivotX - this._pinch.initialDx) * (newScale / this._pinch.initialScale);
-                this.dy = pivotY - (pivotY - this._pinch.initialDy) * (newScale / this._pinch.initialScale);
+
+                // Zoom centrato sul midpoint iniziale + pan del midpoint corrente
+                this.dx = pivotX - (pivotX - this._pinch.initialDx) * (newScale / this._pinch.initialScale) + (newMidX - pivotX);
+                this.dy = pivotY - (pivotY - this._pinch.initialDy) * (newScale / this._pinch.initialScale) + (newMidY - pivotY);
                 this.scale = newScale;
                 this._applyTransform();
                 this._showZoomIndicator();

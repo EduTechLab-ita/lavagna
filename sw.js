@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v45'; // v44 — fix scrittura (no setPointerCapture), testo dal punto di click, toolbar scroll, timer input manuale, resize righello più grande
+const CACHE_NAME = 'eduboard-v46'; // v44 — fix scrittura (no setPointerCapture), testo dal punto di click, toolbar scroll, timer input manuale, resize righello più grande
 const urlsToCache = [
   '.',
   './index.html',
