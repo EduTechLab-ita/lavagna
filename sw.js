@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v58'; // v58 — connect.html: rilevamento PWA standalone + connetti manualmente dal PC
+const CACHE_NAME = 'eduboard-v59'; // v59 — _onExternalToken: fetch userinfo + cartelle + libreria + ultima lezione
 const urlsToCache = [
   '.',
   './index.html',

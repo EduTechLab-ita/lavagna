@@ -210,16 +210,36 @@ class DriveManager {
     }
 
     // Chiamato da EduBoardConnect quando il telefono invia il token
-    _onExternalToken(token, email) {
-        this.accessToken  = token;
-        this.userEmail    = email;
-        this.connected    = true;
-        this.tokenExpiry  = Date.now() + 3600 * 1000; // 1 ora
-        this._saveSession();
-        // Notifica il bottone FAB
-        if (window.driveConnectBtn) window.driveConnectBtn.update();
-        // Toast di conferma
-        if (typeof toast === 'function') toast(`✓ Drive connesso come ${email}`);
+    async _onExternalToken(token, email) {
+        this.accessToken = token;
+        this.userEmail   = email;
+        this.tokenExpiry = Date.now() + 3600 * 1000; // 1 ora
+
+        try {
+            // 1. Recupera nome e foto da Google
+            const info = await this._apiFetch('https://www.googleapis.com/oauth2/v2/userinfo');
+            this.userName     = info.given_name || info.name || '';
+            this.userPhotoUrl = info.picture || null;
+
+            // 2. Inizializza struttura cartelle Drive
+            await this._ensureRootFolder();
+            await this._ensureLessonsFolder();
+            await this._ensureBgFolder();
+
+            this.connected = true;
+            this._saveSession();
+
+            // 3. Aggiorna UI
+            if (window.driveConnectBtn) window.driveConnectBtn.update();
+            if (typeof toast === 'function') toast(`✓ Drive connesso come ${this.userName || email}`);
+
+            // 4. Carica libreria e ultima lezione (come fa il flusso normale)
+            if (window.libraryMgr) window.libraryMgr.refresh();
+            setTimeout(() => _autoOpenLastLesson(), 800);
+
+        } catch (err) {
+            if (typeof toast === 'function') toast('Errore connessione Drive: ' + err.message, 'error');
+        }
     }
 
     /** Restituisce true se il token è valido. */
