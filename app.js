@@ -253,7 +253,7 @@ class BackgroundManager {
             // Cornice tratteggiata per il bordo di stampa A4
             const { px, py, pw, ph } = this._getPageRect(W, H);
             ctx.save();
-            ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
             ctx.lineWidth = 1;
             ctx.setLineDash([6, 5]);
             ctx.strokeRect(px, py, pw, ph);
@@ -283,7 +283,7 @@ class BackgroundManager {
         // Cornice tratteggiata per il bordo di stampa A4
         const { px, py, pw, ph } = this._getPageRect(W, H);
         ctx.save();
-        ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
         ctx.lineWidth = 1;
         ctx.setLineDash([6, 5]);
         ctx.strokeRect(px, py, pw, ph);
@@ -5102,6 +5102,7 @@ class TimerWidget {
                         this._running = false;
                         this.el.querySelector('#timer-start').textContent = '▶';
                         this.el.classList.add('timer-finished');
+                        this._playBeep();
                         setTimeout(() => this.el.classList.remove('timer-finished'), 3000);
                         return;
                     }
@@ -5164,6 +5165,25 @@ class TimerWidget {
         window.addEventListener('pointerup', () => { this._drag.on = false; });
     }
 
+    _playBeep() {
+        try {
+            const ac = new (window.AudioContext || window.webkitAudioContext)();
+            [0, 0.35, 0.7].forEach(t => {
+                const osc  = ac.createOscillator();
+                const gain = ac.createGain();
+                osc.connect(gain);
+                gain.connect(ac.destination);
+                osc.type = 'sine';
+                osc.frequency.value = 880;
+                gain.gain.setValueAtTime(0.5, ac.currentTime + t);
+                gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + t + 0.3);
+                osc.start(ac.currentTime + t);
+                osc.stop(ac.currentTime + t + 0.3);
+            });
+            setTimeout(() => ac.close(), 2500);
+        } catch(e) { /* AudioContext non disponibile */ }
+    }
+
     show() {
         this.el.style.display = 'flex';
         this.el.style.left = this._x + 'px';
@@ -5193,6 +5213,7 @@ class SpotlightTool {
         this._y      = window.innerHeight / 2;
         this._r      = 120; // raggio px
         this._drag   = { on: false };
+        this._shape  = 'circle'; // 'circle' | 'rect'
     }
 
     create() {
@@ -5210,6 +5231,7 @@ class SpotlightTool {
         ctrl.innerHTML = `
             <button class="spotlight-btn" id="spotlight-smaller" title="Più piccolo">−</button>
             <button class="spotlight-btn" id="spotlight-larger"  title="Più grande">+</button>
+            <button class="spotlight-btn" id="spotlight-shape"   title="Forma: cerchio / rettangolo">⬤</button>
             <button class="spotlight-btn" id="spotlight-close"   title="Chiudi">×</button>`;
         ctrl.style.display = 'none';
         document.body.appendChild(ctrl);
@@ -5224,6 +5246,11 @@ class SpotlightTool {
             this._render();
         });
         ctrl.querySelector('#spotlight-close').addEventListener('click', () => this.hide());
+        ctrl.querySelector('#spotlight-shape').addEventListener('click', () => {
+            this._shape = this._shape === 'circle' ? 'rect' : 'circle';
+            ctrl.querySelector('#spotlight-shape').textContent = this._shape === 'circle' ? '⬤' : '▬';
+            this._render();
+        });
 
         // Trascina il foro (click sul canvas spotlight per muoverlo)
         el.style.pointerEvents = 'none'; // non blocca gli eventi sotto
@@ -5258,19 +5285,37 @@ class SpotlightTool {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
         ctx.fillRect(0, 0, W, H);
 
-        // Foro trasparente (rimuovi il nero nell'area circolare)
+        // Foro trasparente (rimuovi il nero nell'area illuminata)
         ctx.save();
         ctx.globalCompositeOperation = 'destination-out';
-        const grad = ctx.createRadialGradient(
-            this._x, this._y, this._r * 0.7,
-            this._x, this._y, this._r
-        );
-        grad.addColorStop(0, 'rgba(0,0,0,1)');
-        grad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(this._x, this._y, this._r, 0, Math.PI * 2);
-        ctx.fill();
+        if (this._shape === 'circle') {
+            const grad = ctx.createRadialGradient(
+                this._x, this._y, this._r * 0.7,
+                this._x, this._y, this._r
+            );
+            grad.addColorStop(0, 'rgba(0,0,0,1)');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(this._x, this._y, this._r, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            // Forma rettangolare con bordi morbidi tramite shadow
+            const hw = this._r * 1.4; // semi-larghezza
+            const hh = this._r * 0.9; // semi-altezza
+            ctx.shadowColor = 'rgba(0,0,0,0)';
+            ctx.fillStyle = 'rgba(0,0,0,1)';
+            ctx.beginPath();
+            const rx = this._x - hw, ry = this._y - hh;
+            const rw = hw * 2, rh = hh * 2, rad = 18;
+            ctx.moveTo(rx + rad, ry);
+            ctx.arcTo(rx + rw, ry,     rx + rw, ry + rh, rad);
+            ctx.arcTo(rx + rw, ry + rh, rx,     ry + rh, rad);
+            ctx.arcTo(rx,      ry + rh, rx,     ry,       rad);
+            ctx.arcTo(rx,      ry,      rx + rw, ry,      rad);
+            ctx.closePath();
+            ctx.fill();
+        }
         ctx.restore();
 
         // Posiziona ctrl accanto allo spotlight
@@ -5333,21 +5378,12 @@ class TendinaTool {
         const ctrl = document.createElement('div');
         ctrl.id = 'tendina-ctrl';
         ctrl.innerHTML = `
-            <button class="tendina-btn" id="tendina-up"    title="Rivela di più">↑ Su</button>
-            <button class="tendina-btn" id="tendina-down"  title="Copri di più">↓ Giù</button>
+            <span style="font-size:11px;color:#aaa;white-space:nowrap">↕ trascina il bordo</span>
             <button class="tendina-btn" id="tendina-close" title="Chiudi">×</button>`;
         ctrl.style.display = 'none';
         document.body.appendChild(ctrl);
         this._ctrl = ctrl;
 
-        ctrl.querySelector('#tendina-up').addEventListener('click', () => {
-            this._h = Math.max(0, this._h - 40);
-            this._applyHeight();
-        });
-        ctrl.querySelector('#tendina-down').addEventListener('click', () => {
-            this._h = Math.min(window.innerHeight - 40, this._h + 40);
-            this._applyHeight();
-        });
         ctrl.querySelector('#tendina-close').addEventListener('click', () => this.hide());
 
         handle.addEventListener('pointerdown', (e) => {
