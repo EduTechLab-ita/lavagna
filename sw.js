@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v43'; // v43 — fix righello touch, margini lavagna, 2-dita zoom, Timer/Spotlight/Tendina, mini barra 1px
+const CACHE_NAME = 'eduboard-v44'; // v44 — fix scrittura (no setPointerCapture), testo dal punto di click, toolbar scroll, timer input manuale, resize righello più grande
 const urlsToCache = [
   '.',
   './index.html',

@@ -1024,10 +1024,10 @@ class CanvasManager {
         this._twoFingerMode  = false;
         this._twoFingerStart = null;
 
-        // Pointer Events API unificata (gestisce mouse, touch e penna identicamente)
+        // touch-action:none è nel CSS dell'overlay → previene scroll nativo senza setPointerCapture
+        // NON usare setPointerCapture: su LIM provoca pointercancel immediato → tratto interrotto
         el.addEventListener('pointerdown', e => {
             e.preventDefault();
-            el.setPointerCapture(e.pointerId);
             this._activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
             if (this._activePointers.size >= 2 && typeof panMgr !== 'undefined') {
@@ -2127,11 +2127,12 @@ class TextManager {
         this.editing = true;
         this.color   = CONFIG.currentColor || '#000000';
 
-        // Posiziona l'input nel canvas
+        // Posiziona l'input nel canvas (coordinate locali del canvas-area, che ha transform scale)
         const canvasArea = document.getElementById('canvas-area');
         const areaRect   = canvasArea.getBoundingClientRect();
-        const x = clientX - areaRect.left;
-        const y = clientY - areaRect.top;
+        const s = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.scale : 1;
+        const x = (clientX - areaRect.left) / s;
+        const y = (clientY - areaRect.top) / s;
 
         this.inputEl.style.display  = 'block';
         this.inputEl.style.left     = x + 'px';
@@ -4997,6 +4998,12 @@ class TimerWidget {
         el.innerHTML = `
             <div class="timer-drag-bar" id="timer-drag-bar" title="Trascina">⠿ Timer</div>
             <div class="timer-display" id="timer-display">00:00</div>
+            <div class="timer-custom-row" id="timer-custom-row" title="Imposta minuti e secondi">
+                <input class="timer-input" id="timer-input-min" type="number" min="0" max="99" value="0" placeholder="mm">
+                <span class="timer-colon">:</span>
+                <input class="timer-input" id="timer-input-sec" type="number" min="0" max="59" value="0" placeholder="ss">
+                <button class="timer-set-btn" id="timer-set-btn" title="Imposta tempo">✓</button>
+            </div>
             <div class="timer-controls">
                 <button class="timer-btn" id="timer-start" title="Avvia / Pausa">▶</button>
                 <button class="timer-btn" id="timer-reset" title="Reset">↺</button>
@@ -5021,6 +5028,11 @@ class TimerWidget {
         el.querySelector('#timer-close').addEventListener('click', () => this.hide());
         el.querySelector('#timer-mode-btn').addEventListener('click', () => this._toggleMode());
 
+        // Input manuale minuti:secondi
+        el.querySelector('#timer-set-btn').addEventListener('click', () => this._setCustomTime());
+        el.querySelector('#timer-input-min').addEventListener('keydown', e => { if (e.key === 'Enter') this._setCustomTime(); });
+        el.querySelector('#timer-input-sec').addEventListener('keydown', e => { if (e.key === 'Enter') this._setCustomTime(); });
+
         el.querySelectorAll('.timer-preset').forEach(btn => {
             btn.addEventListener('click', () => {
                 this._mode = 'countdown';
@@ -5032,6 +5044,22 @@ class TimerWidget {
                 el.querySelector('#timer-mode-btn').textContent = '⏱';
             });
         });
+    }
+
+    _setCustomTime() {
+        const m = parseInt(this.el.querySelector('#timer-input-min').value) || 0;
+        const s = parseInt(this.el.querySelector('#timer-input-sec').value) || 0;
+        const total = m * 60 + Math.min(s, 59);
+        if (total <= 0) return;
+        clearInterval(this._interval);
+        this._running = false;
+        this._mode = 'countdown';
+        this._seconds = total;
+        this._updateDisplay();
+        this.el.querySelector('#timer-start').textContent = '▶';
+        this.el.querySelector('#timer-mode-btn').textContent = '⏱';
+        this.el.querySelector('#timer-presets').style.display = 'flex';
+        this.el.classList.remove('timer-finished');
     }
 
     _toggleRun() {

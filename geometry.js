@@ -921,21 +921,24 @@ class GeometryManager {
 
 .ruler-resize-handle {
     position: absolute;
-    right: 4px;
+    right: 2px;
     top: 50%;
     transform: translateY(-50%);
-    width: 18px;
-    height: 32px;
+    width: 44px;  /* minimo 44px per hit-area dito su LIM */
+    height: 44px;
     cursor: ew-resize;
     color: rgba(80, 40, 0, 0.6);
-    font-size: 14px;
+    font-size: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
     user-select: none;
+    touch-action: none;
     z-index: 10;
     pointer-events: auto; /* Handle interattivo */
+    border-radius: 6px;
 }
+.ruler-resize-handle:hover { background: rgba(80,40,0,0.10); }
 
 /* ============================================================
    GONIOMETRO

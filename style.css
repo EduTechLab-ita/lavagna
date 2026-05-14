@@ -474,14 +474,21 @@ button {
     display: flex;
     align-items: center;
     gap: 2px;
-    flex-wrap: wrap;
-    justify-content: center;
+    flex-wrap: nowrap;        /* mai 2 righe — lo scrolling è orizzontale */
+    overflow-x: auto;         /* scroll orizzontale se non entra tutto */
+    overflow-y: hidden;
+    scrollbar-width: none;    /* Firefox: nasconde scrollbar */
+    -ms-overflow-style: none; /* IE/Edge */
+    justify-content: flex-start;
+    padding-bottom: 2px;      /* spazio per scrollbar su WebKit se necessario */
 }
+.main-row::-webkit-scrollbar { display: none; } /* Chrome/Safari: nasconde scrollbar */
 
 /* Gruppi di strumenti correlati */
 .tool-group {
     display: flex;
     gap: 2px;
+    flex-shrink: 0; /* non si comprimono mai — permettono lo scroll */
 }
 
 /* Separatore verticale tra gruppi */
@@ -2512,6 +2519,40 @@ body:not(.has-page-bar) #zoom-badge {
     transition: background 0.2s;
 }
 .timer-preset:hover { background: rgba(255,255,255,0.25); }
+/* Riga input manuale */
+.timer-custom-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 14px 4px;
+}
+.timer-input {
+    width: 38px;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 6px;
+    color: #fff;
+    font-size: 16px;
+    text-align: center;
+    padding: 2px 4px;
+    -moz-appearance: textfield;
+}
+.timer-input::-webkit-inner-spin-button,
+.timer-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+.timer-input:focus { outline: none; border-color: #60a5fa; }
+.timer-colon { color: #ccc; font-size: 18px; font-weight: bold; }
+.timer-set-btn {
+    background: #2563eb;
+    border: none;
+    color: #fff;
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.timer-set-btn:hover { background: #1d4ed8; }
+
 .timer-btn, .timer-mode, .timer-close {
     background: rgba(255,255,255,0.15);
     border: none;
