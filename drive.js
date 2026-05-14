@@ -2161,61 +2161,81 @@ class EduBoardConnect {
     async show() {
         if (this._panel) return;
 
-        // 1. Mostra subito il pannello con placeholder — nessuna attesa
+        // 1. Pannello visibile subito — schermata "connessione"
         const panel = document.createElement('div');
         panel.id = 'ec-panel';
         panel.innerHTML = `
-            <div class="ec-header">
-                <span class="ec-title">Connetti Drive</span>
-                <span class="ec-subtitle">Scansiona con EduBoard Connect</span>
+            <div id="ec-view-connect" class="ec-view">
+                <div class="ec-header">
+                    <span class="ec-title">Connetti Drive</span>
+                    <span class="ec-subtitle">Scansiona con EduBoard Connect</span>
+                </div>
+                <div class="ec-qr-wrap">
+                    <div id="ec-qr-canvas" class="ec-qr-canvas"></div>
+                    <div class="ec-qr-loading" id="ec-qr-loading">⏳ Generazione QR...</div>
+                </div>
+                <div class="ec-code" id="ec-code">—</div>
+                <div class="ec-status" id="ec-status">
+                    <span class="ec-dot"></span> Connessione al server...
+                </div>
+                <div class="ec-actions">
+                    <button class="ec-btn-install" id="ec-btn-install">📲 Installa EduBoard Connect</button>
+                    <button class="ec-btn-skip" id="ec-btn-skip">Continua senza account →</button>
+                </div>
             </div>
-            <div class="ec-qr-wrap">
-                <div id="ec-qr-canvas" class="ec-qr-canvas"></div>
-                <div class="ec-qr-loading" id="ec-qr-loading">⏳ Generazione QR...</div>
-            </div>
-            <div class="ec-code" id="ec-code">—</div>
-            <div class="ec-status" id="ec-status">
-                <span class="ec-dot"></span> Connessione al server...
-            </div>
-            <div class="ec-actions">
-                <button class="ec-btn-install" id="ec-btn-install">
-                    📲 Installa EduBoard Connect
-                </button>
-                <button class="ec-btn-skip" id="ec-btn-skip">Continua senza account →</button>
+            <div id="ec-view-install" class="ec-view" style="display:none">
+                <div class="ec-header">
+                    <span class="ec-title">📲 Installa</span>
+                    <span class="ec-subtitle">Scansiona e aggiungi alla schermata Home</span>
+                </div>
+                <div class="ec-qr-wrap">
+                    <div id="ec-install-canvas" class="ec-qr-canvas"></div>
+                </div>
+                <div style="font-size:11px;color:#64748b;text-align:center">board.edutechlab.it/connect.html</div>
+                <button class="ec-btn-back" id="ec-btn-back">← Torna alla connessione</button>
             </div>`;
         document.body.appendChild(panel);
         this._panel = panel;
-        panel.querySelector('#ec-btn-install').addEventListener('click', () => this._showInstallQR());
-        panel.querySelector('#ec-btn-skip').addEventListener('click', () => this.hide());
 
-        // 2. Async: crea sessione e genera QR
+        panel.querySelector('#ec-btn-install').addEventListener('click', () => this._switchToInstall());
+        panel.querySelector('#ec-btn-back').addEventListener('click',    () => this._switchToConnect());
+        panel.querySelector('#ec-btn-skip').addEventListener('click',    () => this.hide());
+
+        // Genera QR installazione in background (già pronto quando serve)
+        const installEl = panel.querySelector('#ec-install-canvas');
+        if (installEl && typeof QRCode !== 'undefined') {
+            new QRCode(installEl, {
+                text: 'https://board.edutechlab.it/connect.html',
+                width: 300, height: 300,
+                colorDark: '#000000', colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        }
+
+        // 2. Async: crea sessione e genera QR connessione
         try {
             const res = await fetch(`${CONNECT_SERVER}?action=create&limId=${this._limId}`).then(r => r.json());
             if (!res.ok) throw new Error('server error');
             this._code = res.code;
 
             const connectUrl = `https://board.edutechlab.it/connect.html?code=${this._code}`;
-
-            // Codice testuale
-            const codeEl = document.getElementById('ec-code');
+            const codeEl    = document.getElementById('ec-code');
             if (codeEl) codeEl.textContent = this._code;
 
-            // Genera QR via libreria JS locale (nessuna API esterna)
-            const qrEl = document.getElementById('ec-qr-canvas');
+            const qrEl     = document.getElementById('ec-qr-canvas');
             const loadingEl = document.getElementById('ec-qr-loading');
             if (qrEl && typeof QRCode !== 'undefined') {
                 new QRCode(qrEl, {
-                    text: connectUrl, width: 200, height: 200,
-                    colorDark: '#0f172a', colorLight: '#ffffff',
+                    text: connectUrl,
+                    width: 300, height: 300,          // genera grande → nitido
+                    colorDark: '#000000', colorLight: '#ffffff',
                     correctLevel: QRCode.CorrectLevel.M
                 });
                 if (loadingEl) loadingEl.style.display = 'none';
             }
 
-            // Aggiorna status
             const statusEl = document.getElementById('ec-status');
             if (statusEl) statusEl.innerHTML = '<span class="ec-dot"></span> In attesa del telefono...';
-
             this._startPolling();
         } catch(e) {
             console.error('[EduBoardConnect] Errore:', e);
@@ -2224,10 +2244,23 @@ class EduBoardConnect {
         }
     }
 
+    _switchToInstall() {
+        const v1 = document.getElementById('ec-view-connect');
+        const v2 = document.getElementById('ec-view-install');
+        if (v1) v1.style.display = 'none';
+        if (v2) v2.style.display = 'flex';
+    }
+
+    _switchToConnect() {
+        const v1 = document.getElementById('ec-view-connect');
+        const v2 = document.getElementById('ec-view-install');
+        if (v1) v1.style.display = 'flex';
+        if (v2) v2.style.display = 'none';
+    }
+
     hide() {
         this._stopPolling();
         if (this._panel) { this._panel.remove(); this._panel = null; }
-        if (this._installPanel) { this._installPanel.remove(); this._installPanel = null; }
     }
 
     _startPolling() {
@@ -2250,40 +2283,16 @@ class EduBoardConnect {
                 const statusEl = document.getElementById('ec-status');
                 if (statusEl) statusEl.textContent = '⚠ Codice scaduto. Chiudi e riapri per riprovare.';
             }
-        } catch(e) { /* silenzioso — riprova al prossimo tick */ }
+        } catch(e) { /* silenzioso */ }
     }
 
     _onConnected(token, email) {
-        // Aggiorna UI pannello
         const statusEl = document.getElementById('ec-status');
-        if (statusEl) {
-            statusEl.innerHTML = '<span style="color:#22c55e">✓ Connesso come ' + email + '</span>';
-        }
-        // Passa il token al DriveManager tramite il metodo existente
+        if (statusEl) statusEl.innerHTML = '<span style="color:#22c55e">✓ Connesso come ' + email + '</span>';
         setTimeout(() => {
             this.hide();
             if (window.driveMgr) window.driveMgr._onExternalToken(token, email);
         }, 1200);
-    }
-
-    _showInstallQR() {
-        const installUrl = 'https://board.edutechlab.it/connect.html';
-        if (this._installPanel) { this._installPanel.remove(); this._installPanel = null; return; }
-        const p = document.createElement('div');
-        p.id = 'ec-install-panel';
-        p.innerHTML = `
-            <div style="font-weight:600;margin-bottom:8px">📲 Installa EduBoard Connect</div>
-            <div id="ec-install-canvas" style="display:flex;justify-content:center;margin:8px auto;"></div>
-            <div style="font-size:12px;color:#94a3b8;text-align:center">Scansiona per aprire la mini-app<br>poi "Aggiungi alla schermata Home"</div>
-            <button onclick="this.closest('#ec-install-panel').remove()" style="margin-top:10px;width:100%;background:rgba(255,255,255,0.1);border:none;color:#fff;padding:8px;border-radius:8px;cursor:pointer">Chiudi</button>`;
-        document.body.appendChild(p);
-        this._installPanel = p;
-        const c = document.getElementById('ec-install-canvas');
-        if (c && typeof QRCode !== 'undefined') new QRCode(c, {
-            text: installUrl, width: 180, height: 180,
-            colorDark: '#0f172a', colorLight: '#ffffff',
-            correctLevel: QRCode.CorrectLevel.M
-        });
     }
 }
 
