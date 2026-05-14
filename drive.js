@@ -211,34 +211,29 @@ class DriveManager {
 
     // Chiamato da EduBoardConnect quando il telefono invia il token
     async _onExternalToken(token, email) {
+        // 1. Connetti subito — la UI si aggiorna immediatamente (senza aspettare le cartelle)
         this.accessToken = token;
         this.userEmail   = email;
-        this.tokenExpiry = Date.now() + 3600 * 1000; // 1 ora
+        this.connected   = true;
+        this.tokenExpiry = Date.now() + 3600 * 1000;
+        this._saveSession();
+        if (window.driveConnectBtn) window.driveConnectBtn.update();
+        if (typeof toast === 'function') toast(`✓ Drive connesso come ${email}`);
 
+        // 2. Arricchimento asincrono: nome, foto, cartelle, libreria, ultima lezione
         try {
-            // 1. Recupera nome e foto da Google
             const info = await this._apiFetch('https://www.googleapis.com/oauth2/v2/userinfo');
             this.userName     = info.given_name || info.name || '';
             this.userPhotoUrl = info.picture || null;
-
-            // 2. Inizializza struttura cartelle Drive
             await this._ensureRootFolder();
             await this._ensureLessonsFolder();
             await this._ensureBgFolder();
-
-            this.connected = true;
             this._saveSession();
-
-            // 3. Aggiorna UI
-            if (window.driveConnectBtn) window.driveConnectBtn.update();
-            if (typeof toast === 'function') toast(`✓ Drive connesso come ${this.userName || email}`);
-
-            // 4. Carica libreria e ultima lezione (come fa il flusso normale)
+            if (window.driveConnectBtn) window.driveConnectBtn.update(); // aggiorna con la foto
             if (window.libraryMgr) window.libraryMgr.refresh();
-            setTimeout(() => _autoOpenLastLesson(), 800);
-
+            _autoOpenLastLesson();
         } catch (err) {
-            if (typeof toast === 'function') toast('Errore connessione Drive: ' + err.message, 'error');
+            console.warn('[EduBoardConnect] Post-connect enrichment:', err.message);
         }
     }
 
@@ -2223,9 +2218,15 @@ class EduBoardConnect {
         panel.querySelector('#ec-btn-install').addEventListener('click', () => this._switchToInstall());
         panel.querySelector('#ec-btn-back').addEventListener('click',    () => this._switchToConnect());
         panel.querySelector('#ec-btn-skip').addEventListener('click',    () => this.hide());
-        panel.querySelector('#ec-btn-manual').addEventListener('click',  () => {
+        panel.querySelector('#ec-btn-manual').addEventListener('click',  async () => {
             this.hide();
-            if (window.driveMgr) window.driveMgr.connect();
+            if (!window.driveMgr) return;
+            try {
+                await window.driveMgr.connect();
+                if (window.driveConnectBtn) window.driveConnectBtn.update();
+                if (window.libraryMgr) window.libraryMgr.refresh();
+                _autoOpenLastLesson();
+            } catch (_) {}
         });
 
         // Genera QR installazione tramite qrserver.com (img standard, sempre leggibile)

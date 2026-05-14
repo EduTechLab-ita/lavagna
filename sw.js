@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v59'; // v59 — _onExternalToken: fetch userinfo + cartelle + libreria + ultima lezione
+const CACHE_NAME = 'eduboard-v60'; // v60 — fix F5: UI aggiornata subito dopo connect; connect.html semplificato
 const urlsToCache = [
   '.',
   './index.html',

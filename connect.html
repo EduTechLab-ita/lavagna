@@ -206,19 +206,17 @@
     <div class="card-title">Installa EduBoard Connect</div>
     <div class="card-text">Aggiungi questa pagina alla schermata Home del tuo telefono.<br><br>
       <strong>iPhone:</strong> tocca 🔗 Condividi → "Aggiungi a Home"<br>
-      <strong>Android:</strong> tocca ⋮ Menu → "Installa app" o "Aggiungi a schermata Home"<br><br>
-      Poi scansiona il QR dalla lavagna per connettere il Drive.</div>
+      <strong>Android:</strong> tocca ⋮ Menu → "Installa app" o "Aggiungi a schermata Home"</div>
+    <button class="btn btn-primary" style="margin-top:20px" onclick="markInstalled()">✓ Ho aggiunto l'app all'Home</button>
   </div>
 
-  <!-- SCHERMATA: Ha il codice ma l'app non è installata come PWA -->
+  <!-- SCHERMATA: Ha il codice ma non ha mai installato l'app -->
   <div id="screen-not-installed" class="card hidden">
-    <div class="card-icon">📲</div>
-    <div class="card-title">Installa prima l'app</div>
-    <div class="card-text">Per connettere il Drive alla lavagna usa <strong>EduBoard Connect</strong> installata sul telefono — così non dovrai inserire le credenziali ogni volta.<br><br>
-      <strong>iPhone:</strong> tocca 🔗 Condividi → "Aggiungi a Home"<br>
-      <strong>Android:</strong> tocca ⋮ Menu → "Installa app"<br><br>
-      Poi riscansiona il QR dalla lavagna.</div>
-    <button class="btn btn-primary" style="margin-top:8px" onclick="proceedWithoutInstall()">Continua comunque</button>
+    <div class="card-icon">⚠️</div>
+    <div class="card-title">App non installata</div>
+    <div class="card-text">Per connetterti tramite QR code devi prima installare <strong>EduBoard Connect</strong> sul telefono.<br><br>
+      Scansiona il secondo QR sulla lavagna (quello in basso) per le istruzioni di installazione.<br><br>
+      In alternativa puoi connetterti direttamente dal PC cliccando <em>"Connetti manualmente dal PC"</em> nella lavagna.</div>
   </div>
 
   <!-- SCHERMATA: Account salvato -->
@@ -461,17 +459,6 @@
       return data;
     }
 
-    // ─── RILEVAMENTO PWA STANDALONE ──────────────────────────────────────────────
-    function isStandalone() {
-      return window.matchMedia('(display-mode: standalone)').matches ||
-             window.navigator.standalone === true;
-    }
-
-    // ─── PROCEDI SENZA INSTALLAZIONE ─────────────────────────────────────────────
-    function proceedWithoutInstall() {
-      showLoginOrSaved();
-    }
-
     function showLoginOrSaved() {
       savedEmail = localStorage.getItem(STORAGE_KEY);
       if (savedEmail) {
@@ -488,7 +475,6 @@
     function init() {
       showScreen('screen-loading');
 
-      // Leggi parametro ?code= dall'URL
       const params = new URLSearchParams(window.location.search);
       sessionCode = params.get('code');
 
@@ -497,13 +483,7 @@
         return;
       }
 
-      // Ha il codice: controlla se l'app è installata come PWA
-      if (!isStandalone()) {
-        showScreen('screen-not-installed');
-        return;
-      }
-
-      // È una PWA installata: procedi normalmente
+      // Ha il codice: procedi direttamente con login/account salvato
       showLoginOrSaved();
     }
 
