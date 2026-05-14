@@ -110,13 +110,13 @@ class BackgroundManager {
         const MARGIN = Math.round(W * 0.04);
         let pw, ph;
         if (this.orientation === 'landscape') {
-            pw = Math.round(W * 0.9);
+            pw = Math.round(W * 0.5);
             ph = Math.round(pw / ratio);
             // Clamp: se ph supera H disponibile, riscala da H
             if (ph > H * 0.9) { ph = Math.round(H * 0.9); pw = Math.round(ph * ratio); }
         } else {
             // Portrait: usa W come base, non H
-            pw = Math.round(W * 0.55);
+            pw = Math.round(W * 0.3);
             ph = Math.round(pw / ratio);
         }
         // px centrato orizzontalmente (non dipende da H → stabile al toggle fullscreen)
@@ -253,11 +253,15 @@ class BackgroundManager {
             // Cornice tratteggiata per il bordo di stampa A4
             const { px, py, pw, ph } = this._getPageRect(W, H);
             ctx.save();
-            ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
-            ctx.lineWidth = 1.5;
-            ctx.setLineDash([10, 6]);
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([6, 5]);
             ctx.strokeRect(px, py, pw, ph);
             ctx.setLineDash([]);
+            ctx.font = '11px system-ui, sans-serif';
+            ctx.fillStyle = 'rgba(148, 163, 184, 0.5)';
+            ctx.textAlign = 'right';
+            ctx.fillText('area stampa', px + pw - 6, py + 14);
             ctx.restore();
             return;
         }
@@ -279,11 +283,15 @@ class BackgroundManager {
         // Cornice tratteggiata per il bordo di stampa A4
         const { px, py, pw, ph } = this._getPageRect(W, H);
         ctx.save();
-        ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([10, 6]);
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([6, 5]);
         ctx.strokeRect(px, py, pw, ph);
         ctx.setLineDash([]);
+        ctx.font = '11px system-ui, sans-serif';
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.5)';
+        ctx.textAlign = 'right';
+        ctx.fillText('area stampa', px + pw - 6, py + 14);
         ctx.restore();
     }
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v46'; // v44 — fix scrittura (no setPointerCapture), testo dal punto di click, toolbar scroll, timer input manuale, resize righello più grande
+const CACHE_NAME = 'eduboard-v47'; // v47 — toolbar btn 44px (tutti su una riga), A4 a 50% canvas (spazio infinito oltre i trattini), bordo stampa sottile con label
 const urlsToCache = [
   '.',
   './index.html',
