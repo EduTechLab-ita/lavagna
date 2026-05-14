@@ -2201,15 +2201,15 @@ class EduBoardConnect {
         panel.querySelector('#ec-btn-back').addEventListener('click',    () => this._switchToConnect());
         panel.querySelector('#ec-btn-skip').addEventListener('click',    () => this.hide());
 
-        // Genera QR installazione in background (già pronto quando serve)
+        // Genera QR installazione tramite qrserver.com (img standard, sempre leggibile)
         const installEl = panel.querySelector('#ec-install-canvas');
-        if (installEl && typeof QRCode !== 'undefined') {
-            new QRCode(installEl, {
-                text: 'https://board.edutechlab.it/connect.html',
-                width: 300, height: 300,
-                colorDark: '#000000', colorLight: '#ffffff',
-                correctLevel: QRCode.CorrectLevel.M
-            });
+        if (installEl) {
+            const installUrl = 'https://board.edutechlab.it/connect.html';
+            const img = document.createElement('img');
+            img.src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=M&data=${encodeURIComponent(installUrl)}`;
+            img.style.cssText = 'width:220px;height:220px;display:block';
+            img.alt = 'QR install';
+            installEl.appendChild(img);
         }
 
         // 2. Async: crea sessione e genera QR connessione
@@ -2222,16 +2222,16 @@ class EduBoardConnect {
             const codeEl    = document.getElementById('ec-code');
             if (codeEl) codeEl.textContent = this._code;
 
-            const qrEl     = document.getElementById('ec-qr-canvas');
+            const qrEl      = document.getElementById('ec-qr-canvas');
             const loadingEl = document.getElementById('ec-qr-loading');
-            if (qrEl && typeof QRCode !== 'undefined') {
-                new QRCode(qrEl, {
-                    text: connectUrl,
-                    width: 300, height: 300,          // genera grande → nitido
-                    colorDark: '#000000', colorLight: '#ffffff',
-                    correctLevel: QRCode.CorrectLevel.M
-                });
-                if (loadingEl) loadingEl.style.display = 'none';
+            if (qrEl) {
+                const img = document.createElement('img');
+                img.src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=M&data=${encodeURIComponent(connectUrl)}`;
+                img.style.cssText = 'width:220px;height:220px;display:block';
+                img.alt = 'QR connessione';
+                img.onload  = () => { if (loadingEl) loadingEl.style.display = 'none'; };
+                img.onerror = () => { if (loadingEl) loadingEl.textContent = '⚠ Errore QR'; };
+                qrEl.appendChild(img);
             }
 
             const statusEl = document.getElementById('ec-status');

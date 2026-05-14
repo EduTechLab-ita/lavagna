@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v55'; // v55 — fix QR illeggibile: rimosso border-radius che tagliava i finder pattern
+const CACHE_NAME = 'eduboard-v56'; // v56 — QR via qrserver.com API (img), rimossa libreria qrcodejs
 const urlsToCache = [
   '.',
   './index.html',
