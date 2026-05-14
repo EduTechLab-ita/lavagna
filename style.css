@@ -282,7 +282,7 @@ button {
     display: flex;
     flex-direction: column;
     align-items: center;
-    max-width: min(92vw, 900px);
+    max-width: min(98vw, 1200px);
     width: 100%;
 }
 
@@ -2584,33 +2584,29 @@ body:not(.has-page-bar) #zoom-badge {
     bottom: 70px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(20,20,30,0.85);
-    color: #fff;
-    border-radius: 30px;
-    padding: 6px 16px;
+    background: transparent;
     display: none;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
     z-index: 8500;
-    font-size: 13px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.4);
 }
-#spotlight-ctrl.visible { display: flex; }
 #spotlight-ctrl button {
-    background: rgba(255,255,255,0.15);
-    border: none;
+    background: rgba(15,23,42,0.82);
+    border: 1px solid rgba(255,255,255,0.2);
     color: #fff;
     border-radius: 50%;
-    width: 28px;
-    height: 28px;
-    font-size: 16px;
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: background 0.2s;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    touch-action: none;
 }
-#spotlight-ctrl button:hover { background: rgba(255,255,255,0.3); }
+#spotlight-ctrl button:hover { background: rgba(30,40,70,0.95); }
 
 /* --- Tendina --- */
 #tendina-cover {
@@ -2650,30 +2646,27 @@ body:not(.has-page-bar) #zoom-badge {
     position: fixed;
     bottom: 70px;
     right: 20px;
-    background: rgba(20,20,30,0.85);
-    color: #fff;
-    border-radius: 30px;
-    padding: 6px 14px;
+    background: transparent;
     display: none;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     z-index: 7600;
-    font-size: 12px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.4);
 }
-#tendina-ctrl.visible { display: flex; }
 #tendina-ctrl button {
-    background: rgba(255,255,255,0.15);
-    border: none;
+    background: rgba(15,23,42,0.82);
+    border: 1px solid rgba(255,255,255,0.2);
     color: #fff;
     border-radius: 50%;
-    width: 26px;
-    height: 26px;
-    font-size: 15px;
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: background 0.2s;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    touch-action: none;
 }
-#tendina-ctrl button:hover { background: rgba(255,255,255,0.3); }
+#tendina-ctrl button:hover { background: rgba(30,40,70,0.95); }
+#tendina-ctrl span { display: none; }

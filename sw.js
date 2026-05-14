@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v48'; // v48 — bordo A4 visibile (0.4), timer beep, spotlight rettangolo, tendina drag-only
+const CACHE_NAME = 'eduboard-v49'; // v49 — toolbar maxwidth 1200px (Cancella visibile), trattini A4 più scuri, label basso-sinistra, ctrl spotlight/tendina senza sfondo nero
 const urlsToCache = [
   '.',
   './index.html',

@@ -253,15 +253,15 @@ class BackgroundManager {
             // Cornice tratteggiata per il bordo di stampa A4
             const { px, py, pw, ph } = this._getPageRect(W, H);
             ctx.save();
-            ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
+            ctx.strokeStyle = 'rgba(100, 120, 160, 0.65)';
             ctx.lineWidth = 1;
             ctx.setLineDash([6, 5]);
             ctx.strokeRect(px, py, pw, ph);
             ctx.setLineDash([]);
             ctx.font = '11px system-ui, sans-serif';
-            ctx.fillStyle = 'rgba(148, 163, 184, 0.5)';
-            ctx.textAlign = 'right';
-            ctx.fillText('area stampa', px + pw - 6, py + 14);
+            ctx.fillStyle = 'rgba(100, 120, 160, 0.65)';
+            ctx.textAlign = 'left';
+            ctx.fillText('area stampa', px + 6, py + ph - 6);
             ctx.restore();
             return;
         }
@@ -283,7 +283,7 @@ class BackgroundManager {
         // Cornice tratteggiata per il bordo di stampa A4
         const { px, py, pw, ph } = this._getPageRect(W, H);
         ctx.save();
-        ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
+        ctx.strokeStyle = 'rgba(100, 120, 160, 0.65)';
         ctx.lineWidth = 1;
         ctx.setLineDash([6, 5]);
         ctx.strokeRect(px, py, pw, ph);
