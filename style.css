@@ -2799,6 +2799,20 @@ body:not(.has-page-bar) #zoom-badge {
     width: 100%;
 }
 .ec-btn-back:hover { background: rgba(255,255,255,0.14); color: #fff; }
+.ec-btn-manual {
+    background: none;
+    border: none;
+    color: #475569;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 4px 8px;
+    text-align: center;
+    transition: color 0.2s;
+    width: 100%;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.ec-btn-manual:hover { color: #94a3b8; }
 .ec-view-title {
     font-size: 13px;
     font-weight: 600;

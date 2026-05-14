@@ -210,6 +210,17 @@
       Poi scansiona il QR dalla lavagna per connettere il Drive.</div>
   </div>
 
+  <!-- SCHERMATA: Ha il codice ma l'app non è installata come PWA -->
+  <div id="screen-not-installed" class="card hidden">
+    <div class="card-icon">📲</div>
+    <div class="card-title">Installa prima l'app</div>
+    <div class="card-text">Per connettere il Drive alla lavagna usa <strong>EduBoard Connect</strong> installata sul telefono — così non dovrai inserire le credenziali ogni volta.<br><br>
+      <strong>iPhone:</strong> tocca 🔗 Condividi → "Aggiungi a Home"<br>
+      <strong>Android:</strong> tocca ⋮ Menu → "Installa app"<br><br>
+      Poi riscansiona il QR dalla lavagna.</div>
+    <button class="btn btn-primary" style="margin-top:8px" onclick="proceedWithoutInstall()">Continua comunque</button>
+  </div>
+
   <!-- SCHERMATA: Account salvato -->
   <div id="screen-saved" class="card hidden">
     <div class="card-icon">👤</div>
@@ -276,7 +287,7 @@
 
     // ─── UTILITY SCHERMATE ───────────────────────────────────────────────────────
     const screens = [
-      'screen-loading', 'screen-no-code', 'screen-saved',
+      'screen-loading', 'screen-no-code', 'screen-not-installed', 'screen-saved',
       'screen-login', 'screen-connecting', 'screen-success',
       'screen-error', 'screen-expired'
     ];
@@ -450,6 +461,29 @@
       return data;
     }
 
+    // ─── RILEVAMENTO PWA STANDALONE ──────────────────────────────────────────────
+    function isStandalone() {
+      return window.matchMedia('(display-mode: standalone)').matches ||
+             window.navigator.standalone === true;
+    }
+
+    // ─── PROCEDI SENZA INSTALLAZIONE ─────────────────────────────────────────────
+    function proceedWithoutInstall() {
+      showLoginOrSaved();
+    }
+
+    function showLoginOrSaved() {
+      savedEmail = localStorage.getItem(STORAGE_KEY);
+      if (savedEmail) {
+        document.getElementById('saved-email-label').textContent = savedEmail;
+        showScreen('screen-saved');
+        if (typeof google !== 'undefined' && google.accounts) initGIS(savedEmail);
+      } else {
+        showScreen('screen-login');
+        if (typeof google !== 'undefined' && google.accounts) initGIS(null);
+      }
+    }
+
     // ─── INIT ─────────────────────────────────────────────────────────────────────
     function init() {
       showScreen('screen-loading');
@@ -463,23 +497,14 @@
         return;
       }
 
-      // Leggi account salvato
-      savedEmail = localStorage.getItem(STORAGE_KEY);
-
-      if (savedEmail) {
-        document.getElementById('saved-email-label').textContent = savedEmail;
-        showScreen('screen-saved');
-        // Pre-inizializza GIS in background con hint
-        if (typeof google !== 'undefined' && google.accounts) {
-          initGIS(savedEmail);
-        }
-      } else {
-        showScreen('screen-login');
-        // Pre-inizializza GIS in background
-        if (typeof google !== 'undefined' && google.accounts) {
-          initGIS(null);
-        }
+      // Ha il codice: controlla se l'app è installata come PWA
+      if (!isStandalone()) {
+        showScreen('screen-not-installed');
+        return;
       }
+
+      // È una PWA installata: procedi normalmente
+      showLoginOrSaved();
     }
 
     // Avvia quando il DOM è pronto

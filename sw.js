@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v57'; // v57 — fix _onExternalToken: nomi proprietà corretti + _saveSession()
+const CACHE_NAME = 'eduboard-v58'; // v58 — connect.html: rilevamento PWA standalone + connetti manualmente dal PC
 const urlsToCache = [
   '.',
   './index.html',

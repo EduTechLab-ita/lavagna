@@ -2183,6 +2183,7 @@ class EduBoardConnect {
                 <div class="ec-actions">
                     <button class="ec-btn-install" id="ec-btn-install">📲 Installa EduBoard Connect</button>
                     <button class="ec-btn-skip" id="ec-btn-skip">Continua senza account →</button>
+                    <button class="ec-btn-manual" id="ec-btn-manual">🖥 Connetti manualmente dal PC</button>
                 </div>
             </div>
             <div id="ec-view-install" class="ec-view" style="display:none">
@@ -2202,6 +2203,10 @@ class EduBoardConnect {
         panel.querySelector('#ec-btn-install').addEventListener('click', () => this._switchToInstall());
         panel.querySelector('#ec-btn-back').addEventListener('click',    () => this._switchToConnect());
         panel.querySelector('#ec-btn-skip').addEventListener('click',    () => this.hide());
+        panel.querySelector('#ec-btn-manual').addEventListener('click',  () => {
+            this.hide();
+            if (window.driveMgr) window.driveMgr.connect();
+        });
 
         // Genera QR installazione tramite qrserver.com (img standard, sempre leggibile)
         const installEl = panel.querySelector('#ec-install-canvas');
