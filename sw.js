@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v42'; // v42 — fix sfondo aggiornamento immediato, spacing LIM, oggetti allineati ai disegni
+const CACHE_NAME = 'eduboard-v43'; // v43 — fix righello touch, margini lavagna, 2-dita zoom, Timer/Spotlight/Tendina, mini barra 1px
 const urlsToCache = [
   '.',
   './index.html',

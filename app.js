@@ -1018,16 +1018,57 @@ class CanvasManager {
         el.style.pointerEvents = 'auto'; // overlay riceve eventi
         this.canvas.style.pointerEvents = 'none'; // draw-canvas non riceve eventi diretti
 
+        // Traccia tutti i pointer attivi (supporta 2 dita indipendentemente dal pointerType)
+        // Necessario per LIM con penna che emula il dito (pointerType = 'pen' non 'touch')
+        this._activePointers = new Map(); // pointerId → {x, y}
+        this._twoFingerMode  = false;
+        this._twoFingerStart = null;
+
         // Pointer Events API unificata (gestisce mouse, touch e penna identicamente)
         el.addEventListener('pointerdown', e => {
-            // Pinch a 2 dita: non interferire (gestito da PanManager via touchstart)
-            if (e.pointerType === 'touch' && e.isPrimary === false) return;
             e.preventDefault();
             el.setPointerCapture(e.pointerId);
+            this._activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+            if (this._activePointers.size >= 2 && typeof panMgr !== 'undefined') {
+                // Modalità 2 dita: pan + zoom, qualunque sia il pointerType
+                this._twoFingerMode = true;
+                CONFIG.isDrawing = false; // annulla eventuale tratto in corso
+                const pts = Array.from(this._activePointers.values());
+                this._twoFingerStart = {
+                    dx:    panMgr.dx,
+                    dy:    panMgr.dy,
+                    scale: panMgr.scale,
+                    midX:  (pts[0].x + pts[1].x) / 2,
+                    midY:  (pts[0].y + pts[1].y) / 2,
+                    dist:  Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y) || 1,
+                };
+                return;
+            }
             this._onStart(e);
         }, { passive: false });
 
         el.addEventListener('pointermove', e => {
+            this._activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+            if (this._twoFingerMode && this._activePointers.size >= 2 &&
+                typeof panMgr !== 'undefined' && this._twoFingerStart) {
+                const pts = Array.from(this._activePointers.values());
+                const newMidX = (pts[0].x + pts[1].x) / 2;
+                const newMidY = (pts[0].y + pts[1].y) / 2;
+                const newDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y) || 1;
+                const sf = this._twoFingerStart;
+                const newScale = Math.max(0.2, Math.min(4, sf.scale * (newDist / sf.dist)));
+                // Zoom centrato sul midpoint iniziale + pan del midpoint
+                panMgr.dx    = sf.midX - (sf.midX - sf.dx) * (newScale / sf.scale) + (newMidX - sf.midX);
+                panMgr.dy    = sf.midY - (sf.midY - sf.dy) * (newScale / sf.scale) + (newMidY - sf.midY);
+                panMgr.scale = newScale;
+                panMgr._applyTransform();
+                panMgr._showZoomIndicator();
+                return;
+            }
+
+            // Singolo dito/penna: gestione normale
             if (e.pointerType === 'touch' && e.isPrimary === false) return;
             // getCoalescedEvents: restituisce tutti i campioni hardware accumulati dal browser
             // (anche su PC lenti), evitando salti/scatti quando gli eventi arrivano rarefatti
@@ -1036,12 +1077,25 @@ class CanvasManager {
         }, { passive: false });
 
         el.addEventListener('pointerup', e => {
+            this._activePointers.delete(e.pointerId);
+            if (this._twoFingerMode) {
+                if (this._activePointers.size < 2) {
+                    this._twoFingerMode  = false;
+                    this._twoFingerStart = null;
+                    CONFIG.isDrawing = false;
+                }
+                return;
+            }
             if (e.pointerType === 'touch' && e.isPrimary === false) return;
             this._onEnd(e);
         });
 
         el.addEventListener('pointercancel', e => {
-            // Tratta come fine tratto (es. sistema interrompe il gesto)
+            this._activePointers.delete(e.pointerId);
+            if (this._twoFingerMode && this._activePointers.size < 2) {
+                this._twoFingerMode  = false;
+                this._twoFingerStart = null;
+            }
             this._onEnd(e);
         });
     }
@@ -2455,6 +2509,11 @@ function setupFullscreen() {
             if (btnExit) btnExit.style.display = 'flex';
             if (icon)    icon.innerHTML = '<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>';
             if (label)   label.textContent = 'Riduci';
+            // Modalità compatta: chiudi la toolbar automaticamente in fullscreen
+            // La linguetta (toggle) rimane visibile per riaprirla al bisogno
+            if (typeof toolbarMgr !== 'undefined' && toolbarMgr?.visible) {
+                toolbarMgr.hide();
+            }
         } else {
             document.body.classList.remove('fullscreen-mode');
             if (header) header.style.display = '';
@@ -2682,7 +2741,7 @@ class PanManager {
         const { pw } = (typeof bgMgr !== 'undefined' && bgMgr)
             ? bgMgr._getPageRect(W, H)
             : { pw: Math.round(W * 0.9) };
-        return (vW - 40) / pw; // 40px = 20px margine per lato
+        return (vW - 40) * 0.80 / pw; // 80% → margine visibile reale intorno alla pagina (non solo body CSS)
     }
 
     centerView() {
@@ -4852,10 +4911,10 @@ function setupMiniSizeBar() {
     const bar = document.getElementById('mini-size-bar');
     if (!bar) return;
 
-    // Dimensioni esposte: stessa 4 principali della toolbar
-    const SIZES = [3, 6, 10, 16];
+    // Dimensioni esposte: include extra-small (1px)
+    const SIZES = [1, 3, 6, 10, 16];
     // SVG stroke-width proporzionale per l'icona
-    const SIZE_SW = [1.5, 3, 5, 8];
+    const SIZE_SW = [0.8, 1.5, 3, 5, 8];
 
     let _toolbarOpen = false;
 
@@ -4912,6 +4971,405 @@ function setupMiniSizeBar() {
 }
 
 // =============================================================================
+// SEZIONE 13f — Overlay Tools: Timer, Spotlight, Tendina didattica
+// =============================================================================
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIMER — Cronometro / Conto alla rovescia draggabile sul canvas
+// ─────────────────────────────────────────────────────────────────────────────
+
+class TimerWidget {
+    constructor() {
+        this.el        = null;
+        this.visible   = false;
+        this._interval = null;
+        this._seconds  = 0;       // secondi rimasti (countdown) o trascorsi (stopwatch)
+        this._running  = false;
+        this._mode     = 'countdown'; // 'countdown' | 'stopwatch'
+        this._drag     = { on: false, startX: 0, startY: 0, origX: 0, origY: 0 };
+        this._x        = 40;
+        this._y        = 100;
+    }
+
+    create() {
+        const el = document.createElement('div');
+        el.id = 'timer-widget';
+        el.innerHTML = `
+            <div class="timer-drag-bar" id="timer-drag-bar" title="Trascina">⠿ Timer</div>
+            <div class="timer-display" id="timer-display">00:00</div>
+            <div class="timer-controls">
+                <button class="timer-btn" id="timer-start" title="Avvia / Pausa">▶</button>
+                <button class="timer-btn" id="timer-reset" title="Reset">↺</button>
+                <button class="timer-mode" id="timer-mode-btn" title="Cambia modalità">⏱</button>
+            </div>
+            <div class="timer-presets" id="timer-presets">
+                <button class="timer-preset" data-sec="60">1'</button>
+                <button class="timer-preset" data-sec="120">2'</button>
+                <button class="timer-preset" data-sec="180">3'</button>
+                <button class="timer-preset" data-sec="300">5'</button>
+                <button class="timer-preset" data-sec="600">10'</button>
+            </div>
+            <button class="timer-close" id="timer-close" title="Chiudi">×</button>`;
+        el.style.display = 'none';
+        document.body.appendChild(el);
+        this.el = el;
+
+        this._setupDrag();
+
+        el.querySelector('#timer-start').addEventListener('click', () => this._toggleRun());
+        el.querySelector('#timer-reset').addEventListener('click', () => this._reset());
+        el.querySelector('#timer-close').addEventListener('click', () => this.hide());
+        el.querySelector('#timer-mode-btn').addEventListener('click', () => this._toggleMode());
+
+        el.querySelectorAll('.timer-preset').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this._mode = 'countdown';
+                this._seconds = parseInt(btn.dataset.sec);
+                this._running = false;
+                clearInterval(this._interval);
+                this._updateDisplay();
+                el.querySelector('#timer-start').textContent = '▶';
+                el.querySelector('#timer-mode-btn').textContent = '⏱';
+            });
+        });
+    }
+
+    _toggleRun() {
+        if (this._running) {
+            clearInterval(this._interval);
+            this._running = false;
+            this.el.querySelector('#timer-start').textContent = '▶';
+        } else {
+            this._running = true;
+            this.el.querySelector('#timer-start').textContent = '⏸';
+            this._interval = setInterval(() => {
+                if (this._mode === 'countdown') {
+                    if (this._seconds <= 0) {
+                        clearInterval(this._interval);
+                        this._running = false;
+                        this.el.querySelector('#timer-start').textContent = '▶';
+                        this.el.classList.add('timer-finished');
+                        setTimeout(() => this.el.classList.remove('timer-finished'), 3000);
+                        return;
+                    }
+                    this._seconds--;
+                } else {
+                    this._seconds++;
+                }
+                this._updateDisplay();
+            }, 1000);
+        }
+    }
+
+    _reset() {
+        clearInterval(this._interval);
+        this._running = false;
+        this._seconds = 0;
+        this._updateDisplay();
+        this.el.querySelector('#timer-start').textContent = '▶';
+        this.el.classList.remove('timer-finished');
+    }
+
+    _toggleMode() {
+        this._reset();
+        this._mode = this._mode === 'countdown' ? 'stopwatch' : 'countdown';
+        this.el.querySelector('#timer-mode-btn').textContent =
+            this._mode === 'countdown' ? '⏱' : '⏲';
+        this.el.querySelector('#timer-presets').style.display =
+            this._mode === 'countdown' ? 'flex' : 'none';
+    }
+
+    _updateDisplay() {
+        const m = Math.floor(this._seconds / 60);
+        const s = this._seconds % 60;
+        const txt = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+        this.el.querySelector('#timer-display').textContent = txt;
+        // Cambia colore quando il tempo sta per scadere
+        if (this._mode === 'countdown' && this._seconds <= 10 && this._seconds > 0) {
+            this.el.querySelector('#timer-display').style.color = '#ef4444';
+        } else {
+            this.el.querySelector('#timer-display').style.color = '';
+        }
+    }
+
+    _setupDrag() {
+        const bar = this.el.querySelector('#timer-drag-bar');
+        bar.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            bar.setPointerCapture(e.pointerId);
+            this._drag = { on: true, startX: e.clientX, startY: e.clientY,
+                           origX: this._x, origY: this._y };
+        });
+        window.addEventListener('pointermove', (e) => {
+            if (!this._drag.on) return;
+            this._x = this._drag.origX + (e.clientX - this._drag.startX);
+            this._y = this._drag.origY + (e.clientY - this._drag.startY);
+            this.el.style.left = this._x + 'px';
+            this.el.style.top  = this._y + 'px';
+        });
+        window.addEventListener('pointerup', () => { this._drag.on = false; });
+    }
+
+    show() {
+        this.el.style.display = 'flex';
+        this.el.style.left = this._x + 'px';
+        this.el.style.top  = this._y + 'px';
+        this.visible = true;
+    }
+
+    hide() {
+        clearInterval(this._interval);
+        this._running = false;
+        this.el.style.display = 'none';
+        this.visible = false;
+        const btn = document.getElementById('btn-timer');
+        if (btn) btn.classList.remove('active');
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SPOTLIGHT — Overlay scuro con foro circolare draggabile (focalizza attenzione)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class SpotlightTool {
+    constructor() {
+        this.el      = null;
+        this.visible = false;
+        this._x      = window.innerWidth  / 2;
+        this._y      = window.innerHeight / 2;
+        this._r      = 120; // raggio px
+        this._drag   = { on: false };
+    }
+
+    create() {
+        const el = document.createElement('canvas');
+        el.id = 'spotlight-canvas';
+        el.style.cssText = `
+            position:fixed; top:0; left:0; pointer-events:none;
+            z-index:160; display:none;`;
+        document.body.appendChild(el);
+        this.el = el;
+
+        // Controlli spotlight
+        const ctrl = document.createElement('div');
+        ctrl.id = 'spotlight-ctrl';
+        ctrl.innerHTML = `
+            <button class="spotlight-btn" id="spotlight-smaller" title="Più piccolo">−</button>
+            <button class="spotlight-btn" id="spotlight-larger"  title="Più grande">+</button>
+            <button class="spotlight-btn" id="spotlight-close"   title="Chiudi">×</button>`;
+        ctrl.style.display = 'none';
+        document.body.appendChild(ctrl);
+        this._ctrl = ctrl;
+
+        ctrl.querySelector('#spotlight-smaller').addEventListener('click', () => {
+            this._r = Math.max(40, this._r - 20);
+            this._render();
+        });
+        ctrl.querySelector('#spotlight-larger').addEventListener('click', () => {
+            this._r = Math.min(400, this._r + 20);
+            this._render();
+        });
+        ctrl.querySelector('#spotlight-close').addEventListener('click', () => this.hide());
+
+        // Trascina il foro (click sul canvas spotlight per muoverlo)
+        el.style.pointerEvents = 'none'; // non blocca gli eventi sotto
+        // Usiamo un div trasparente sopra per il drag
+        const dragArea = document.createElement('div');
+        dragArea.id = 'spotlight-drag-area';
+        dragArea.style.cssText = `
+            position:fixed; top:0; left:0; width:100%; height:100%;
+            z-index:161; display:none; cursor:none;`;
+        document.body.appendChild(dragArea);
+        this._dragArea = dragArea;
+
+        dragArea.addEventListener('pointermove', (e) => {
+            this._x = e.clientX;
+            this._y = e.clientY;
+            this._render();
+        });
+        dragArea.addEventListener('pointerdown', (e) => {
+            // Click fuori dal foro → niente (il foro segue il cursore automaticamente)
+        });
+    }
+
+    _render() {
+        const W = window.innerWidth;
+        const H = window.innerHeight;
+        this.el.width  = W;
+        this.el.height = H;
+        const ctx = this.el.getContext('2d');
+        ctx.clearRect(0, 0, W, H);
+
+        // Overlay scuro con foro
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.fillRect(0, 0, W, H);
+
+        // Foro trasparente (rimuovi il nero nell'area circolare)
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
+        const grad = ctx.createRadialGradient(
+            this._x, this._y, this._r * 0.7,
+            this._x, this._y, this._r
+        );
+        grad.addColorStop(0, 'rgba(0,0,0,1)');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(this._x, this._y, this._r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Posiziona ctrl accanto allo spotlight
+        if (this._ctrl) {
+            this._ctrl.style.left = Math.min(this._x + this._r + 10, W - 130) + 'px';
+            this._ctrl.style.top  = Math.max(this._y - 20, 10) + 'px';
+        }
+    }
+
+    show() {
+        this._x = window.innerWidth  / 2;
+        this._y = window.innerHeight / 2;
+        this.el.style.display      = 'block';
+        this._dragArea.style.display = 'block';
+        if (this._ctrl) this._ctrl.style.display = 'flex';
+        this._render();
+        this.visible = true;
+    }
+
+    hide() {
+        this.el.style.display        = 'none';
+        this._dragArea.style.display = 'none';
+        if (this._ctrl) this._ctrl.style.display = 'none';
+        this.visible = false;
+        const btn = document.getElementById('btn-spotlight');
+        if (btn) btn.classList.remove('active');
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TENDINA — Rettangolo scorrevole che copre il canvas per rivelare a poco a poco
+// ─────────────────────────────────────────────────────────────────────────────
+
+class TendinaTool {
+    constructor() {
+        this.el      = null;
+        this.visible = false;
+        this._h      = 0;    // altezza coperta dall'alto (px)
+        this._drag   = { on: false, startY: 0, origH: 0 };
+        this._dir    = 'top'; // 'top' | 'bottom' | 'left' | 'right'
+    }
+
+    create() {
+        const el = document.createElement('div');
+        el.id = 'tendina-cover';
+        el.style.cssText = `
+            position:fixed; top:0; left:0; width:100%; height:0;
+            background:#1e293b; z-index:155; display:none;
+            transition: none;`;
+        document.body.appendChild(el);
+        this.el = el;
+
+        // Handle trascinamento nella parte bassa della tendina
+        const handle = document.createElement('div');
+        handle.id = 'tendina-handle';
+        handle.innerHTML = '⋯ trascina per rivelare';
+        el.appendChild(handle);
+
+        // Bottoni controllo
+        const ctrl = document.createElement('div');
+        ctrl.id = 'tendina-ctrl';
+        ctrl.innerHTML = `
+            <button class="tendina-btn" id="tendina-up"    title="Rivela di più">↑ Su</button>
+            <button class="tendina-btn" id="tendina-down"  title="Copri di più">↓ Giù</button>
+            <button class="tendina-btn" id="tendina-close" title="Chiudi">×</button>`;
+        ctrl.style.display = 'none';
+        document.body.appendChild(ctrl);
+        this._ctrl = ctrl;
+
+        ctrl.querySelector('#tendina-up').addEventListener('click', () => {
+            this._h = Math.max(0, this._h - 40);
+            this._applyHeight();
+        });
+        ctrl.querySelector('#tendina-down').addEventListener('click', () => {
+            this._h = Math.min(window.innerHeight - 40, this._h + 40);
+            this._applyHeight();
+        });
+        ctrl.querySelector('#tendina-close').addEventListener('click', () => this.hide());
+
+        handle.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handle.setPointerCapture(e.pointerId);
+            this._drag = { on: true, startY: e.clientY, origH: this._h };
+        });
+        window.addEventListener('pointermove', (e) => {
+            if (!this._drag.on) return;
+            this._h = Math.max(0, Math.min(
+                window.innerHeight - 40,
+                this._drag.origH + (e.clientY - this._drag.startY)
+            ));
+            this._applyHeight();
+        });
+        window.addEventListener('pointerup', () => { this._drag.on = false; });
+    }
+
+    _applyHeight() {
+        this.el.style.height = this._h + 'px';
+        if (this._ctrl) {
+            this._ctrl.style.top  = (this._h + 4) + 'px';
+            this._ctrl.style.left = '50%';
+            this._ctrl.style.transform = 'translateX(-50%)';
+        }
+    }
+
+    show() {
+        this._h = Math.round(window.innerHeight * 0.3); // copre il 30% iniziale
+        this.el.style.display      = 'block';
+        if (this._ctrl) this._ctrl.style.display = 'flex';
+        this._applyHeight();
+        this.visible = true;
+    }
+
+    hide() {
+        this.el.style.display        = 'none';
+        if (this._ctrl) this._ctrl.style.display = 'none';
+        this.visible = false;
+        const btn = document.getElementById('btn-tendina');
+        if (btn) btn.classList.remove('active');
+    }
+}
+
+// Istanze globali (create nell'INIT)
+let timerWidget, spotlightTool, tendinaTool;
+
+function setupOverlayTools() {
+    timerWidget   = new TimerWidget();
+    spotlightTool = new SpotlightTool();
+    tendinaTool   = new TendinaTool();
+    timerWidget.create();
+    spotlightTool.create();
+    tendinaTool.create();
+
+    const btnTimer     = document.getElementById('btn-timer');
+    const btnSpotlight = document.getElementById('btn-spotlight');
+    const btnTendina   = document.getElementById('btn-tendina');
+
+    if (btnTimer) btnTimer.addEventListener('click', () => {
+        if (timerWidget.visible) { timerWidget.hide(); btnTimer.classList.remove('active'); }
+        else { timerWidget.show(); btnTimer.classList.add('active'); }
+    });
+    if (btnSpotlight) btnSpotlight.addEventListener('click', () => {
+        if (spotlightTool.visible) { spotlightTool.hide(); btnSpotlight.classList.remove('active'); }
+        else { spotlightTool.show(); btnSpotlight.classList.add('active'); }
+    });
+    if (btnTendina) btnTendina.addEventListener('click', () => {
+        if (tendinaTool.visible) { tendinaTool.hide(); btnTendina.classList.remove('active'); }
+        else { tendinaTool.show(); btnTendina.classList.add('active'); }
+    });
+}
+
+// =============================================================================
 // SEZIONE 14 — INIT
 // Istanziazione globale dei manager e avvio dell'applicazione.
 // =============================================================================
@@ -4940,6 +5398,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupProjectName();   // Feature 6
     setupMiniColorBar();  // Mini barra colori rapida (sinistra freccia, solo toolbar chiusa)
     setupMiniSizeBar();   // Mini barra dimensioni tratto (destra freccia, solo toolbar chiusa)
+    setupOverlayTools();  // Feature: Timer, Spotlight, Tendina didattica
 
     // PageManager — pagine multiple
     pageManager = new PageManager(canvasMgr, objectLayer, bgMgr);

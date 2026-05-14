@@ -26,7 +26,7 @@
                 <img src="./icon-192x192.png" alt="EduBoard" class="logo-icon">
                 <div class="logo-info">
                     <span class="logo-text"><span class="logo-edu">Edu</span><span class="logo-board">Board</span></span>
-                    <span class="logo-sub">v42 &nbsp;·&nbsp; © EduTechLab di Rizzotto Fabio</span>
+                    <span class="logo-sub">v43 &nbsp;·&nbsp; © EduTechLab di Rizzotto Fabio</span>
                 </div>
             </div>
             <div class="project-badge" id="project-name">Nuova Lavagna</div>
@@ -151,6 +151,7 @@
                 </div>
                 <div class="options-divider"></div>
                 <div class="options-sizes" id="options-sizes">
+                    <button class="size-btn" data-size="1" title="Stilo extra-fine (1px)"><span class="size-dot" style="width:2px;height:2px"></span></button>
                     <button class="size-btn active" data-size="3"><span class="size-dot" style="width:4px;height:4px"></span></button>
                     <button class="size-btn" data-size="6"><span class="size-dot" style="width:7px;height:7px"></span></button>
                     <button class="size-btn" data-size="10"><span class="size-dot" style="width:11px;height:11px"></span></button>
@@ -248,6 +249,24 @@
                             <path d="M21 15l-3.5-3.5L14 15"/>
                         </svg>
                         <span>Importa</span>
+                    </button>
+                </div>
+
+                <div class="tool-separator"></div>
+
+                <!-- Gruppo 3b: Didattica -->
+                <div class="tool-group">
+                    <button class="tool-btn action-btn" id="btn-timer" title="Timer countdown / cronometro">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 3"/><path d="M9.5 2.5h5M12 2.5v3"/></svg>
+                        <span>Timer</span>
+                    </button>
+                    <button class="tool-btn action-btn" id="btn-spotlight" title="Spotlight — evidenzia area schermo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+                        <span>Spotlight</span>
+                    </button>
+                    <button class="tool-btn action-btn" id="btn-tendina" title="Tendina — copri e rivela la lavagna">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="2" width="20" height="10" rx="1" fill="currentColor" opacity="0.4"/><rect x="2" y="2" width="20" height="20" rx="1"/><line x1="2" y1="12" x2="22" y2="12" stroke-dasharray="3,2"/><path d="M8 15l4 4 4-4"/></svg>
+                        <span>Tendina</span>
                     </button>
                 </div>
 

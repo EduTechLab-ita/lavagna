@@ -2445,3 +2445,193 @@ body:not(.has-page-bar) #zoom-badge {
 #zoom-reset-btn:hover {
     background: #2563eb;
 }
+
+/* =============================================================================
+   OVERLAY TOOLS — Timer, Spotlight, Tendina
+   ============================================================================= */
+
+/* --- Timer Widget --- */
+#timer-widget {
+    position: fixed;
+    top: 100px;
+    right: 20px;
+    background: rgba(20,20,30,0.92);
+    color: #fff;
+    border-radius: 14px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    z-index: 9000;
+    min-width: 180px;
+    user-select: none;
+    font-family: 'Segoe UI', sans-serif;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+}
+.timer-drag-bar, #timer-drag-bar {
+    background: rgba(255,255,255,0.08);
+    border-radius: 14px 14px 0 0;
+    padding: 6px 12px;
+    cursor: grab;
+    font-size: 11px;
+    color: #aaa;
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+}
+.timer-drag-bar:active, #timer-drag-bar:active { cursor: grabbing; }
+.timer-display, #timer-display {
+    font-size: 42px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+    transition: color 0.3s;
+    padding: 10px 14px 4px;
+}
+.timer-controls {
+    display: flex;
+    gap: 8px;
+    padding: 4px 14px;
+}
+.timer-presets, #timer-presets {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 4px 10px 10px;
+}
+.timer-preset {
+    background: rgba(255,255,255,0.12);
+    border: none;
+    color: #fff;
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.timer-preset:hover { background: rgba(255,255,255,0.25); }
+.timer-btn, .timer-mode, .timer-close {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: #fff;
+    border-radius: 8px;
+    padding: 5px 12px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.timer-btn:hover, .timer-mode:hover, .timer-close:hover { background: rgba(255,255,255,0.3); }
+.timer-close { background: rgba(220,50,50,0.3); }
+.timer-close:hover { background: rgba(220,50,50,0.6); }
+#timer-widget.timer-finished .timer-display,
+#timer-widget.timer-finished #timer-display { color: #ef4444; animation: timer-blink 0.5s step-end 6; }
+@keyframes timer-blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* --- Spotlight --- */
+#spotlight-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 8000;
+    pointer-events: none;
+    display: none;
+}
+#spotlight-canvas.visible { display: block; }
+#spotlight-ctrl {
+    position: fixed;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(20,20,30,0.85);
+    color: #fff;
+    border-radius: 30px;
+    padding: 6px 16px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    z-index: 8500;
+    font-size: 13px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+}
+#spotlight-ctrl.visible { display: flex; }
+#spotlight-ctrl button {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: #fff;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+#spotlight-ctrl button:hover { background: rgba(255,255,255,0.3); }
+
+/* --- Tendina --- */
+#tendina-cover {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: rgba(15,15,20,0.93);
+    z-index: 7500;
+    display: none;
+    pointer-events: none;
+}
+#tendina-cover.visible { display: block; }
+#tendina-handle {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 28px;
+    background: rgba(255,255,255,0.12);
+    cursor: ns-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    border-radius: 0 0 4px 4px;
+}
+#tendina-handle::after {
+    content: '';
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.4);
+}
+#tendina-ctrl {
+    position: fixed;
+    bottom: 70px;
+    right: 20px;
+    background: rgba(20,20,30,0.85);
+    color: #fff;
+    border-radius: 30px;
+    padding: 6px 14px;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    z-index: 7600;
+    font-size: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+}
+#tendina-ctrl.visible { display: flex; }
+#tendina-ctrl button {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: #fff;
+    border-radius: 50%;
+    width: 26px;
+    height: 26px;
+    font-size: 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+#tendina-ctrl button:hover { background: rgba(255,255,255,0.3); }

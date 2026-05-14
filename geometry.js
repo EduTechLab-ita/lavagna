@@ -838,6 +838,7 @@ class GeometryManager {
     align-items: flex-start;
     overflow: visible;
     transform-origin: center center;
+    pointer-events: none; /* Il corpo è trasparente agli eventi — i tocchi arrivano al canvas */
 }
 
 #ruler-canvas {
@@ -865,6 +866,7 @@ class GeometryManager {
     align-items: center;
     justify-content: center;
     z-index: 2;
+    pointer-events: auto; /* Handle interattivo — riceve eventi */
 }
 
 .ruler-rotate-handle:active {
@@ -887,6 +889,7 @@ class GeometryManager {
     color: #fff;
     line-height: 1;
     z-index: 15;
+    pointer-events: auto; /* Handle interattivo */
 }
 
 .ruler-close:hover {
@@ -911,6 +914,7 @@ class GeometryManager {
     touch-action: none;
     z-index: 4;
     border-radius: 6px;
+    pointer-events: auto; /* Handle interattivo */
 }
 .ruler-drag-handle:hover { background: rgba(80,40,0,0.10); }
 .ruler-drag-handle:active { cursor: grabbing; }
@@ -930,6 +934,7 @@ class GeometryManager {
     justify-content: center;
     user-select: none;
     z-index: 10;
+    pointer-events: auto; /* Handle interattivo */
 }
 
 /* ============================================================
@@ -1026,6 +1031,7 @@ class GeometryManager {
     cursor: text;
     z-index: 5;
     outline: none;
+    pointer-events: auto; /* Input interattivo */
 }
 .geo-angle-input {
     bottom: auto;
