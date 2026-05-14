@@ -2716,7 +2716,7 @@ body:not(.has-page-bar) #zoom-badge {
 .ec-qr-canvas canvas, .ec-qr-canvas img {
     width: 220px !important;
     height: 220px !important;
-    border-radius: 12px;
+    border-radius: 0;
     display: block;
 }
 .ec-qr-loading {

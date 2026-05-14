@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v54'; // v54 — QR crisp 300px, single panel two-view
+const CACHE_NAME = 'eduboard-v55'; // v55 — fix QR illeggibile: rimosso border-radius che tagliava i finder pattern
 const urlsToCache = [
   '.',
   './index.html',
