@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v64'; // v64 — fix window.driveConnectBtn non esposto (nome/foto non comparivano); _autoOpenLastLesson con delay 800ms via QR
+const CACHE_NAME = 'eduboard-v65'; // v65 — mini app PWA: scanner QR, laser pointer, campanella foto; fix endpoint /photo e /laser Worker
 const urlsToCache = [
   '.',
   './index.html',
@@ -10,6 +10,8 @@ const urlsToCache = [
   './icon-192x192.png',
   './icon-512x512.png',
   './connect.html',
+  './connect-manifest.json',
+  './jsqr.min.js',
   './qrcode.min.js'
 ];
 

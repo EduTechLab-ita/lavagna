@@ -218,6 +218,7 @@ class DriveManager {
         this.tokenExpiry = expiry || Date.now() + 3600 * 1000;
         this._saveSession();
         if (window.driveConnectBtn) window.driveConnectBtn.update();
+        if (window.eduBoardConnect) window.eduBoardConnect._updateBell();
         if (typeof toast === 'function') toast(`✓ Drive connesso come ${email}`);
 
         // 2. Fetch nome+foto con fetch diretto (bypass _apiFetch — più robusto con token esterno)
@@ -230,6 +231,7 @@ class DriveManager {
             this.userPhotoUrl = info.picture    || null;
             this._saveSession();
             if (window.driveConnectBtn) window.driveConnectBtn.update();
+            if (window.eduBoardConnect) window.eduBoardConnect._updateBell();
         })
         .catch(err => console.warn('[EduBoardConnect] userinfo:', err));
 
@@ -2320,23 +2322,158 @@ class EduBoardConnect {
     // Polling foto dal telefono — avviato da initDrive dopo la connessione
     startPhotoPolling() {
         if (this._photoInt) return;
+        this._pendingPhotos = this._pendingPhotos || [];
+
         this._photoInt = setInterval(async () => {
             if (!window.driveMgr?.isConnected()) return;
             try {
                 const res = await fetch(`${CONNECT_SERVER}/photos/${this._limId}`).then(r => r.json());
                 if (!res.photos?.length) return;
                 for (const photo of res.photos) {
-                    const img = new Image();
-                    img.onload = () => {
-                        if (window.objectLayer) {
-                            window.objectLayer.addImage(img, photo.name);
-                            toast('Foto "' + photo.name + '" aggiunta alla lavagna', 'success');
-                        }
-                    };
-                    img.src = photo.dataUrl;
+                    this._pendingPhotos.push(photo);
                 }
-            } catch(e) { /* silenzioso */ }
+                this._updateBell();
+            } catch (_) { /* silenzioso */ }
         }, 3000);
+    }
+
+    // Polling laser — avviato da initDrive dopo la connessione
+    startLaserPolling() {
+        if (this._laserInt) return;
+        this._laserInt = setInterval(async () => {
+            if (!window.driveMgr?.isConnected()) return;
+            try {
+                const res = await fetch(`${CONNECT_SERVER}/laser/${this._limId}`).then(r => r.json());
+                this._updateLaser(res);
+            } catch (_) { /* silenzioso */ }
+        }, 500);
+    }
+
+    _updateLaser(data) {
+        let dot = document.getElementById('laser-pointer-dot');
+        if (!dot) {
+            dot = document.createElement('div');
+            dot.id = 'laser-pointer-dot';
+            dot.style.cssText = `
+                position:fixed; width:22px; height:22px; border-radius:50%;
+                background:radial-gradient(circle, #ff3333 0%, rgba(255,0,0,0.4) 60%, transparent 100%);
+                box-shadow: 0 0 16px #ff3333, 0 0 4px #fff;
+                pointer-events:none; z-index:9000; transform:translate(-50%,-50%);
+                display:none; transition:none;
+            `;
+            document.body.appendChild(dot);
+        }
+
+        if (!data.active) {
+            dot.style.display = 'none';
+            return;
+        }
+
+        // Mappa coordinate relative (0-1) sull'area canvas
+        const canvasArea = document.getElementById('canvas-area');
+        if (!canvasArea) return;
+        const rect = canvasArea.getBoundingClientRect();
+        const x = rect.left + data.x * rect.width;
+        const y = rect.top  + data.y * rect.height;
+        dot.style.left    = x + 'px';
+        dot.style.top     = y + 'px';
+        dot.style.display = 'block';
+    }
+
+    _updateBell() {
+        const bell  = document.getElementById('photo-bell-btn');
+        const badge = document.getElementById('photo-bell-badge');
+        if (!bell) return;
+        // Mostra la campanella solo se Drive è connesso
+        bell.style.display = window.driveMgr?.isConnected() ? 'flex' : 'none';
+        if (!badge) return;
+        const count = (this._pendingPhotos || []).length;
+        badge.textContent = count > 9 ? '9+' : String(count);
+        badge.style.display = count > 0 ? 'flex' : 'none';
+        if (count > 0) bell.classList.add('bell-has-photos');
+        else           bell.classList.remove('bell-has-photos');
+    }
+
+    openPhotoPanel() {
+        let panel = document.getElementById('photo-notif-panel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'photo-notif-panel';
+            document.body.appendChild(panel);
+        }
+        this._renderPhotoPanel(panel);
+        panel.style.display = 'flex';
+    }
+
+    _renderPhotoPanel(panel) {
+        const photos = this._pendingPhotos || [];
+        panel.innerHTML = `
+            <div class="pnp-header">
+                <span class="pnp-title">📷 Foto ricevute (${photos.length})</span>
+                <button class="pnp-close" id="pnp-close-btn">✕</button>
+            </div>
+            <div class="pnp-body">
+                ${photos.length === 0
+                    ? '<div class="pnp-empty">Nessuna foto ricevuta</div>'
+                    : photos.map((p, i) => `
+                        <div class="pnp-item" data-idx="${i}">
+                            <img src="${p.dataUrl}" alt="${p.name}" class="pnp-thumb">
+                            <div class="pnp-item-info">
+                                <div class="pnp-item-name">${p.name}</div>
+                                <button class="pnp-add-btn" data-idx="${i}">Aggiungi alla lavagna</button>
+                            </div>
+                            <button class="pnp-del-btn" data-idx="${i}" title="Rimuovi">✕</button>
+                        </div>
+                    `).join('')}
+            </div>
+            ${photos.length > 0 ? '<button class="pnp-clear-btn" id="pnp-clear-btn">Cancella tutte</button>' : ''}
+        `;
+
+        panel.querySelector('#pnp-close-btn').addEventListener('click', () => {
+            panel.style.display = 'none';
+        });
+
+        panel.querySelectorAll('.pnp-add-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.dataset.idx);
+                this._addPhotoToCanvas(idx);
+                this._renderPhotoPanel(panel); // Aggiorna UI
+                this._updateBell();
+            });
+        });
+
+        panel.querySelectorAll('.pnp-del-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.dataset.idx);
+                this._pendingPhotos.splice(idx, 1);
+                this._renderPhotoPanel(panel);
+                this._updateBell();
+            });
+        });
+
+        const clearBtn = panel.querySelector('#pnp-clear-btn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                this._pendingPhotos = [];
+                this._renderPhotoPanel(panel);
+                this._updateBell();
+            });
+        }
+    }
+
+    _addPhotoToCanvas(idx) {
+        const photo = (this._pendingPhotos || [])[idx];
+        if (!photo) return;
+        const img = new Image();
+        img.onload = () => {
+            if (window.objectLayer?.addImage) {
+                window.objectLayer.addImage(img, photo.name);
+                if (typeof toast === 'function') toast('Foto aggiunta alla lavagna');
+            }
+        };
+        img.src = photo.dataUrl;
+        // Rimuovi dalla lista pending dopo aggiunta
+        this._pendingPhotos.splice(idx, 1);
     }
 }
 
@@ -2359,6 +2496,11 @@ function initDrive() {
     driveConnectBtn = new DriveConnectButton(driveMgr);
     window.eduBoardConnect = new EduBoardConnect();
     window.eduBoardConnect.startPhotoPolling();
+    window.eduBoardConnect.startLaserPolling();
+
+    document.getElementById('photo-bell-btn')?.addEventListener('click', () => {
+        window.eduBoardConnect?.openPhotoPanel();
+    });
 
     // Esponi come globali window.* — necessario per AutoSaveManager (onDirty usa window.libraryMgr e window.driveMgr)
     window.driveMgr        = driveMgr;

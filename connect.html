@@ -2,11 +2,15 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="EduConnect">
+  <meta name="theme-color" content="#3b82f6">
   <title>EduBoard Connect</title>
+  <link rel="manifest" href="connect-manifest.json">
+  <script src="jsqr.min.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -24,11 +28,18 @@
       text-align: center;
     }
 
-    .logo { margin-bottom: 36px; }
-    .logo-title { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.5px; color: #f1f5f9; }
-    .logo-title span { color: #3b82f6; }
-    .logo-subtitle { font-size: 0.8rem; color: #64748b; letter-spacing: 0.15em; text-transform: uppercase; margin-top: 4px; }
+    body.laser-active {
+      overflow: hidden;
+      padding: 0;
+    }
 
+    /* Logo */
+    .logo { margin-bottom: 24px; }
+    .logo-title { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.5px; }
+    .logo-title span { color: #3b82f6; }
+    .logo-subtitle { font-size: 0.8rem; color: #64748b; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 4px; }
+
+    /* Card */
     .card {
       background: #1e293b;
       border-radius: 20px;
@@ -37,11 +48,15 @@
       max-width: 380px;
       border: 1px solid #334155;
     }
-
     .card-icon { font-size: 2.2rem; margin-bottom: 14px; }
     .card-title { font-size: 1.15rem; font-weight: 600; color: #f1f5f9; margin-bottom: 8px; }
     .card-text { font-size: 0.88rem; color: #94a3b8; line-height: 1.55; margin-bottom: 22px; }
 
+    /* Screens */
+    .screen { width: 100%; max-width: 420px; display: flex; flex-direction: column; align-items: center; }
+    .hidden { display: none !important; }
+
+    /* Buttons */
     .btn {
       display: block; width: 100%; padding: 15px 24px;
       border: none; border-radius: 12px;
@@ -54,6 +69,7 @@
     .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
     .btn-secondary { background: #334155; color: #cbd5e1; margin-top: 10px; }
 
+    /* Spinner */
     .spinner {
       width: 40px; height: 40px;
       border: 3px solid #334155; border-top-color: #3b82f6;
@@ -62,6 +78,7 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* Success */
     .success-circle {
       width: 80px; height: 80px;
       background: #16a34a; border-radius: 50%;
@@ -71,12 +88,14 @@
     }
     @keyframes pop { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
+    /* Error */
     .error-badge {
       background: #7f1d1d; border: 1px solid #991b1b; border-radius: 10px;
       padding: 12px 16px; font-size: 0.85rem; color: #fca5a5;
       margin-bottom: 20px; line-height: 1.4;
     }
 
+    /* Saved email */
     .saved-email { font-size: 0.8rem; color: #64748b; margin-top: 10px; }
     .link-btn {
       background: none; border: none; color: #3b82f6;
@@ -85,93 +104,183 @@
     }
     .link-btn:hover { color: #60a5fa; }
 
-    /* Sezione foto */
-    .photo-section {
-      margin-top: 16px;
-      padding-top: 16px;
-      border-top: 1px solid #334155;
+    /* Feature grid (success screen) */
+    .feature-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 12px; width: 100%; margin-top: 20px;
     }
-    .photo-section .card-text { margin-bottom: 12px; }
+    .feature-btn {
+      background: #1e293b; border: 1px solid #334155;
+      border-radius: 16px; padding: 20px 10px;
+      cursor: pointer; transition: background 0.15s, transform 0.1s;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+    }
+    .feature-btn:hover { background: #263548; }
+    .feature-btn:active { transform: scale(0.96); }
+    .feature-icon { font-size: 2rem; }
+    .feature-label { font-size: 0.82rem; color: #94a3b8; font-weight: 500; }
 
-    /* Camera input nascosto */
-    #camera-input { display: none; }
+    /* Photo status */
+    .photo-status { font-size: 0.8rem; color: #64748b; margin-top: 10px; min-height: 20px; }
 
-    .hidden { display: none !important; }
+    /* Scanner */
+    #screen-scanner {
+      width: 100%; max-width: 420px;
+      display: flex; flex-direction: column; align-items: center; gap: 16px;
+    }
+    .scanner-header { text-align: center; }
+    .scanner-viewport {
+      position: relative; width: 100%; max-width: 300px;
+      aspect-ratio: 1; border-radius: 20px; overflow: hidden;
+      background: #000;
+    }
+    #scanner-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .scanner-frame { position: absolute; inset: 0; }
+    .scanner-corner {
+      position: absolute; width: 24px; height: 24px;
+      border-color: #3b82f6; border-style: solid; border-width: 0;
+    }
+    .scanner-corner.tl { top: 12px; left: 12px; border-top-width: 3px; border-left-width: 3px; border-radius: 4px 0 0 0; }
+    .scanner-corner.tr { top: 12px; right: 12px; border-top-width: 3px; border-right-width: 3px; border-radius: 0 4px 0 0; }
+    .scanner-corner.bl { bottom: 12px; left: 12px; border-bottom-width: 3px; border-left-width: 3px; border-radius: 0 0 0 4px; }
+    .scanner-corner.br { bottom: 12px; right: 12px; border-bottom-width: 3px; border-right-width: 3px; border-radius: 0 0 4px 0; }
+    .scanner-line {
+      position: absolute; left: 16px; right: 16px; height: 2px;
+      background: linear-gradient(to right, transparent, #3b82f6, transparent);
+      animation: scanner-scan 2s ease-in-out infinite;
+      top: 50%;
+    }
+    @keyframes scanner-scan {
+      0%, 100% { transform: translateY(-60px); opacity: 0.3; }
+      50% { transform: translateY(60px); opacity: 1; }
+    }
+    .scanner-status { font-size: 0.9rem; color: #94a3b8; text-align: center; }
+
+    /* Laser screen */
+    #screen-laser {
+      position: fixed; inset: 0; background: #000;
+      display: flex; flex-direction: column;
+      z-index: 9999; margin: 0; max-width: none; padding: 0;
+    }
+    .laser-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 16px 20px; background: rgba(0,0,0,0.8);
+      position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+    }
+    .laser-back-btn {
+      background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);
+      color: #fff; border-radius: 8px; padding: 8px 14px;
+      font-size: 0.9rem; cursor: pointer; font-family: inherit;
+    }
+    .laser-title { font-size: 1rem; font-weight: 600; color: #fff; }
+    .laser-area {
+      flex: 1; position: relative; touch-action: none;
+      display: flex; align-items: center; justify-content: center;
+      cursor: crosshair;
+    }
+    .laser-instruction { color: rgba(255,255,255,0.3); font-size: 1rem; pointer-events: none; user-select: none; }
+    .laser-dot {
+      position: absolute; width: 20px; height: 20px;
+      background: radial-gradient(circle, #ff4444 0%, #ff000080 60%, transparent 100%);
+      border-radius: 50%; transform: translate(-50%, -50%);
+      pointer-events: none; box-shadow: 0 0 12px #ff4444;
+      transition: none;
+    }
   </style>
 </head>
 <body>
 
-  <div class="logo">
-    <div class="logo-title">Edu<span>Board</span></div>
-    <div class="logo-subtitle">Connect</div>
+  <!-- Logo (visibile in tutte le schermate tranne laser) -->
+  <div class="logo" id="app-logo">
+    <div class="logo-title">Edu<span>Board</span> <span style="font-size:0.9rem;font-weight:400;color:#64748b">Connect</span></div>
   </div>
 
-  <!-- Loading iniziale -->
-  <div id="screen-loading" class="card">
+  <!-- Screen: Loading -->
+  <div id="screen-loading" class="screen card">
     <div class="spinner"></div>
     <div class="card-title">Avvio...</div>
   </div>
 
-  <!-- Nessun codice QR: solo installazione -->
-  <div id="screen-no-code" class="card hidden">
-    <div class="card-icon">📲</div>
-    <div class="card-title">Installa EduBoard Connect</div>
-    <div class="card-text">
-      <strong>1.</strong> Aggiungi questa pagina alla schermata Home:<br>
-      <em>iPhone:</em> Condividi → "Aggiungi a Home"<br>
-      <em>Android:</em> Menu → "Installa app"<br><br>
-      <strong>2.</strong> Poi memorizza il tuo account — la prossima volta basta un tap.
+  <!-- Screen: Scanner -->
+  <div id="screen-scanner" class="screen hidden">
+    <div class="scanner-header">
+      <div class="logo-title">Edu<span>Board</span></div>
+      <div class="logo-subtitle">Punta la fotocamera al QR sulla LIM</div>
     </div>
-    <button class="btn btn-primary" id="btn-memorize">Memorizza account Google</button>
+    <div class="scanner-viewport">
+      <video id="scanner-video" autoplay playsinline muted></video>
+      <canvas id="scanner-canvas" style="display:none"></canvas>
+      <div class="scanner-frame">
+        <div class="scanner-corner tl"></div>
+        <div class="scanner-corner tr"></div>
+        <div class="scanner-corner bl"></div>
+        <div class="scanner-corner br"></div>
+      </div>
+      <div class="scanner-line"></div>
+    </div>
+    <div id="scanner-status" class="scanner-status">Cerco il QR...</div>
+    <button class="btn btn-secondary" id="btn-scanner-manual" style="margin-top:12px;width:100%;max-width:300px">Inserisci codice manualmente</button>
   </div>
 
-  <!-- Account memorizzato (senza sessione) -->
-  <div id="screen-memorized" class="card hidden">
-    <div class="success-circle">✓</div>
-    <div class="card-title">Account memorizzato!</div>
-    <div class="card-text">D'ora in poi scansiona il QR sulla lavagna per connetterti in un tap.</div>
-  </div>
-
-  <!-- Account già salvato: connetti con un tap -->
-  <div id="screen-saved" class="card hidden">
+  <!-- Screen: Saved account -->
+  <div id="screen-saved" class="screen card hidden">
     <div class="card-icon">👤</div>
     <div class="card-title">Connetti la lavagna</div>
-    <div class="card-text">Usa il tuo account Google per collegare la sessione sulla LIM.</div>
+    <div class="card-text">Pronto per collegarti alla LIM.</div>
     <button class="btn btn-primary" id="btn-continue">Connetti</button>
     <div class="saved-email" id="saved-email-label"></div>
     <button class="link-btn" id="btn-change-account">Cambia account</button>
   </div>
 
-  <!-- Nessun account salvato: login -->
-  <div id="screen-login" class="card hidden">
+  <!-- Screen: Login -->
+  <div id="screen-login" class="screen card hidden">
     <div class="card-icon">🔐</div>
     <div class="card-title">Accedi con Google</div>
-    <div class="card-text">Collega il tuo account Google per connettere la sessione sulla lavagna.</div>
+    <div class="card-text">Collega il tuo account Google per connettere la lavagna.</div>
     <button class="btn btn-primary" id="btn-login">Accedi con Google</button>
   </div>
 
-  <!-- Connessione in corso -->
-  <div id="screen-connecting" class="card hidden">
+  <!-- Screen: Connecting -->
+  <div id="screen-connecting" class="screen card hidden">
     <div class="spinner"></div>
     <div class="card-title">Connessione in corso...</div>
     <div class="card-text">Sto collegando il tuo account alla lavagna</div>
   </div>
 
-  <!-- Successo: connesso — con pulsante foto -->
-  <div id="screen-success" class="card hidden">
+  <!-- Screen: Success -->
+  <div id="screen-success" class="screen card hidden">
     <div class="success-circle">✓</div>
     <div class="card-title">Lavagna connessa!</div>
-    <div class="card-text">Puoi riporre il telefono. La sessione è attiva sulla LIM.</div>
-    <div class="photo-section">
-      <div class="card-text">Vuoi inviare una foto alla lavagna?</div>
-      <button class="btn btn-secondary" id="btn-photo">Scatta / Scegli foto</button>
-      <input type="file" id="camera-input" accept="image/*" capture="environment">
-      <div id="photo-status" style="font-size:0.8rem;color:#64748b;margin-top:10px"></div>
+    <div class="card-text">La sessione è attiva sulla LIM.</div>
+    <div class="feature-grid">
+      <button class="feature-btn" id="btn-photo">
+        <span class="feature-icon">📷</span>
+        <span class="feature-label">Invia foto</span>
+      </button>
+      <button class="feature-btn" id="btn-laser">
+        <span class="feature-icon">🔴</span>
+        <span class="feature-label">Laser</span>
+      </button>
+    </div>
+    <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
+    <div id="photo-status" class="photo-status"></div>
+    <button class="link-btn" style="margin-top:16px" id="btn-scan-again">Connetti altra LIM</button>
+  </div>
+
+  <!-- Screen: Laser -->
+  <div id="screen-laser" class="screen hidden">
+    <div class="laser-header">
+      <button class="laser-back-btn" id="btn-laser-back">✕ Esci</button>
+      <div class="laser-title">🔴 Laser Pointer</div>
+    </div>
+    <div class="laser-area" id="laser-area">
+      <div class="laser-instruction">Tocca e trascina per puntare</div>
+      <div class="laser-dot" id="laser-dot" style="display:none"></div>
     </div>
   </div>
 
-  <!-- Errore -->
-  <div id="screen-error" class="card hidden">
+  <!-- Screen: Error -->
+  <div id="screen-error" class="screen card hidden">
     <div class="card-icon">⚠️</div>
     <div class="card-title">Si è verificato un errore</div>
     <div id="error-message" class="error-badge"></div>
@@ -179,28 +288,55 @@
   </div>
 
   <script>
+    // ── COSTANTI ──────────────────────────────────────────────────────────────
     const CLIENT_ID   = '374342529488-c123a5j5v8hnfs241udbl55fos5thfq6.apps.googleusercontent.com';
     const SCOPE       = 'https://www.googleapis.com/auth/drive email profile';
     const CF_WORKER   = 'https://eduboard-connect.edutechlab-ita.workers.dev';
     const STORAGE_KEY = 'ec_saved_email';
+    const LIM_ID_KEY  = 'ec_last_lim_id';
 
     const SCREENS = [
-      'screen-loading','screen-no-code','screen-memorized',
-      'screen-saved','screen-login','screen-connecting',
-      'screen-success','screen-error'
+      'screen-loading', 'screen-scanner', 'screen-saved', 'screen-login',
+      'screen-connecting', 'screen-success', 'screen-laser', 'screen-error'
     ];
 
-    let limId       = null;
-    let savedEmail  = null;
-    let gisClient   = null;
-    let memorizeMode = false;
-    let currentToken = null;
+    // ── VARIABILI GLOBALI ─────────────────────────────────────────────────────
+    let limId            = null;
+    let savedEmail       = null;
+    let gisClient        = null;
+    let currentToken     = null;
+    let scannerStream    = null;
+    let scannerAnimFrame = null;
+    let laserThrottle    = null;
 
+    // ── SHOW SCREEN ───────────────────────────────────────────────────────────
     function showScreen(id) {
-      SCREENS.forEach(s => document.getElementById(s).classList.toggle('hidden', s !== id));
+      const isLaser = id === 'screen-laser';
+      const logo = document.getElementById('app-logo');
+      if (logo) logo.style.display = isLaser ? 'none' : '';
+
+      if (isLaser) {
+        document.body.classList.add('laser-active');
+      } else {
+        document.body.classList.remove('laser-active');
+      }
+
+      SCREENS.forEach(s => {
+        const el = document.getElementById(s);
+        if (!el) return;
+        if (s === 'screen-laser') {
+          // La schermata laser usa position:fixed — gestisci con display diretto
+          el.style.display = (s === id) ? 'flex' : 'none';
+          el.classList.remove('hidden');
+        } else {
+          el.classList.toggle('hidden', s !== id);
+          el.style.display = '';
+        }
+      });
     }
 
     function showError(msg) {
+      stopScanner();
       document.getElementById('error-message').textContent = msg;
       showScreen('screen-error');
     }
@@ -224,8 +360,7 @@
 
     // ── TOKEN CALLBACK ────────────────────────────────────────────────────────
     async function onTokenReceived(response) {
-      // Riabilita pulsanti in caso di errore
-      ['btn-continue','btn-login','btn-memorize'].forEach(id => {
+      ['btn-continue', 'btn-login'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.disabled = false;
       });
@@ -252,13 +387,6 @@
         return;
       }
 
-      // Modalità memorizzazione (senza limId)
-      if (memorizeMode) {
-        memorizeMode = false;
-        showScreen('screen-memorized');
-        return;
-      }
-
       // Connessione sessione LIM
       showScreen('screen-connecting');
       try {
@@ -280,22 +408,147 @@
       }
     }
 
+    // ── SCANNER ───────────────────────────────────────────────────────────────
+    async function startScanner() {
+      try {
+        const video  = document.getElementById('scanner-video');
+        const canvas = document.getElementById('scanner-canvas');
+        const ctx    = canvas.getContext('2d');
+
+        scannerStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        video.srcObject = scannerStream;
+        video.play();
+
+        function scan() {
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width  = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+            if (code && code.data.includes('lid=')) {
+              stopScanner();
+              let lid = null;
+              try {
+                lid = new URL(code.data).searchParams.get('lid');
+              } catch (_) {
+                lid = code.data.split('lid=')[1];
+              }
+              if (lid) {
+                limId = lid.trim();
+                localStorage.setItem(LIM_ID_KEY, limId);
+                if (navigator.vibrate) navigator.vibrate(100);
+                document.getElementById('scanner-status').textContent = 'QR rilevato!';
+                setTimeout(() => {
+                  savedEmail = localStorage.getItem(STORAGE_KEY);
+                  if (savedEmail) {
+                    document.getElementById('saved-email-label').textContent = savedEmail;
+                    showScreen('screen-saved');
+                    waitForGIS(savedEmail, () => {});
+                  } else {
+                    showScreen('screen-login');
+                    waitForGIS(null, () => {});
+                  }
+                }, 400);
+              }
+            }
+          }
+          scannerAnimFrame = requestAnimationFrame(scan);
+        }
+        scannerAnimFrame = requestAnimationFrame(scan);
+      } catch (err) {
+        document.getElementById('scanner-status').textContent = 'Fotocamera non disponibile. ' + err.message;
+      }
+    }
+
+    function stopScanner() {
+      if (scannerAnimFrame) { cancelAnimationFrame(scannerAnimFrame); scannerAnimFrame = null; }
+      if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
+    }
+
+    // ── LASER ─────────────────────────────────────────────────────────────────
+    function startLaser() {
+      showScreen('screen-laser');
+      const area = document.getElementById('laser-area');
+      const dot  = document.getElementById('laser-dot');
+
+      function sendLaser(x, y) {
+        if (!laserThrottle) {
+          laserThrottle = setTimeout(() => { laserThrottle = null; }, 80);
+          fetch(`${CF_WORKER}/laser/${limId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ x, y, active: true })
+          }).catch(() => {});
+        }
+      }
+
+      function deactivateLaser() {
+        dot.style.display = 'none';
+        fetch(`${CF_WORKER}/laser/${limId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ active: false })
+        }).catch(() => {});
+      }
+
+      // Rimuovi listener precedenti clonando l'elemento
+      const newArea = area.cloneNode(true);
+      area.parentNode.replaceChild(newArea, area);
+      const newDot = document.getElementById('laser-dot');
+
+      newArea.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const t = e.touches[0];
+        const rect = newArea.getBoundingClientRect();
+        const x = (t.clientX - rect.left) / rect.width;
+        const y = (t.clientY - rect.top)  / rect.height;
+        newDot.style.left    = (x * 100) + '%';
+        newDot.style.top     = (y * 100) + '%';
+        newDot.style.display = 'block';
+        sendLaser(x, y);
+      }, { passive: false });
+
+      newArea.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const t = e.touches[0];
+        const rect = newArea.getBoundingClientRect();
+        const x = (t.clientX - rect.left) / rect.width;
+        const y = (t.clientY - rect.top)  / rect.height;
+        newDot.style.left = (x * 100) + '%';
+        newDot.style.top  = (y * 100) + '%';
+        sendLaser(x, y);
+      }, { passive: false });
+
+      newArea.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        deactivateLaser();
+      }, { passive: false });
+    }
+
     // ── FOTO ──────────────────────────────────────────────────────────────────
     function setupPhotoButton() {
-      const btn   = document.getElementById('btn-photo');
-      const input = document.getElementById('camera-input');
+      const btn    = document.getElementById('btn-photo');
+      const input  = document.getElementById('camera-input');
       const status = document.getElementById('photo-status');
       if (!btn || !input) return;
 
-      btn.addEventListener('click', () => input.click());
-      input.addEventListener('change', async () => {
-        const file = input.files[0];
+      // Rimuovi listener precedenti clonando
+      const newBtn = btn.cloneNode(true);
+      btn.parentNode.replaceChild(newBtn, btn);
+      const newInput = input.cloneNode(true);
+      input.parentNode.replaceChild(newInput, input);
+
+      newBtn.addEventListener('click', () => newInput.click());
+      newInput.addEventListener('change', async () => {
+        const file = newInput.files[0];
         if (!file) return;
         status.textContent = 'Invio foto...';
-        btn.disabled = true;
+        newBtn.disabled = true;
 
         try {
-          // Leggi e comprimi
           const dataUrl = await compressImage(file, 1200, 0.82);
           const res = await fetch(`${CF_WORKER}/photo/${limId}`, {
             method: 'POST',
@@ -303,17 +556,13 @@
             body: JSON.stringify({ dataUrl, name: file.name || 'foto.jpg' })
           }).then(r => r.json());
 
-          if (res.ok) {
-            status.textContent = 'Foto inviata alla lavagna!';
-          } else {
-            status.textContent = 'Errore invio. Riprova.';
-          }
+          status.textContent = res.ok ? 'Foto inviata alla lavagna!' : 'Errore invio. Riprova.';
         } catch (_) {
           status.textContent = 'Errore di rete. Riprova.';
         }
 
-        btn.disabled = false;
-        input.value = '';
+        newBtn.disabled = false;
+        newInput.value = '';
         setTimeout(() => { status.textContent = ''; }, 4000);
       });
     }
@@ -344,30 +593,78 @@
     }
 
     // ── PULSANTI ──────────────────────────────────────────────────────────────
-    document.getElementById('btn-continue')?.addEventListener('click', () => {
+
+    // Inserimento manuale codice LIM
+    document.getElementById('btn-scanner-manual').addEventListener('click', () => {
+      const code = prompt('Inserisci il codice LIM (da URL connect.html?lid=XXXXX):');
+      if (code) {
+        let lid = code;
+        if (code.includes('lid=')) {
+          try { lid = new URL(code).searchParams.get('lid') || code.split('lid=')[1]; }
+          catch (_) { lid = code.split('lid=')[1]; }
+        }
+        if (lid) {
+          stopScanner();
+          limId = lid.trim();
+          localStorage.setItem(LIM_ID_KEY, limId);
+          savedEmail = localStorage.getItem(STORAGE_KEY);
+          if (savedEmail) {
+            document.getElementById('saved-email-label').textContent = savedEmail;
+            showScreen('screen-saved');
+            waitForGIS(savedEmail, () => {});
+          } else {
+            showScreen('screen-login');
+            waitForGIS(null, () => {});
+          }
+        }
+      }
+    });
+
+    // Connetti (account salvato)
+    document.getElementById('btn-continue').addEventListener('click', () => {
       document.getElementById('btn-continue').disabled = true;
       waitForGIS(savedEmail, () => gisClient.requestAccessToken());
     });
 
-    document.getElementById('btn-login')?.addEventListener('click', () => {
+    // Login
+    document.getElementById('btn-login').addEventListener('click', () => {
       document.getElementById('btn-login').disabled = true;
       waitForGIS(null, () => gisClient.requestAccessToken());
     });
 
-    document.getElementById('btn-change-account')?.addEventListener('click', () => {
+    // Cambia account
+    document.getElementById('btn-change-account').addEventListener('click', () => {
       localStorage.removeItem(STORAGE_KEY);
       savedEmail = null;
       showScreen('screen-login');
-      if (typeof google !== 'undefined') initGIS(null);
+      waitForGIS(null, () => {});
     });
 
-    document.getElementById('btn-memorize')?.addEventListener('click', () => {
-      document.getElementById('btn-memorize').disabled = true;
-      memorizeMode = true;
-      waitForGIS(null, () => gisClient.requestAccessToken());
+    // Laser back
+    document.getElementById('btn-laser-back').addEventListener('click', () => {
+      fetch(`${CF_WORKER}/laser/${limId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: false })
+      }).catch(() => {});
+      showScreen('screen-success');
     });
 
-    document.getElementById('btn-retry')?.addEventListener('click', init);
+    // Laser button
+    document.getElementById('btn-laser').addEventListener('click', startLaser);
+
+    // Connetti altra LIM
+    document.getElementById('btn-scan-again').addEventListener('click', () => {
+      limId = null;
+      showScreen('screen-scanner');
+      startScanner();
+    });
+
+    // Riprova (errore)
+    document.getElementById('btn-retry').addEventListener('click', () => {
+      showScreen('screen-scanner');
+      startScanner();
+    });
 
     // ── INIT ──────────────────────────────────────────────────────────────────
     function init() {
@@ -376,10 +673,14 @@
       limId = params.get('lid');
 
       if (!limId) {
-        showScreen('screen-no-code');
+        // Nessun lid nell'URL → mostra scanner per leggere il QR della LIM
+        startScanner();
+        showScreen('screen-scanner');
         return;
       }
 
+      // Ha il lid → flow connessione classico
+      localStorage.setItem(LIM_ID_KEY, limId);
       savedEmail = localStorage.getItem(STORAGE_KEY);
       if (savedEmail) {
         document.getElementById('saved-email-label').textContent = savedEmail;
