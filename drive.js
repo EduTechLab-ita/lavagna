@@ -210,12 +210,12 @@ class DriveManager {
     }
 
     // Chiamato da EduBoardConnect quando il telefono invia il token
-    async _onExternalToken(token, email) {
+    async _onExternalToken(token, email, expiry) {
         // 1. Connetti subito — la UI si aggiorna immediatamente (senza aspettare le cartelle)
         this.accessToken = token;
         this.userEmail   = email;
         this.connected   = true;
-        this.tokenExpiry = Date.now() + 3600 * 1000;
+        this.tokenExpiry = expiry || Date.now() + 3600 * 1000;
         this._saveSession();
         if (window.driveConnectBtn) window.driveConnectBtn.update();
         if (typeof toast === 'function') toast(`✓ Drive connesso come ${email}`);
@@ -2162,34 +2162,33 @@ function _injectDriveStyles() {
 
 // =============================================================================
 // SEZIONE 3b — EduBoardConnect
-// Gestisce il pannello QR per connettere Drive via telefono
+// Gestisce il pannello QR per connettere Drive via telefono (backend: Cloudflare Workers)
 // =============================================================================
 
-const CONNECT_SERVER = 'https://script.google.com/macros/s/AKfycbyZyURzHYJ8BuQL_5IIb__EcOitNbtP8u20vlBs3dal3b1iaBbzd9ZtAAJJPt1RpuA/exec';
+const CONNECT_SERVER = 'https://eduboard-connect.edutechlab-ita.workers.dev';
 
 class EduBoardConnect {
     constructor() {
-        this._limId    = this._getLimId();
-        this._code     = null;
-        this._pollInt  = null;
-        this._panel    = null;
+        this._limId      = this._getLimId();
+        this._pollInt    = null;
+        this._photoInt   = null;
+        this._panel      = null;
     }
 
     // ID stabile per questa LIM (persiste in localStorage)
     _getLimId() {
         let id = localStorage.getItem('ec_lim_id');
         if (!id) {
-            id = Math.random().toString(36).slice(2, 10).toUpperCase();
+            id = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 18));
             localStorage.setItem('ec_lim_id', id);
         }
         return id;
     }
 
-    // Mostra il pannello QR (chiamato quando il docente clicca il FAB non connesso)
-    async show() {
-        if (this._panel) return;
+    // Mostra il pannello QR
+    show() {
+        if (this._panel) { this._panel.style.display = 'flex'; this._startPolling(); return; }
 
-        // 1. Pannello visibile subito — schermata "connessione"
         const panel = document.createElement('div');
         panel.id = 'ec-panel';
         panel.innerHTML = `
@@ -2200,28 +2199,27 @@ class EduBoardConnect {
                 </div>
                 <div class="ec-qr-wrap">
                     <div id="ec-qr-canvas" class="ec-qr-canvas"></div>
-                    <div class="ec-qr-loading" id="ec-qr-loading">⏳ Generazione QR...</div>
+                    <div class="ec-qr-loading" id="ec-qr-loading">Generazione QR...</div>
                 </div>
-                <div class="ec-code" id="ec-code">—</div>
                 <div class="ec-status" id="ec-status">
-                    <span class="ec-dot"></span> Connessione al server...
+                    <span class="ec-dot"></span> In attesa del telefono...
                 </div>
                 <div class="ec-actions">
-                    <button class="ec-btn-install" id="ec-btn-install">📲 Installa EduBoard Connect</button>
-                    <button class="ec-btn-skip" id="ec-btn-skip">Continua senza account →</button>
-                    <button class="ec-btn-manual" id="ec-btn-manual">🖥 Connetti manualmente dal PC</button>
+                    <button class="ec-btn-install" id="ec-btn-install">Installa EduBoard Connect</button>
+                    <button class="ec-btn-skip" id="ec-btn-skip">Continua senza Drive</button>
+                    <button class="ec-btn-manual" id="ec-btn-manual">Connetti manualmente dal PC</button>
                 </div>
             </div>
             <div id="ec-view-install" class="ec-view" style="display:none">
                 <div class="ec-header">
-                    <span class="ec-title">📲 Installa</span>
+                    <span class="ec-title">Installa</span>
                     <span class="ec-subtitle">Scansiona e aggiungi alla schermata Home</span>
                 </div>
                 <div class="ec-qr-wrap">
                     <div id="ec-install-canvas" class="ec-qr-canvas"></div>
                 </div>
                 <div style="font-size:11px;color:#64748b;text-align:center">board.edutechlab.it/connect.html</div>
-                <button class="ec-btn-back" id="ec-btn-back">← Torna alla connessione</button>
+                <button class="ec-btn-back" id="ec-btn-back">Torna alla connessione</button>
             </div>`;
         document.body.appendChild(panel);
         this._panel = panel;
@@ -2235,13 +2233,30 @@ class EduBoardConnect {
             try {
                 await window.driveMgr.connect();
                 if (window.driveConnectBtn) window.driveConnectBtn.update();
-                if (window.libraryMgr) window.libraryMgr.refresh();
-                _autoOpenLastLesson();
-            } catch (_) {}
+                const greeting = window.driveMgr.userName || window.driveMgr.userEmail;
+                toast('Google Drive connesso! Benvenuto, ' + greeting, 'success');
+                setTimeout(() => _autoOpenLastLesson(), 800);
+            } catch (err) {
+                if (err?.message !== 'cancelled') toast('Errore: ' + (err?.message || err), 'error');
+            }
         });
 
-        // Genera QR installazione tramite qrserver.com (img standard, sempre leggibile)
-        const installEl = panel.querySelector('#ec-install-canvas');
+        // QR connessione (con limId direttamente nell'URL)
+        const connectUrl = `https://board.edutechlab.it/connect.html?lid=${this._limId}`;
+        const qrEl      = document.getElementById('ec-qr-canvas');
+        const loadingEl = document.getElementById('ec-qr-loading');
+        if (qrEl) {
+            const img = document.createElement('img');
+            img.src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=M&data=${encodeURIComponent(connectUrl)}`;
+            img.style.cssText = 'width:220px;height:220px;display:block';
+            img.alt = 'QR connessione';
+            img.onload  = () => { if (loadingEl) loadingEl.style.display = 'none'; };
+            img.onerror = () => { if (loadingEl) loadingEl.textContent = 'Errore QR'; };
+            qrEl.appendChild(img);
+        }
+
+        // QR installazione
+        const installEl = document.getElementById('ec-install-canvas');
         if (installEl) {
             const installUrl = 'https://board.edutechlab.it/connect.html';
             const img = document.createElement('img');
@@ -2251,59 +2266,28 @@ class EduBoardConnect {
             installEl.appendChild(img);
         }
 
-        // 2. Async: crea sessione e genera QR connessione
-        try {
-            const res = await fetch(`${CONNECT_SERVER}?action=create&limId=${this._limId}`).then(r => r.json());
-            if (!res.ok) throw new Error('server error');
-            this._code = res.code;
-
-            const connectUrl = `https://board.edutechlab.it/connect.html?code=${this._code}`;
-            const codeEl    = document.getElementById('ec-code');
-            if (codeEl) codeEl.textContent = this._code;
-
-            const qrEl      = document.getElementById('ec-qr-canvas');
-            const loadingEl = document.getElementById('ec-qr-loading');
-            if (qrEl) {
-                const img = document.createElement('img');
-                img.src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=M&data=${encodeURIComponent(connectUrl)}`;
-                img.style.cssText = 'width:220px;height:220px;display:block';
-                img.alt = 'QR connessione';
-                img.onload  = () => { if (loadingEl) loadingEl.style.display = 'none'; };
-                img.onerror = () => { if (loadingEl) loadingEl.textContent = '⚠ Errore QR'; };
-                qrEl.appendChild(img);
-            }
-
-            const statusEl = document.getElementById('ec-status');
-            if (statusEl) statusEl.innerHTML = '<span class="ec-dot"></span> In attesa del telefono...';
-            this._startPolling();
-        } catch(e) {
-            console.error('[EduBoardConnect] Errore:', e);
-            const statusEl = document.getElementById('ec-status');
-            if (statusEl) statusEl.textContent = '⚠ Errore di connessione. Riprova.';
-        }
+        this._startPolling();
     }
 
     _switchToInstall() {
-        const v1 = document.getElementById('ec-view-connect');
-        const v2 = document.getElementById('ec-view-install');
-        if (v1) v1.style.display = 'none';
-        if (v2) v2.style.display = 'flex';
+        document.getElementById('ec-view-connect').style.display = 'none';
+        document.getElementById('ec-view-install').style.display = 'flex';
     }
 
     _switchToConnect() {
-        const v1 = document.getElementById('ec-view-connect');
-        const v2 = document.getElementById('ec-view-install');
-        if (v1) v1.style.display = 'flex';
-        if (v2) v2.style.display = 'none';
+        document.getElementById('ec-view-connect').style.display = 'flex';
+        document.getElementById('ec-view-install').style.display = 'none';
+        this._startPolling();
     }
 
     hide() {
         this._stopPolling();
-        if (this._panel) { this._panel.remove(); this._panel = null; }
+        if (this._panel) { this._panel.style.display = 'none'; }
     }
 
     _startPolling() {
-        this._pollInt = setInterval(() => this._poll(), 3000);
+        this._stopPolling();
+        this._pollInt = setInterval(() => this._poll(), 2000);
     }
 
     _stopPolling() {
@@ -2311,27 +2295,48 @@ class EduBoardConnect {
     }
 
     async _poll() {
-        if (!this._code) return;
         try {
-            const res = await fetch(`${CONNECT_SERVER}?action=poll&code=${this._code}`).then(r => r.json());
+            const res = await fetch(`${CONNECT_SERVER}/session/${this._limId}`).then(r => r.json());
             if (res.status === 'connected') {
                 this._stopPolling();
-                this._onConnected(res.token, res.email);
-            } else if (res.status === 'expired') {
-                this._stopPolling();
+                // Aggiorna UI di conferma
                 const statusEl = document.getElementById('ec-status');
-                if (statusEl) statusEl.textContent = '⚠ Codice scaduto. Chiudi e riapri per riprovare.';
+                if (statusEl) statusEl.innerHTML = '<span style="color:#22c55e">Connesso come ' + res.email + '</span>';
+                // Nascondi pannello PRIMA di aprire lezione (evita decentramento canvas)
+                setTimeout(() => {
+                    this.hide();
+                    if (window.driveMgr) window.driveMgr._onExternalToken(res.token, res.email, res.expiry);
+                }, 800);
+            } else if (res.status === 'transferred') {
+                // Questa LIM è stata scalzata da un'altra sessione dello stesso account
+                toast('Sessione Drive trasferita ad un\'altra classe.', 'info');
+                this._stopPolling();
+                if (window.driveMgr) window.driveMgr.disconnect();
+                if (window.driveConnectBtn) window.driveConnectBtn.update();
             }
-        } catch(e) { /* silenzioso */ }
+        } catch(e) { /* silenzioso — polling continua */ }
     }
 
-    _onConnected(token, email) {
-        const statusEl = document.getElementById('ec-status');
-        if (statusEl) statusEl.innerHTML = '<span style="color:#22c55e">✓ Connesso come ' + email + '</span>';
-        setTimeout(() => {
-            this.hide();
-            if (window.driveMgr) window.driveMgr._onExternalToken(token, email);
-        }, 1200);
+    // Polling foto dal telefono — avviato da initDrive dopo la connessione
+    startPhotoPolling() {
+        if (this._photoInt) return;
+        this._photoInt = setInterval(async () => {
+            if (!window.driveMgr?.isConnected()) return;
+            try {
+                const res = await fetch(`${CONNECT_SERVER}/photos/${this._limId}`).then(r => r.json());
+                if (!res.photos?.length) return;
+                for (const photo of res.photos) {
+                    const img = new Image();
+                    img.onload = () => {
+                        if (window.objectLayer) {
+                            window.objectLayer.addImage(img, photo.name);
+                            toast('Foto "' + photo.name + '" aggiunta alla lavagna', 'success');
+                        }
+                    };
+                    img.src = photo.dataUrl;
+                }
+            } catch(e) { /* silenzioso */ }
+        }, 3000);
     }
 }
 
@@ -2353,6 +2358,7 @@ function initDrive() {
     libraryMgr      = new LibraryManager(driveMgr);
     driveConnectBtn = new DriveConnectButton(driveMgr);
     window.eduBoardConnect = new EduBoardConnect();
+    window.eduBoardConnect.startPhotoPolling();
 
     // Esponi come globali window.* — necessario per AutoSaveManager (onDirty usa window.libraryMgr e window.driveMgr)
     window.driveMgr   = driveMgr;

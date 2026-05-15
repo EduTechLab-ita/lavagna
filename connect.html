@@ -9,11 +9,7 @@
   <title>EduBoard Connect</title>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -28,28 +24,10 @@
       text-align: center;
     }
 
-    .logo {
-      margin-bottom: 48px;
-    }
-
-    .logo-title {
-      font-size: 2rem;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-      color: #f1f5f9;
-    }
-
-    .logo-title span {
-      color: #3b82f6;
-    }
-
-    .logo-subtitle {
-      font-size: 0.9rem;
-      color: #64748b;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      margin-top: 4px;
-    }
+    .logo { margin-bottom: 36px; }
+    .logo-title { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.5px; color: #f1f5f9; }
+    .logo-title span { color: #3b82f6; }
+    .logo-subtitle { font-size: 0.8rem; color: #64748b; letter-spacing: 0.15em; text-transform: uppercase; margin-top: 4px; }
 
     .card {
       background: #1e293b;
@@ -60,130 +38,65 @@
       border: 1px solid #334155;
     }
 
-    .card-icon {
-      font-size: 2.5rem;
-      margin-bottom: 16px;
-    }
-
-    .card-title {
-      font-size: 1.2rem;
-      font-weight: 600;
-      color: #f1f5f9;
-      margin-bottom: 8px;
-    }
-
-    .card-text {
-      font-size: 0.9rem;
-      color: #94a3b8;
-      line-height: 1.5;
-      margin-bottom: 24px;
-    }
+    .card-icon { font-size: 2.2rem; margin-bottom: 14px; }
+    .card-title { font-size: 1.15rem; font-weight: 600; color: #f1f5f9; margin-bottom: 8px; }
+    .card-text { font-size: 0.88rem; color: #94a3b8; line-height: 1.55; margin-bottom: 22px; }
 
     .btn {
-      display: block;
-      width: 100%;
-      padding: 16px 24px;
-      border: none;
-      border-radius: 12px;
-      font-size: 1rem;
-      font-weight: 600;
-      font-family: inherit;
-      cursor: pointer;
-      transition: opacity 0.15s ease, transform 0.1s ease;
-      text-decoration: none;
+      display: block; width: 100%; padding: 15px 24px;
+      border: none; border-radius: 12px;
+      font-size: 1rem; font-weight: 600; font-family: inherit;
+      cursor: pointer; transition: opacity 0.15s, transform 0.1s;
     }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: #3b82f6; color: #fff; }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-secondary { background: #334155; color: #cbd5e1; margin-top: 10px; }
 
-    .btn:active {
-      transform: scale(0.98);
-    }
-
-    .btn-primary {
-      background: #3b82f6;
-      color: #ffffff;
-    }
-
-    .btn-primary:hover {
-      opacity: 0.9;
-    }
-
-    .btn-primary:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .saved-email {
-      font-size: 0.8rem;
-      color: #64748b;
-      margin-top: 10px;
-    }
-
-    .link-btn {
-      background: none;
-      border: none;
-      color: #3b82f6;
-      font-size: 0.85rem;
-      font-family: inherit;
-      cursor: pointer;
-      text-decoration: underline;
-      margin-top: 14px;
-      padding: 4px 8px;
-    }
-
-    .link-btn:hover {
-      color: #60a5fa;
-    }
-
-    /* Loading spinner */
     .spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid #334155;
-      border-top-color: #3b82f6;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      width: 40px; height: 40px;
+      border: 3px solid #334155; border-top-color: #3b82f6;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
       margin: 0 auto 20px;
     }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    /* Success animation */
     .success-circle {
-      width: 80px;
-      height: 80px;
-      background: #16a34a;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 20px;
-      font-size: 2.2rem;
-      animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+      width: 80px; height: 80px;
+      background: #16a34a; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px; font-size: 2.2rem;
+      animation: pop 0.4s cubic-bezier(0.175,0.885,0.32,1.275) forwards;
     }
+    @keyframes pop { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
-    @keyframes pop {
-      0% { transform: scale(0); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-
-    /* Error style */
     .error-badge {
-      background: #7f1d1d;
-      border: 1px solid #991b1b;
-      border-radius: 10px;
-      padding: 12px 16px;
-      font-size: 0.85rem;
-      color: #fca5a5;
-      margin-bottom: 20px;
-      line-height: 1.4;
+      background: #7f1d1d; border: 1px solid #991b1b; border-radius: 10px;
+      padding: 12px 16px; font-size: 0.85rem; color: #fca5a5;
+      margin-bottom: 20px; line-height: 1.4;
     }
 
-    /* Hidden utility */
-    .hidden {
-      display: none !important;
+    .saved-email { font-size: 0.8rem; color: #64748b; margin-top: 10px; }
+    .link-btn {
+      background: none; border: none; color: #3b82f6;
+      font-size: 0.85rem; font-family: inherit; cursor: pointer;
+      text-decoration: underline; margin-top: 12px; padding: 4px 8px;
     }
+    .link-btn:hover { color: #60a5fa; }
+
+    /* Sezione foto */
+    .photo-section {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #334155;
+    }
+    .photo-section .card-text { margin-bottom: 12px; }
+
+    /* Camera input nascosto */
+    #camera-input { display: none; }
+
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
@@ -193,117 +106,98 @@
     <div class="logo-subtitle">Connect</div>
   </div>
 
-  <!-- SCHERMATA: Loading iniziale -->
+  <!-- Loading iniziale -->
   <div id="screen-loading" class="card">
     <div class="spinner"></div>
-    <div class="card-title">Verifica in corso...</div>
-    <div class="card-text">Controllo del codice sessione</div>
+    <div class="card-title">Avvio...</div>
   </div>
 
-  <!-- SCHERMATA: Nessun codice QR → installa l'app e memorizza account -->
+  <!-- Nessun codice QR: solo installazione -->
   <div id="screen-no-code" class="card hidden">
     <div class="card-icon">📲</div>
     <div class="card-title">Installa EduBoard Connect</div>
     <div class="card-text">
       <strong>1.</strong> Aggiungi questa pagina alla schermata Home:<br>
-      <em>iPhone:</em> 🔗 Condividi → "Aggiungi a Home"<br>
-      <em>Android:</em> ⋮ Menu → "Installa app"<br><br>
-      <strong>2.</strong> Poi premi il bottone qui sotto per memorizzare il tuo account — la prossima volta non dovrai reinserire le credenziali.
+      <em>iPhone:</em> Condividi → "Aggiungi a Home"<br>
+      <em>Android:</em> Menu → "Installa app"<br><br>
+      <strong>2.</strong> Poi memorizza il tuo account — la prossima volta basta un tap.
     </div>
-    <button class="btn btn-primary" style="margin-top:20px" id="btn-memorize" onclick="handleMemorize()">Memorizza il mio account Google</button>
+    <button class="btn btn-primary" id="btn-memorize">Memorizza account Google</button>
   </div>
 
-  <!-- SCHERMATA: Nessun codice ma login avvenuto → account memorizzato -->
+  <!-- Account memorizzato (senza sessione) -->
   <div id="screen-memorized" class="card hidden">
     <div class="success-circle">✓</div>
     <div class="card-title">Account memorizzato!</div>
-    <div class="card-text">D'ora in poi scansiona il QR sulla lavagna per connetterti in un tap, senza reinserire le credenziali.</div>
+    <div class="card-text">D'ora in poi scansiona il QR sulla lavagna per connetterti in un tap.</div>
   </div>
 
-  <!-- SCHERMATA: Ha il codice ma non ha mai installato l'app -->
-  <div id="screen-not-installed" class="card hidden">
-    <div class="card-icon">⚠️</div>
-    <div class="card-title">App non installata</div>
-    <div class="card-text">Per connetterti tramite QR code devi prima installare <strong>EduBoard Connect</strong> sul telefono.<br><br>
-      Scansiona il secondo QR sulla lavagna per le istruzioni di installazione.<br><br>
-      In alternativa connettiti direttamente dal PC con <em>"Connetti manualmente dal PC"</em>.</div>
-  </div>
-
-  <!-- SCHERMATA: Account salvato -->
+  <!-- Account già salvato: connetti con un tap -->
   <div id="screen-saved" class="card hidden">
     <div class="card-icon">👤</div>
     <div class="card-title">Connetti la lavagna</div>
     <div class="card-text">Usa il tuo account Google per collegare la sessione sulla LIM.</div>
-    <button class="btn btn-primary" id="btn-continue" onclick="handleContinue()">
-      Continua
-    </button>
+    <button class="btn btn-primary" id="btn-continue">Connetti</button>
     <div class="saved-email" id="saved-email-label"></div>
-    <button class="link-btn" onclick="handleChangeAccount()">Cambia account</button>
+    <button class="link-btn" id="btn-change-account">Cambia account</button>
   </div>
 
-  <!-- SCHERMATA: Nessun account salvato -->
+  <!-- Nessun account salvato: login -->
   <div id="screen-login" class="card hidden">
     <div class="card-icon">🔐</div>
     <div class="card-title">Accedi con Google</div>
     <div class="card-text">Collega il tuo account Google per connettere la sessione sulla lavagna.</div>
-    <button class="btn btn-primary" id="btn-login" onclick="handleLogin()">
-      Accedi con Google
-    </button>
+    <button class="btn btn-primary" id="btn-login">Accedi con Google</button>
   </div>
 
-  <!-- SCHERMATA: In elaborazione -->
+  <!-- Connessione in corso -->
   <div id="screen-connecting" class="card hidden">
     <div class="spinner"></div>
     <div class="card-title">Connessione in corso...</div>
     <div class="card-text">Sto collegando il tuo account alla lavagna</div>
   </div>
 
-  <!-- SCHERMATA: Successo -->
+  <!-- Successo: connesso — con pulsante foto -->
   <div id="screen-success" class="card hidden">
     <div class="success-circle">✓</div>
     <div class="card-title">Lavagna connessa!</div>
-    <div class="card-text">Puoi riporre il telefono.<br>La sessione è attiva sulla LIM.</div>
+    <div class="card-text">Puoi riporre il telefono. La sessione è attiva sulla LIM.</div>
+    <div class="photo-section">
+      <div class="card-text">Vuoi inviare una foto alla lavagna?</div>
+      <button class="btn btn-secondary" id="btn-photo">Scatta / Scegli foto</button>
+      <input type="file" id="camera-input" accept="image/*" capture="environment">
+      <div id="photo-status" style="font-size:0.8rem;color:#64748b;margin-top:10px"></div>
+    </div>
   </div>
 
-  <!-- SCHERMATA: Errore generico -->
+  <!-- Errore -->
   <div id="screen-error" class="card hidden">
     <div class="card-icon">⚠️</div>
     <div class="card-title">Si è verificato un errore</div>
     <div id="error-message" class="error-badge"></div>
-    <button class="btn btn-primary" onclick="handleRetry()">Riprova</button>
-  </div>
-
-  <!-- SCHERMATA: Codice scaduto -->
-  <div id="screen-expired" class="card hidden">
-    <div class="card-icon">⏱️</div>
-    <div class="card-title">Codice scaduto</div>
-    <div class="card-text">Codice scaduto. Riscansiona il QR code sulla lavagna.</div>
+    <button class="btn btn-primary" id="btn-retry">Riprova</button>
   </div>
 
   <script>
-    // ─── COSTANTI ────────────────────────────────────────────────────────────────
-    const CLIENT_ID    = '374342529488-c123a5j5v8hnfs241udbl55fos5thfq6.apps.googleusercontent.com';
-    const SCOPE        = 'https://www.googleapis.com/auth/drive email profile';
-    const APPS_SCRIPT  = 'https://script.google.com/macros/s/AKfycbyZyURzHYJ8BuQL_5IIb__EcOitNbtP8u20vlBs3dal3b1iaBbzd9ZtAAJJPt1RpuA/exec';
-    const STORAGE_KEY  = 'ec_saved_email';
+    const CLIENT_ID   = '374342529488-c123a5j5v8hnfs241udbl55fos5thfq6.apps.googleusercontent.com';
+    const SCOPE       = 'https://www.googleapis.com/auth/drive email profile';
+    const CF_WORKER   = 'https://eduboard-connect.edutechlab-ita.workers.dev';
+    const STORAGE_KEY = 'ec_saved_email';
 
-    // ─── STATO ───────────────────────────────────────────────────────────────────
-    let sessionCode  = null;
-    let savedEmail   = null;
-    let gisClient    = null;
-    let gisReady     = false;
-
-    // ─── UTILITY SCHERMATE ───────────────────────────────────────────────────────
-    const screens = [
-      'screen-loading', 'screen-no-code', 'screen-memorized', 'screen-not-installed',
-      'screen-saved', 'screen-login', 'screen-connecting', 'screen-success',
-      'screen-error', 'screen-expired'
+    const SCREENS = [
+      'screen-loading','screen-no-code','screen-memorized',
+      'screen-saved','screen-login','screen-connecting',
+      'screen-success','screen-error'
     ];
 
+    let limId       = null;
+    let savedEmail  = null;
+    let gisClient   = null;
+    let memorizeMode = false;
+    let currentToken = null;
+
     function showScreen(id) {
-      screens.forEach(s => {
-        document.getElementById(s).classList.toggle('hidden', s !== id);
-      });
+      SCREENS.forEach(s => document.getElementById(s).classList.toggle('hidden', s !== id));
     }
 
     function showError(msg) {
@@ -311,190 +205,181 @@
       showScreen('screen-error');
     }
 
-    // ─── INIZIALIZZAZIONE GIS ────────────────────────────────────────────────────
+    // ── GIS ───────────────────────────────────────────────────────────────────
     function initGIS(hint) {
       gisClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: SCOPE,
-        hint: hint || '',
+        hint: hint || undefined,
         callback: onTokenReceived,
       });
-      gisReady = true;
     }
 
-    function waitForGIS(hint, callback) {
-      if (typeof google !== 'undefined' && google.accounts) {
-        initGIS(hint);
-        callback();
-      } else {
-        // GIS non ancora caricato, aspetta
-        const script = document.querySelector('script[src*="gsi/client"]');
-        if (script) {
-          script.addEventListener('load', () => {
-            initGIS(hint);
-            callback();
-          });
-        } else {
-          setTimeout(() => waitForGIS(hint, callback), 200);
-        }
-      }
+    function waitForGIS(hint, cb) {
+      if (typeof google !== 'undefined' && google.accounts) { initGIS(hint); cb(); return; }
+      const script = document.querySelector('script[src*="gsi/client"]');
+      if (script) script.addEventListener('load', () => { initGIS(hint); cb(); });
+      else setTimeout(() => waitForGIS(hint, cb), 200);
     }
 
-    // ─── GESTORI PULSANTI ────────────────────────────────────────────────────────
-    function handleContinue() {
-      const btn = document.getElementById('btn-continue');
-      btn.disabled = true;
-      waitForGIS(savedEmail, () => {
-        gisClient.requestAccessToken();
-      });
-    }
-
-    function handleLogin() {
-      const btn = document.getElementById('btn-login');
-      btn.disabled = true;
-      waitForGIS(null, () => {
-        gisClient.requestAccessToken();
-      });
-    }
-
-    function handleChangeAccount() {
-      localStorage.removeItem(STORAGE_KEY);
-      savedEmail = null;
-      waitForGIS(null, () => {
-        showScreen('screen-login');
-      });
-    }
-
-    function handleRetry() {
-      // Re-inizializza tutto da capo
-      init();
-    }
-
-    // ─── CALLBACK TOKEN ───────────────────────────────────────────────────────────
+    // ── TOKEN CALLBACK ────────────────────────────────────────────────────────
     async function onTokenReceived(response) {
+      // Riabilita pulsanti in caso di errore
+      ['btn-continue','btn-login','btn-memorize'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = false;
+      });
+
       if (response.error) {
-        const btn1 = document.getElementById('btn-continue');
-        const btn2 = document.getElementById('btn-login');
-        const btn3 = document.getElementById('btn-memorize');
-        if (btn1) btn1.disabled = false;
-        if (btn2) btn2.disabled = false;
-        if (btn3) btn3.disabled = false;
-        memorizeMode = false;
-        if (response.error !== 'access_denied') {
-          showError('Autenticazione non riuscita: ' + response.error + '. Riprova.');
-        }
+        if (response.error !== 'access_denied') showError('Autenticazione non riuscita: ' + response.error);
         return;
       }
 
-      const accessToken = response.access_token;
+      const token = response.access_token;
+      currentToken = token;
 
-      // Modalità memorizzazione: salva solo l'email, non connette nessuna sessione
-      if (memorizeMode) {
-        memorizeMode = false;
-        try {
-          const userInfo = await fetchUserInfo(accessToken);
-          localStorage.setItem(STORAGE_KEY, userInfo.email);
-          showScreen('screen-memorized');
-        } catch (err) {
-          showError('Impossibile recuperare il tuo account. Riprova.');
-        }
-        return;
-      }
-
-      showScreen('screen-connecting');
-
+      // Recupera email
+      let email;
       try {
-        // 1. Recupera email utente
-        const userInfo = await fetchUserInfo(accessToken);
-        const email = userInfo.email;
-
-        // 2. Salva email
+        const info = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: 'Bearer ' + token }
+        }).then(r => r.json());
+        email = info.email;
         localStorage.setItem(STORAGE_KEY, email);
         savedEmail = email;
+      } catch (_) {
+        showError('Impossibile recuperare le informazioni account. Riprova.');
+        return;
+      }
 
-        // 3. Chiama Apps Script
-        await connectToBoard(accessToken, email);
+      // Modalità memorizzazione (senza limId)
+      if (memorizeMode) {
+        memorizeMode = false;
+        showScreen('screen-memorized');
+        return;
+      }
 
-        // 4. Mostra successo
+      // Connessione sessione LIM
+      showScreen('screen-connecting');
+      try {
+        const res = await fetch(`${CF_WORKER}/session/${limId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token,
+            email,
+            expiry: Date.now() + 3600 * 1000
+          })
+        }).then(r => r.json());
+
+        if (!res.ok) throw new Error(res.error || 'Errore server');
         showScreen('screen-success');
-
+        setupPhotoButton();
       } catch (err) {
-        if (err.message === 'EXPIRED') {
-          showScreen('screen-expired');
-        } else if (err.message === 'NETWORK') {
-          showError('Errore di rete. Controlla la connessione e riprova.');
-        } else {
-          showError(err.message || 'Errore sconosciuto. Riprova.');
+        showError(err.message || 'Errore di rete. Riprova.');
+      }
+    }
+
+    // ── FOTO ──────────────────────────────────────────────────────────────────
+    function setupPhotoButton() {
+      const btn   = document.getElementById('btn-photo');
+      const input = document.getElementById('camera-input');
+      const status = document.getElementById('photo-status');
+      if (!btn || !input) return;
+
+      btn.addEventListener('click', () => input.click());
+      input.addEventListener('change', async () => {
+        const file = input.files[0];
+        if (!file) return;
+        status.textContent = 'Invio foto...';
+        btn.disabled = true;
+
+        try {
+          // Leggi e comprimi
+          const dataUrl = await compressImage(file, 1200, 0.82);
+          const res = await fetch(`${CF_WORKER}/photo/${limId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dataUrl, name: file.name || 'foto.jpg' })
+          }).then(r => r.json());
+
+          if (res.ok) {
+            status.textContent = 'Foto inviata alla lavagna!';
+          } else {
+            status.textContent = 'Errore invio. Riprova.';
+          }
+        } catch (_) {
+          status.textContent = 'Errore di rete. Riprova.';
         }
-      }
+
+        btn.disabled = false;
+        input.value = '';
+        setTimeout(() => { status.textContent = ''; }, 4000);
+      });
     }
 
-    // ─── FETCH USERINFO ───────────────────────────────────────────────────────────
-    async function fetchUserInfo(token) {
-      let resp;
-      try {
-        resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: 'Bearer ' + token }
-        });
-      } catch (_) {
-        throw new Error('NETWORK');
-      }
-
-      if (!resp.ok) {
-        throw new Error('Impossibile recuperare le informazioni del tuo account Google.');
-      }
-      return resp.json();
+    function compressImage(file, maxPx, quality) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const img = new Image();
+          img.onload = () => {
+            let { width: w, height: h } = img;
+            if (w > maxPx || h > maxPx) {
+              const ratio = Math.min(maxPx / w, maxPx / h);
+              w = Math.round(w * ratio);
+              h = Math.round(h * ratio);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          };
+          img.onerror = reject;
+          img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
     }
 
-    // ─── CHIAMA APPS SCRIPT ───────────────────────────────────────────────────────
-    async function connectToBoard(token, email) {
-      const url = new URL(APPS_SCRIPT);
-      url.searchParams.set('action', 'connect');
-      url.searchParams.set('code',   sessionCode);
-      url.searchParams.set('token',  token);
-      url.searchParams.set('email',  email);
+    // ── PULSANTI ──────────────────────────────────────────────────────────────
+    document.getElementById('btn-continue')?.addEventListener('click', () => {
+      document.getElementById('btn-continue').disabled = true;
+      waitForGIS(savedEmail, () => gisClient.requestAccessToken());
+    });
 
-      let resp;
-      try {
-        resp = await fetch(url.toString());
-      } catch (_) {
-        throw new Error('NETWORK');
-      }
+    document.getElementById('btn-login')?.addEventListener('click', () => {
+      document.getElementById('btn-login').disabled = true;
+      waitForGIS(null, () => gisClient.requestAccessToken());
+    });
 
-      if (!resp.ok) {
-        throw new Error('Il server non ha risposto correttamente. Riprova.');
-      }
+    document.getElementById('btn-change-account')?.addEventListener('click', () => {
+      localStorage.removeItem(STORAGE_KEY);
+      savedEmail = null;
+      showScreen('screen-login');
+      if (typeof google !== 'undefined') initGIS(null);
+    });
 
-      let data;
-      try {
-        data = await resp.json();
-      } catch (_) {
-        throw new Error('Risposta del server non valida. Riprova.');
-      }
-
-      if (data.error) {
-        // Apps Script segnala codice scaduto o altro errore
-        const msg = (data.error + '').toLowerCase();
-        if (msg.includes('scad') || msg.includes('expir') || msg.includes('invalid') || msg.includes('not found')) {
-          throw new Error('EXPIRED');
-        }
-        throw new Error(data.error);
-      }
-
-      return data;
-    }
-
-    // ─── MEMORIZZA ACCOUNT (da schermata installazione, senza codice sessione) ──
-    let memorizeMode = false;
-
-    function handleMemorize() {
-      const btn = document.getElementById('btn-memorize');
-      if (btn) btn.disabled = true;
+    document.getElementById('btn-memorize')?.addEventListener('click', () => {
+      document.getElementById('btn-memorize').disabled = true;
       memorizeMode = true;
       waitForGIS(null, () => gisClient.requestAccessToken());
-    }
+    });
 
-    function showLoginOrSaved() {
+    document.getElementById('btn-retry')?.addEventListener('click', init);
+
+    // ── INIT ──────────────────────────────────────────────────────────────────
+    function init() {
+      showScreen('screen-loading');
+      const params = new URLSearchParams(window.location.search);
+      limId = params.get('lid');
+
+      if (!limId) {
+        showScreen('screen-no-code');
+        return;
+      }
+
       savedEmail = localStorage.getItem(STORAGE_KEY);
       if (savedEmail) {
         document.getElementById('saved-email-label').textContent = savedEmail;
@@ -506,23 +391,6 @@
       }
     }
 
-    // ─── INIT ─────────────────────────────────────────────────────────────────────
-    function init() {
-      showScreen('screen-loading');
-
-      const params = new URLSearchParams(window.location.search);
-      sessionCode = params.get('code');
-
-      if (!sessionCode) {
-        showScreen('screen-no-code');
-        return;
-      }
-
-      // Ha il codice: procedi direttamente con login/account salvato
-      showLoginOrSaved();
-    }
-
-    // Avvia quando il DOM è pronto
     document.addEventListener('DOMContentLoaded', init);
   </script>
 

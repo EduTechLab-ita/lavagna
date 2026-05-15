@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v62'; // v62 — userinfo via fetch diretto; mini app: memorizza account
+const CACHE_NAME = 'eduboard-v63'; // v63 — backend Cloudflare Workers + KV; foto da telefono; fix testi decentrati; fix foto/nome post-QR
 const urlsToCache = [
   '.',
   './index.html',
