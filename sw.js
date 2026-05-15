@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v63'; // v63 — backend Cloudflare Workers + KV; foto da telefono; fix testi decentrati; fix foto/nome post-QR
+const CACHE_NAME = 'eduboard-v64'; // v64 — fix window.driveConnectBtn non esposto (nome/foto non comparivano); _autoOpenLastLesson con delay 800ms via QR
 const urlsToCache = [
   '.',
   './index.html',

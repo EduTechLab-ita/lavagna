@@ -244,7 +244,7 @@ class DriveManager {
                 console.warn('[EduBoardConnect] folders:', err.message);
             }
             if (window.libraryMgr) window.libraryMgr.refresh();
-            _autoOpenLastLesson();
+            setTimeout(() => _autoOpenLastLesson(), 800);
         })();
     }
 
@@ -2361,8 +2361,9 @@ function initDrive() {
     window.eduBoardConnect.startPhotoPolling();
 
     // Esponi come globali window.* — necessario per AutoSaveManager (onDirty usa window.libraryMgr e window.driveMgr)
-    window.driveMgr   = driveMgr;
-    window.libraryMgr = libraryMgr;
+    window.driveMgr        = driveMgr;
+    window.libraryMgr      = libraryMgr;
+    window.driveConnectBtn = driveConnectBtn;
 
     // Ripristina sessione precedente (se il token è ancora valido)
     const restored = driveMgr._loadSession();
