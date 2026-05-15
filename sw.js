@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v65'; // v65 — mini app PWA: scanner QR, laser pointer, campanella foto; fix endpoint /photo e /laser Worker
+const CACHE_NAME = 'eduboard-v66'; // v65 — mini app PWA: scanner QR, laser pointer, campanella foto; fix endpoint /photo e /laser Worker
 const urlsToCache = [
   '.',
   './index.html',

@@ -2511,6 +2511,7 @@ function initDrive() {
     const restored = driveMgr._loadSession();
     if (restored) {
         driveConnectBtn.update();
+        window.eduBoardConnect._updateBell();
         if (driveMgr.isConnected()) {
             // Pre-carica la libreria in background all'avvio (senza aprire il pannello)
             // → quando l'utente la apre per la prima volta, è già pronta
