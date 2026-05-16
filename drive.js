@@ -2741,6 +2741,11 @@ function initDrive() {
     _setupLibraryTab('library-tab-left',  'left');
     _setupLibraryTab('library-tab-right', 'right');
 
+    // ── Pulsante "Nuova lavagna" nel pannello ──────────────────────────────
+    document.getElementById('library-new-board')?.addEventListener('click', () => {
+        projectMgr.newBoard();
+    });
+
     // ── Pulsante "Nuova cartella" nel pannello ─────────────────────────────
     document.getElementById('library-new-folder')?.addEventListener('click', () => {
         libraryMgr.createFolder(libraryMgr.currentFolderId);
