@@ -4699,11 +4699,13 @@ class PageManager {
                     tmp.width = srcW;
                     tmp.height = srcH;
                     tmp.getContext('2d').drawImage(o.img, 0, 0);
+                    // Tutte le coordinate normalizzate per pw (unico fattore).
+                    // Garantisce proporzioni corrette indipendentemente da schermo e orientamento.
                     return { ...o, img: null, dataUrl: tmp.toDataURL(),
                         x: (o.x - objR.px) / objR.pw,
-                        y: (o.y - objR.py) / objR.ph,
+                        y: (o.y - objR.py) / objR.pw,
                         w: o.w / objR.pw,
-                        h: o.h / objR.ph };
+                        h: o.h / objR.pw };
                 } catch (_) {
                     return { ...o, img: null, dataUrl: null };
                 }
@@ -4749,12 +4751,12 @@ class PageManager {
             img.onload = () => {
                 let x, y, w, h;
                 if (pageData.objectFormat === 'page-fraction') {
-                    // Formato corrente: coordinate e dimensioni come frazione del foglio.
-                    // Moltiplica per le dimensioni correnti del foglio → risoluzione-indipendente.
+                    // Formato corrente: tutte le coordinate come frazione di pw (unico fattore).
+                    // Moltiplica per pw corrente → risoluzione e orientamento indipendenti.
                     x = o.x * r2.pw + r2.px;
-                    y = o.y * r2.ph + r2.py;
+                    y = o.y * r2.pw + r2.py;
                     w = o.w * r2.pw;
-                    h = o.h * r2.ph;
+                    h = o.h * r2.pw;
                 } else if (pageData.objectFormat === 'page-relative') {
                     // Vecchio formato: coordinate in pixel-canvas relative all'origine del foglio.
                     x = o.x + r2.px;

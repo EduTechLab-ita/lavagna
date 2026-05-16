@@ -942,7 +942,10 @@
     _gyroBaseBeta  = null;
     _gyroActive    = false;
 
-    const btn    = document.getElementById('laser-gyro-btn');
+    // Rimuovi listener precedenti clonando il bottone (evita accumulo su aperture multiple)
+    const oldBtn = document.getElementById('laser-gyro-btn');
+    const btn    = oldBtn.cloneNode(true);
+    oldBtn.replaceWith(btn);
     const status = document.getElementById('laser-gyro-status');
 
     // Controlla supporto giroscopio

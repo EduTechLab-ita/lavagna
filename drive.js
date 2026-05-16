@@ -2502,7 +2502,7 @@ class EduBoardConnect {
 
     _addPhotoToCanvas(idx) {
         const photo = (this._pendingPhotos || [])[idx];
-        if (!photo || photo.added) return;
+        if (!photo) return;
         const img = new Image();
         img.onload = () => {
             if (window.objectLayer?.addObject) {
