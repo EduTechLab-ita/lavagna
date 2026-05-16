@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v77'; // v77 — standalone+reinstall: banner "Apri in Chrome" per forzare browser mode
+const CACHE_NAME = 'eduboard-v78'; // v78 — QR1(?install=1): installa/già installata. QR2(?lid): connette/chiede install
 const urlsToCache = [
   '.',
   './index.html',

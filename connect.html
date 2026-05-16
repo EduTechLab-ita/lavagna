@@ -352,30 +352,6 @@
       font-weight: 600; white-space: nowrap;
     }
 
-    /* ── Banner standalone-reinstall ── */
-    .reinstall-notice {
-      width: 100%; max-width: 380px;
-      background: #1c2a1c; border: 1px solid #16a34a;
-      border-radius: 14px; padding: 18px 20px;
-      margin-bottom: 16px; text-align: left;
-      display: none;
-    }
-    .reinstall-notice.visible { display: block; }
-    .reinstall-notice-title {
-      font-size: 0.95rem; font-weight: 700; color: #4ade80; margin-bottom: 6px;
-    }
-    .reinstall-notice-text {
-      font-size: 0.82rem; color: #86efac; line-height: 1.5; margin-bottom: 14px;
-    }
-    .btn-open-chrome {
-      display: block; width: 100%; padding: 13px 20px;
-      background: #16a34a; border: none; border-radius: 10px;
-      color: #fff; font-size: 1rem; font-weight: 700;
-      font-family: inherit; cursor: pointer;
-      transition: background 0.15s, transform 0.1s;
-    }
-    .btn-open-chrome:hover { background: #15803d; }
-    .btn-open-chrome:active { transform: scale(0.97); }
 
     /* ── Connected header ── */
     .connected-header {
@@ -407,16 +383,6 @@
   <!-- Screen: Browser (non installata come PWA)          -->
   <!-- ════════════════════════════════════════════════════ -->
   <div id="screen-browser" class="screen hidden">
-    <!-- Banner solo quando la pagina è aperta in standalone (PWA già installata) -->
-    <div class="reinstall-notice" id="reinstall-notice">
-      <div class="reinstall-notice-title">⚠️ Aperta dentro EduBoard</div>
-      <div class="reinstall-notice-text">
-        La pagina si è aperta nell'app EduBoard invece che in Chrome.<br>
-        Per reinstallare EduBoard Connect, tocca il pulsante qui sotto.
-      </div>
-      <button class="btn-open-chrome" id="btn-open-chrome">🔗 Apri in Chrome per installare</button>
-    </div>
-
     <div id="browser-lid-banner" class="install-banner"></div>
     <div class="card" style="margin-bottom:16px">
       <div class="card-icon">📱</div>
@@ -494,6 +460,41 @@
             <div class="guide-step-action">Android: menu ⋮ → Aggiungi a schermata Home</div>
             <div class="guide-step-detail">iPhone: pulsante ⬆ → Aggiungi a schermata Home</div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════ -->
+  <!-- Screen: Già installata (?install=1 in standalone)   -->
+  <!-- ════════════════════════════════════════════════════ -->
+  <div id="screen-installed" class="screen hidden">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-icon">✅</div>
+      <div class="card-title">App già installata!</div>
+      <div class="card-text">EduBoard Connect è già presente sul tuo telefono.<br>Apri l'app direttamente dalla schermata home.</div>
+    </div>
+    <div class="install-guide">
+      <div class="guide-heading">Se vuoi reinstallarla</div>
+      <div class="guide-step">
+        <div class="guide-num">1</div>
+        <div class="guide-step-content">
+          <div class="guide-step-action">Tieni premuta l'icona EduBoard Connect</div>
+          <div class="guide-step-detail">Nella schermata home del telefono, fino a quando appare il menu</div>
+        </div>
+      </div>
+      <div class="guide-step">
+        <div class="guide-num">2</div>
+        <div class="guide-step-content">
+          <div class="guide-step-action">Tocca "Disinstalla" e conferma</div>
+          <div class="guide-step-detail">Su alcuni telefoni si chiama "Rimuovi" o "Elimina"</div>
+        </div>
+      </div>
+      <div class="guide-step">
+        <div class="guide-num">3</div>
+        <div class="guide-step-content">
+          <div class="guide-step-action">Riscansionna il QR "Installa App" sulla LIM</div>
+          <div class="guide-step-detail">Il pulsante <span class="guide-step-badge">📱 Installa App</span> è in alto nella barra della lavagna</div>
         </div>
       </div>
     </div>
@@ -676,7 +677,7 @@
   const LIM_ID_KEY    = 'ec_last_lim_id';
 
   const ALL_SCREENS = [
-    'screen-browser', 'screen-loading', 'screen-scanner', 'screen-saved',
+    'screen-browser', 'screen-installed', 'screen-loading', 'screen-scanner', 'screen-saved',
     'screen-login', 'screen-connecting', 'screen-success',
     'screen-laser', 'screen-timer', 'screen-error'
   ];
@@ -1162,12 +1163,6 @@
     }
   });
 
-  // Bottone "Apri in Chrome" (standalone + reinstall)
-  document.getElementById('btn-open-chrome').addEventListener('click', () => {
-    const reinstallUrl = 'https://board.edutechlab.it/connect.html?reinstall=1';
-    window.open(reinstallUrl, '_blank');
-  });
-
   // Input manuale codice LIM
   document.getElementById('btn-manual-confirm').addEventListener('click', () => {
     const val = document.getElementById('manual-input').value.trim();
@@ -1237,32 +1232,38 @@
     const params = new URLSearchParams(window.location.search);
     const urlLid = params.get('lid');
 
-    // Modalità BROWSER o reinstall forzato: mostra schermata installazione
-    const forceInstall = params.get('reinstall') === '1';
-    if (!isStandalone() || forceInstall) {
+    // QR 1 — Installa: ?install=1 (o ?reinstall=1 per retrocompat.)
+    const isInstallFlow = params.get('install') === '1' || params.get('reinstall') === '1';
+    if (isInstallFlow) {
+      if (isStandalone()) {
+        // App già installata → schermata informativa con guida disinstalla
+        showScreen('screen-installed');
+      } else {
+        // Browser mode → schermata installazione automatica
+        showScreen('screen-browser');
+        showInstallGuide();
+      }
+      return;
+    }
+
+    // QR 2 — Connetti: ?lid=xxx (o apertura diretta senza parametri)
+    if (!isStandalone()) {
+      // Non installata → mostra install screen con messaggio "installa prima"
       const banner = document.getElementById('browser-lid-banner');
       if (urlLid) {
         banner.textContent = 'Per connetterti alla lavagna installa prima EduBoard Connect.';
         banner.classList.add('visible');
-      }
-      // Se siamo in standalone + reinstall: mostro il banner "Apri in Chrome"
-      // (la pagina si è aperta dentro EduBoard invece che nel browser)
-      if (isStandalone() && forceInstall) {
-        document.getElementById('reinstall-notice').classList.add('visible');
       }
       showScreen('screen-browser');
       showInstallGuide();
       return;
     }
 
-    // Modalità STANDALONE
+    // Standalone → flusso normale
     setupPhotoButton();
-
     if (urlLid) {
-      // Arriva con ?lid=xxx dal QR → vai direttamente al flow connessione
       afterLidDetected(urlLid);
     } else {
-      // Nessun lid → scanner
       startScanner();
     }
   }
