@@ -2435,27 +2435,66 @@ function toast(msg, type = 'info') {
 class PWAManager {
     constructor() {
         if ('serviceWorker' in navigator && location.protocol === 'https:') {
+            // Traccia se c'era già un SW attivo (= aggiornamento, non prima installazione)
+            const hadController = !!navigator.serviceWorker.controller;
+
             navigator.serviceWorker.register('./sw.js').then(reg => {
-                reg.addEventListener('updatefound', () => {
-                    const w = reg.installing;
-                    w.addEventListener('statechange', () => {
-                        if (w.state === 'installed' && navigator.serviceWorker.controller) {
-                            document.getElementById('update-banner').style.display = 'flex';
-                        }
-                    });
-                });
                 navigator.serviceWorker.addEventListener('controllerchange', () => {
                     window.location.reload();
                 });
             });
+
+            // Riceve il messaggio UPDATE_AVAILABLE dal SW durante l'activate
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data?.type === 'UPDATE_AVAILABLE' && hadController) {
+                    // Salva changelog in sessionStorage: verrà mostrato dopo il reload
+                    sessionStorage.setItem('sw_pending_changelog', JSON.stringify({
+                        version: event.data.version || '',
+                        changelog: event.data.changelog || ''
+                    }));
+                }
+            });
         }
 
-        document.getElementById('update-btn').addEventListener('click', () => {
+        // Mostra il changelog se era stato salvato prima del reload
+        const pendingRaw = sessionStorage.getItem('sw_pending_changelog');
+        if (pendingRaw) {
+            sessionStorage.removeItem('sw_pending_changelog');
+            try {
+                const { version, changelog } = JSON.parse(pendingRaw);
+                this._showChangelog(version, changelog);
+            } catch (_) {}
+        }
+
+        document.getElementById('update-btn')?.addEventListener('click', () => {
             navigator.serviceWorker.controller?.postMessage({ type: 'SKIP_WAITING' });
         });
-        document.getElementById('dismiss-update').addEventListener('click', () => {
+        document.getElementById('dismiss-update')?.addEventListener('click', () => {
             document.getElementById('update-banner').style.display = 'none';
         });
+    }
+
+    _showChangelog(version, changelog) {
+        const overlay = document.createElement('div');
+        overlay.className = 'sw-changelog-overlay';
+        const vLabel = version ? version.replace('eduboard-', '') : '';
+        overlay.innerHTML = `
+            <div class="sw-changelog-card">
+                <div class="sw-changelog-icon">✨</div>
+                <div class="sw-changelog-version">${vLabel ? 'Aggiornato a ' + vLabel : 'EduBoard aggiornato'}</div>
+                <div class="sw-changelog-text">${changelog || 'Nuove funzionalità disponibili.'}</div>
+                <div class="sw-changelog-bar"><div class="sw-changelog-progress"></div></div>
+            </div>`;
+        document.body.appendChild(overlay);
+        // Auto-rimozione dopo 6 secondi
+        const DURATION = 6000;
+        overlay.querySelector('.sw-changelog-progress').style.animationDuration = DURATION + 'ms';
+        const dismiss = () => {
+            overlay.classList.add('sw-changelog-out');
+            setTimeout(() => overlay.remove(), 400);
+        };
+        overlay.addEventListener('click', dismiss);
+        setTimeout(dismiss, DURATION);
     }
 }
 

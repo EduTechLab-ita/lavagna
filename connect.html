@@ -1092,6 +1092,50 @@
   }
 
   document.addEventListener('DOMContentLoaded', init);
+
+  // ══════════════════════════════════════════════════════════════
+  // SERVICE WORKER — auto-aggiornamento silenzioso
+  // ══════════════════════════════════════════════════════════════
+  (function() {
+    if (!('serviceWorker' in navigator) || location.protocol !== 'https:') return;
+
+    // Registra il SW (lo condivide con EduBoard, stesso dominio)
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+
+    let _changelog = '';
+
+    // Quando il SW manda UPDATE_AVAILABLE: salva il changelog
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data?.type === 'UPDATE_AVAILABLE') {
+        _changelog = event.data.changelog || 'Nuove funzionalità disponibili.';
+      }
+    });
+
+    // Quando il nuovo SW prende il controllo: mostra overlay e ricarica
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      _showEcUpdateOverlay(_changelog);
+      setTimeout(() => location.reload(), 2200);
+    });
+
+    function _showEcUpdateOverlay(text) {
+      const el = document.createElement('div');
+      el.style.cssText = [
+        'position:fixed','inset:0','z-index:99999',
+        'background:rgba(248,250,252,0.96)','backdrop-filter:blur(6px)',
+        'display:flex','flex-direction:column','align-items:center','justify-content:center',
+        'gap:14px','font-family:system-ui,sans-serif','text-align:center','padding:32px'
+      ].join(';');
+      el.innerHTML = `
+        <div style="font-size:2rem">✨</div>
+        <div style="font-size:1rem;font-weight:700;color:#0f172a">EduBoard Connect aggiornato</div>
+        <div style="font-size:0.82rem;color:#64748b;max-width:260px;line-height:1.5">${text}</div>
+        <div style="width:180px;height:3px;background:#e2e8f0;border-radius:2px;overflow:hidden">
+          <div style="height:100%;background:#3b82f6;border-radius:2px;animation:ecupd 2.2s linear forwards"></div>
+        </div>
+        <style>@keyframes ecupd{from{width:100%}to{width:0%}}</style>`;
+      document.body.appendChild(el);
+    }
+  })();
   </script>
 
 </body>

@@ -1,4 +1,7 @@
-const CACHE_NAME = 'eduboard-v93'; // v93 — pannello QR light+compatto, campanella fullscreen solo in fullscreen
+const CACHE_NAME = 'eduboard-v94'; // v94 — auto-aggiornamento EduBoard+EduConnect con changelog
+// Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
+const CHANGELOG  = 'Pannello QR connessione più compatto e tema chiaro · EduConnect si aggiorna da sola · Campanella foto visibile solo a schermo intero';
+
 const urlsToCache = [
   '.',
   './index.html',
@@ -61,7 +64,8 @@ self.addEventListener('activate', (event) => {
             console.log('[SW] Notifying client about update');
             client.postMessage({
               type: 'UPDATE_AVAILABLE',
-              message: 'Una nuova versione di EduBoard è disponibile!'
+              version: CACHE_NAME,
+              changelog: CHANGELOG
             });
           });
         })
