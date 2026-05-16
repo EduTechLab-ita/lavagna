@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v98'; // v96 — EduConnect: token in cache (no popup ripetuto), foto account, esci account
+const CACHE_NAME = 'eduboard-v99'; // v96 — EduConnect: token in cache (no popup ripetuto), foto account, esci account
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
 const CHANGELOG  = 'EduConnect: login Google una volta sola, foto account in alto, pulsante Esci account';
 
