@@ -2163,6 +2163,15 @@ class EduBoardConnect {
         this._panel          = null;
         this._phoneConnected = false;
         this._timerWasActive = false;
+        this._audioCtx       = null;
+        // Sblocca AudioContext al primo gesto utente sulla LIM
+        const unlockAudio = () => {
+            if (!this._audioCtx) {
+                try { this._audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(_) {}
+            }
+            if (this._audioCtx?.state === 'suspended') this._audioCtx.resume().catch(() => {});
+        };
+        ['click','touchstart','keydown'].forEach(ev => document.addEventListener(ev, unlockAudio, { once: false, passive: true }));
     }
 
     // ID stabile per questa LIM (persiste in localStorage)
@@ -2420,14 +2429,11 @@ class EduBoardConnect {
                 ${photos.length === 0
                     ? '<div class="pnp-empty">Nessuna foto ricevuta</div>'
                     : photos.map((p, i) => `
-                        <div class="pnp-item${p.added ? ' pnp-item-added' : ''}" data-idx="${i}" style="${p.added ? 'opacity:0.5' : ''}">
+                        <div class="pnp-item${p.added ? ' pnp-item-added' : ''}" data-idx="${i}">
                             <img src="${p.dataUrl}" alt="${p.name}" class="pnp-thumb">
                             <div class="pnp-item-info">
                                 <div class="pnp-item-name">${p.name}</div>
-                                ${p.added
-                                    ? '<button class="pnp-add-btn pnp-add-done" data-idx="' + i + '" disabled>✓ Aggiunta</button>'
-                                    : '<button class="pnp-add-btn" data-idx="' + i + '">Aggiungi alla lavagna</button>'
-                                }
+                                <button class="pnp-add-btn" data-idx="${i}">${p.added ? '+ Aggiungi di nuovo' : 'Aggiungi alla lavagna'}</button>
                             </div>
                             <button class="pnp-del-btn" data-idx="${i}" title="Rimuovi">✕</button>
                         </div>
@@ -2492,9 +2498,10 @@ class EduBoardConnect {
                 const H = Math.round(img.naturalHeight * scale);
                 const x = scrollX + areaW / 2 - W / 2;
                 const y = scrollY + areaH / 2 - H / 2;
-                window.objectLayer.addObject('image', img, x, y, W, H);
+                const obj = window.objectLayer.addObject('image', img, x, y, W, H);
+                if (obj) window.objectLayer.bringToFront(obj.id);
                 if (typeof toast === 'function') toast('Foto aggiunta alla lavagna', 'success');
-                // Marca come aggiunta (non rimuovere dalla lista — resta nel pannello con stile "aggiunta")
+                // Marca come aggiunta ma permette di riaggiungerla — il badge si azzera
                 photo.added = true;
             } else {
                 if (typeof toast === 'function') toast('Errore: objectLayer non disponibile', 'error');
@@ -2515,23 +2522,24 @@ class EduBoardConnect {
         }, 500);
     }
 
-    _playTimerAlarm() {
+    _beep(freq, duration, volume) {
+        const ctx = this._audioCtx;
+        if (!ctx) return;
         try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            [0, 500, 1000].forEach(delay => {
-                setTimeout(() => {
-                    const osc  = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-                    osc.frequency.value = 880;
-                    gain.gain.setValueAtTime(0.35, ctx.currentTime);
-                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
-                    osc.start(ctx.currentTime);
-                    osc.stop(ctx.currentTime + 0.45);
-                }, delay);
-            });
+            const osc  = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(volume || 0.35, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + duration);
         } catch(_) {}
+    }
+
+    _playTimerAlarm() {
+        [0, 500, 1000].forEach(d => setTimeout(() => this._beep(880, 0.45), d));
     }
 
     _updateTimer(data) {
@@ -2585,10 +2593,19 @@ class EduBoardConnect {
     }
 
     _triggerBuzz() {
-        // Effetto visivo flash + vibrazione audio
-        document.body.style.transition = 'background 0.1s';
-        document.body.style.background = 'rgba(59,130,246,0.3)';
-        setTimeout(() => { document.body.style.background = ''; }, 300);
+        // Flash overlay sopra tutti i canvas
+        let overlay = document.getElementById('buzz-flash-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'buzz-flash-overlay';
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:0;background:rgba(59,130,246,0.45);transition:opacity 0.15s';
+            document.body.appendChild(overlay);
+        }
+        overlay.style.opacity = '1';
+        setTimeout(() => { overlay.style.opacity = '0'; }, 300);
+        // Suono
+        this._beep(660, 0.3, 0.4);
+        setTimeout(() => this._beep(880, 0.25, 0.3), 200);
         // Toast
         if (typeof toast === 'function') toast('🔔 Attenzione!', 'info');
     }

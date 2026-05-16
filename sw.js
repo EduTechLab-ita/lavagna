@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v71'; // v71 — fix: token null check, foto scala+centra, badge azzera, timer suona
+const CACHE_NAME = 'eduboard-v72'; // v72 — AudioContext unlock, foto bringToFront+riaggiungi, buzz overlay+suono
 const urlsToCache = [
   '.',
   './index.html',
