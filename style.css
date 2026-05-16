@@ -477,7 +477,7 @@ button {
 
 /* Puntino che rappresenta visivamente il diametro del tratto */
 .size-dot {
-    background: #ffffff;
+    background: #0f172a;
     border-radius: 50%;
     display: block;
 }
