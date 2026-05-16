@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v75'; // v75 — ?reinstall=1 forza screen-browser anche in standalone (fix reinstallazione PWA)
+const CACHE_NAME = 'eduboard-v76'; // v76 — guida installazione visuale per piattaforma (Android/iOS), no alert()
 const urlsToCache = [
   '.',
   './index.html',

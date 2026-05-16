@@ -315,15 +315,42 @@
       display: none;
     }
     .install-banner.visible { display: block; }
-    .install-steps {
-      text-align: left; width: 100%;
-      background: #0f172a; border: 1px solid var(--border);
-      border-radius: 12px; padding: 16px 18px; margin-top: 16px;
+
+    /* ── Install Guide ── */
+    .install-guide {
+      width: 100%; max-width: 380px;
+      margin-top: 16px;
     }
-    .install-steps-title { font-size: 0.78rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
-    .install-step { font-size: 0.84rem; color: var(--text-muted); padding: 5px 0; line-height: 1.4; }
-    .install-step strong { color: var(--text); }
-    .install-note { font-size: 0.78rem; color: var(--text-dim); margin-top: 14px; line-height: 1.5; }
+    .guide-heading {
+      font-size: 0.72rem; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.1em;
+      margin-bottom: 12px; text-align: center;
+    }
+    .guide-step {
+      display: flex; align-items: flex-start; gap: 14px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 14px 16px; margin-bottom: 10px;
+    }
+    .guide-num {
+      width: 28px; height: 28px; flex-shrink: 0;
+      background: var(--accent); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; font-weight: 700; color: #fff;
+    }
+    .guide-step-content { flex: 1; text-align: left; }
+    .guide-step-action {
+      font-size: 0.9rem; font-weight: 600; color: var(--text);
+      margin-bottom: 4px;
+    }
+    .guide-step-detail {
+      font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;
+    }
+    .guide-step-badge {
+      display: inline-block; background: #0f172a;
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 1px 7px; font-size: 0.82rem; color: var(--text);
+      font-weight: 600; white-space: nowrap;
+    }
 
     /* ── Connected header ── */
     .connected-header {
@@ -356,17 +383,84 @@
   <!-- ════════════════════════════════════════════════════ -->
   <div id="screen-browser" class="screen hidden">
     <div id="browser-lid-banner" class="install-banner"></div>
-    <div class="card">
+    <div class="card" style="margin-bottom:16px">
       <div class="card-icon">📱</div>
       <div class="card-title">Installa EduBoard Connect</div>
-      <div class="card-text">L'app per controllare la lavagna dal tuo telefono.<br>È necessario installarla per connettersi alla LIM.</div>
-      <button class="btn btn-primary" id="btn-install">Installa app</button>
-      <div class="install-steps">
-        <div class="install-steps-title">Installazione manuale</div>
-        <div class="install-step"><strong>Android / Chrome:</strong> menu (⋮) → Aggiungi a schermata Home</div>
-        <div class="install-step" style="margin-top:8px"><strong>iPhone / Safari:</strong> Condividi (⬆) → Aggiungi a schermata Home</div>
+      <div class="card-text">Per controllare la lavagna dal tuo telefono devi installare l'app una volta sola.</div>
+      <button class="btn btn-primary" id="btn-install">⬇ Installa app</button>
+    </div>
+
+    <!-- Guida visuale — sempre visibile, specifica per piattaforma -->
+    <div class="install-guide" id="install-guide">
+      <div class="guide-heading" id="guide-heading">Installazione manuale</div>
+
+      <!-- Android / Chrome -->
+      <div id="guide-android" class="hidden">
+        <div class="guide-step">
+          <div class="guide-num">1</div>
+          <div class="guide-step-content">
+            <div class="guide-step-action">Tocca il menu in alto a destra</div>
+            <div class="guide-step-detail">Il pulsante <span class="guide-step-badge">⋮</span> (tre puntini) nell'angolo in alto a destra di Chrome</div>
+          </div>
+        </div>
+        <div class="guide-step">
+          <div class="guide-num">2</div>
+          <div class="guide-step-content">
+            <div class="guide-step-action">Tocca "Aggiungi a schermata Home"</div>
+            <div class="guide-step-detail">Potresti vedere anche <span class="guide-step-badge">Installa app</span></div>
+          </div>
+        </div>
+        <div class="guide-step">
+          <div class="guide-num">3</div>
+          <div class="guide-step-content">
+            <div class="guide-step-action">Conferma con "Aggiungi" o "Installa"</div>
+            <div class="guide-step-detail">L'icona di EduBoard Connect apparirà nella schermata home</div>
+          </div>
+        </div>
       </div>
-      <div class="install-note">Apri questa pagina da Chrome (Android) o Safari (iPhone) se il pulsante non funziona.</div>
+
+      <!-- iPhone / Safari -->
+      <div id="guide-ios" class="hidden">
+        <div class="guide-step">
+          <div class="guide-num">1</div>
+          <div class="guide-step-content">
+            <div class="guide-step-action">Tocca il pulsante Condividi</div>
+            <div class="guide-step-detail">Il pulsante <span class="guide-step-badge">⬆</span> nella barra in basso di Safari</div>
+          </div>
+        </div>
+        <div class="guide-step">
+          <div class="guide-num">2</div>
+          <div class="guide-step-content">
+            <div class="guide-step-action">Tocca "Aggiungi a schermata Home"</div>
+            <div class="guide-step-detail">Scorri verso il basso nel menu che si apre</div>
+          </div>
+        </div>
+        <div class="guide-step">
+          <div class="guide-num">3</div>
+          <div class="guide-step-content">
+            <div class="guide-step-action">Tocca "Aggiungi" in alto a destra</div>
+            <div class="guide-step-detail">L'icona di EduBoard Connect apparirà nella schermata home</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Altro (desktop / browser non supportato) -->
+      <div id="guide-other" class="hidden">
+        <div class="guide-step">
+          <div class="guide-num">1</div>
+          <div class="guide-step-content">
+            <div class="guide-step-action">Apri questa pagina da Chrome (Android)</div>
+            <div class="guide-step-detail">oppure da Safari su iPhone/iPad</div>
+          </div>
+        </div>
+        <div class="guide-step">
+          <div class="guide-num">2</div>
+          <div class="guide-step-content">
+            <div class="guide-step-action">Android: menu ⋮ → Aggiungi a schermata Home</div>
+            <div class="guide-step-detail">iPhone: pulsante ⬆ → Aggiungi a schermata Home</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -994,9 +1088,23 @@
   window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
     deferredInstall = e;
-    const btn = document.getElementById('btn-install');
-    if (btn) btn.textContent = 'Installa app';
   });
+
+  function detectPlatform() {
+    const ua = navigator.userAgent;
+    if (/iPhone|iPad|iPod/.test(ua)) return 'ios';
+    if (/Android/.test(ua)) return 'android';
+    return 'other';
+  }
+
+  function showInstallGuide() {
+    const platform = detectPlatform();
+    document.getElementById('guide-android').classList.toggle('hidden', platform !== 'android');
+    document.getElementById('guide-ios').classList.toggle('hidden', platform !== 'ios');
+    document.getElementById('guide-other').classList.toggle('hidden', platform !== 'other');
+    const headings = { android: 'Come installare su Android', ios: 'Come installare su iPhone/iPad', other: 'Come installare' };
+    document.getElementById('guide-heading').textContent = headings[platform];
+  }
 
   document.getElementById('btn-install').addEventListener('click', async () => {
     if (deferredInstall) {
@@ -1004,7 +1112,18 @@
       const result = await deferredInstall.userChoice;
       if (result.outcome === 'accepted') deferredInstall = null;
     } else {
-      alert('Per installare:\n\nAndroid/Chrome: menu (⋮) → Aggiungi a schermata Home\niPhone/Safari: Condividi (⬆) → Aggiungi a schermata Home');
+      // Nessun prompt disponibile (già installata o cooldown Chrome) → evidenzia la guida
+      const guide = document.getElementById('install-guide');
+      guide.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      guide.style.outline = '2px solid var(--accent)';
+      guide.style.borderRadius = '12px';
+      guide.style.transition = 'outline 0.5s';
+      const btn = document.getElementById('btn-install');
+      btn.textContent = '⬇ Segui i passi qui sotto';
+      setTimeout(() => {
+        guide.style.outline = '';
+        btn.textContent = '⬇ Installa app';
+      }, 3000);
     }
   });
 
@@ -1086,6 +1205,7 @@
         banner.classList.add('visible');
       }
       showScreen('screen-browser');
+      showInstallGuide();
       return;
     }
 
