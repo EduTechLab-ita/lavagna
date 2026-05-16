@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v95'; // v95 — pallini selezione grandi, menu selezione con ingranaggio
+const CACHE_NAME = 'eduboard-v96'; // v96 — EduConnect: token in cache (no popup ripetuto), foto account, esci account
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'Pallini di ridimensionamento più grandi · Menu selezione con ingranaggio espandibile · Auto-aggiornamento EduConnect';
+const CHANGELOG  = 'EduConnect: login Google una volta sola, foto account in alto, pulsante Esci account';
 
 const urlsToCache = [
   '.',

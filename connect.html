@@ -321,6 +321,41 @@
     }
 
 
+    /* ── User account header (fisso in alto, visibile quando autenticato) ── */
+    .user-header {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 52px; z-index: 200;
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 16px;
+      background: #ffffff; border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 6px rgba(15,23,42,0.06);
+    }
+    .user-avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      object-fit: cover; border: 2px solid var(--accent);
+      flex-shrink: 0;
+    }
+    .user-avatar-init {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; font-weight: 700; flex-shrink: 0;
+    }
+    .user-header-name {
+      flex: 1; font-size: 0.82rem; font-weight: 600; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .user-signout-btn {
+      background: none; border: 1px solid var(--border);
+      color: var(--text-muted); border-radius: 8px;
+      padding: 5px 10px; font-size: 0.72rem;
+      font-family: inherit; cursor: pointer; white-space: nowrap;
+      transition: background 0.15s, color 0.15s;
+    }
+    .user-signout-btn:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+    /* Padding top body quando l'header è visibile */
+    body.has-user-header { padding-top: 52px; }
+
     /* ── Connected header ── */
     .connected-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -336,6 +371,13 @@
   </style>
 </head>
 <body>
+
+  <!-- Header account utente (visibile solo quando autenticato) -->
+  <div id="user-header" class="user-header" style="display:none">
+    <div id="user-avatar-wrap"></div>
+    <span class="user-header-name" id="user-header-name"></span>
+    <button class="user-signout-btn" id="btn-signout">Esci account</button>
+  </div>
 
   <!-- Logo (visibile nelle schermate normali) -->
   <div class="logo" id="app-logo">
@@ -611,8 +653,12 @@
   const CLIENT_ID   = '374342529488-c123a5j5v8hnfs241udbl55fos5thfq6.apps.googleusercontent.com';
   const SCOPE       = 'https://www.googleapis.com/auth/drive.file email profile';
   const CF_WORKER   = 'https://eduboard-connect.edutechlab-ita.workers.dev';
-  const STORAGE_EMAIL = 'ec_saved_email';
-  const LIM_ID_KEY    = 'ec_last_lim_id';
+  const STORAGE_EMAIL   = 'ec_saved_email';
+  const STORAGE_TOKEN   = 'ec_access_token';
+  const STORAGE_EXPIRY  = 'ec_token_expiry';
+  const STORAGE_PICTURE = 'ec_user_picture';
+  const STORAGE_NAME    = 'ec_user_name';
+  const LIM_ID_KEY      = 'ec_last_lim_id';
 
   const ALL_SCREENS = [
     'screen-browser', 'screen-installed', 'screen-loading', 'screen-scanner', 'screen-saved',
@@ -654,6 +700,15 @@
         el.style.display = '';
       }
     });
+
+    // Mostra user header solo nelle schermate "operative" (non install/login/loading)
+    const NO_HEADER = new Set(['screen-browser', 'screen-installed', 'screen-loading', 'screen-login', 'screen-connecting']);
+    const uh = document.getElementById('user-header');
+    if (uh) {
+      const show = !NO_HEADER.has(id) && !!localStorage.getItem(STORAGE_EMAIL);
+      uh.style.display = show ? 'flex' : 'none';
+      document.body.classList.toggle('has-user-header', show);
+    }
   }
 
   function showError(msg) {
@@ -698,10 +753,71 @@
   }
 
   // ══════════════════════════════════════════════════════════════
-  // TOKEN CALLBACK
+  // TOKEN HELPERS
+  // ══════════════════════════════════════════════════════════════
+
+  // Restituisce { token, expiry } se il token in cache è ancora valido (con 2 min buffer), altrimenti null
+  function getCachedToken() {
+    const token  = localStorage.getItem(STORAGE_TOKEN);
+    const expiry = parseInt(localStorage.getItem(STORAGE_EXPIRY) || '0', 10);
+    if (token && Date.now() < expiry - 120000) return { token, expiry };
+    return null;
+  }
+
+  // Salva il token con la sua scadenza in localStorage
+  function saveTokenData(token, expiresIn) {
+    const expiry = Date.now() + (expiresIn ? expiresIn * 1000 : 3600000);
+    localStorage.setItem(STORAGE_TOKEN, token);
+    localStorage.setItem(STORAGE_EXPIRY, String(expiry));
+    return expiry;
+  }
+
+  // Cancella tutti i dati di autenticazione
+  function clearAuthData() {
+    localStorage.removeItem(STORAGE_EMAIL);
+    localStorage.removeItem(STORAGE_TOKEN);
+    localStorage.removeItem(STORAGE_EXPIRY);
+    localStorage.removeItem(STORAGE_PICTURE);
+    localStorage.removeItem(STORAGE_NAME);
+    savedEmail = null;
+  }
+
+  // Aggiorna l'header con avatar + nome dell'utente
+  function updateUserHeader() {
+    const wrap    = document.getElementById('user-avatar-wrap');
+    const nameEl  = document.getElementById('user-header-name');
+    if (!wrap || !nameEl) return;
+    const picture = localStorage.getItem(STORAGE_PICTURE) || '';
+    const name    = localStorage.getItem(STORAGE_NAME) || localStorage.getItem(STORAGE_EMAIL) || '';
+    const initials = (name.charAt(0) || '?').toUpperCase();
+    wrap.innerHTML = picture
+      ? `<img class="user-avatar" src="${picture}" alt="${initials}" onerror="this.parentNode.innerHTML='<div class=user-avatar-init>${initials}</div>'">`
+      : `<div class="user-avatar-init">${initials}</div>`;
+    nameEl.textContent = name;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // CONNESSIONE LIM (usata sia da token fresco che da cache)
+  // ══════════════════════════════════════════════════════════════
+  async function connectToLim(token, expiry, email) {
+    showScreen('screen-connecting');
+    try {
+      const res = await fetch(`${CF_WORKER}/session/${limId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, email, expiry })
+      }).then(r => r.json());
+      if (!res.ok) throw new Error(res.error || 'Errore server');
+      showConnected(email);
+    } catch (err) {
+      showError(err.message || 'Errore di rete. Riprova.');
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // TOKEN CALLBACK (dal popup Google)
   // ══════════════════════════════════════════════════════════════
   async function onTokenReceived(response) {
-    // Re-abilita pulsanti
     ['btn-continue', 'btn-login'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.disabled = false;
@@ -715,8 +831,9 @@
     }
 
     const accessToken = response.access_token;
+    const expiry = saveTokenData(accessToken, response.expires_in);
 
-    // Recupera email via userinfo
+    // Recupera email, nome e foto
     let email;
     try {
       const info = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
@@ -725,30 +842,16 @@
       email = info.email;
       if (!email) throw new Error('email non ricevuta');
       localStorage.setItem(STORAGE_EMAIL, email);
+      localStorage.setItem(STORAGE_NAME,    info.name    || email);
+      localStorage.setItem(STORAGE_PICTURE, info.picture || '');
       savedEmail = email;
+      updateUserHeader();
     } catch (_) {
       showError('Impossibile recuperare le informazioni account. Riprova.');
       return;
     }
 
-    // Connessione sessione LIM — invia token + email + expiry alla LIM tramite CF Worker
-    showScreen('screen-connecting');
-    try {
-      const res = await fetch(`${CF_WORKER}/session/${limId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token:  accessToken,
-          email,
-          expiry: Date.now() + (response.expires_in ? response.expires_in * 1000 : 3600000)
-        })
-      }).then(r => r.json());
-
-      if (!res.ok) throw new Error(res.error || 'Errore server');
-      showConnected(email);
-    } catch (err) {
-      showError(err.message || 'Errore di rete. Riprova.');
-    }
+    await connectToLim(accessToken, expiry, email);
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -819,11 +922,23 @@
     limId = lid;
     localStorage.setItem(LIM_ID_KEY, limId);
     savedEmail = localStorage.getItem(STORAGE_EMAIL);
+
+    const cached = getCachedToken();
+    if (savedEmail && cached) {
+      // Token ancora valido → connessione istantanea, senza popup Google
+      updateUserHeader();
+      connectToLim(cached.token, cached.expiry, savedEmail);
+      return;
+    }
+
     if (savedEmail) {
+      // Account noto ma token scaduto → mostra "Connetti" (un tap, popup veloce)
       document.getElementById('saved-email-label').textContent = savedEmail;
+      updateUserHeader();
       showScreen('screen-saved');
       waitForGIS(savedEmail, () => {});
     } else {
+      // Primo utilizzo → login completo
       showScreen('screen-login');
       waitForGIS(null, () => {});
     }
@@ -1026,12 +1141,18 @@
     waitForGIS(null, () => gisClient.requestAccessToken({ prompt: 'select_account' }));
   });
 
-  // Cambia account
+  // Cambia account — azzera tutto e rifai il login
   document.getElementById('btn-change-account').addEventListener('click', () => {
-    localStorage.removeItem(STORAGE_EMAIL);
-    savedEmail = null;
+    clearAuthData();
     showScreen('screen-login');
     waitForGIS(null, () => {});
+  });
+
+  // Esci account (dall'header) — azzera tutto e torna allo scanner
+  document.getElementById('btn-signout').addEventListener('click', () => {
+    clearAuthData();
+    updateUserHeader();
+    disconnect();
   });
 
   // Timer
@@ -1091,6 +1212,8 @@
     }
   }
 
+  // Carica subito avatar se già autenticato
+  updateUserHeader();
   document.addEventListener('DOMContentLoaded', init);
 
   // ══════════════════════════════════════════════════════════════
