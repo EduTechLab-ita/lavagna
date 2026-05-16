@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v94'; // v94 — auto-aggiornamento EduBoard+EduConnect con changelog
+const CACHE_NAME = 'eduboard-v95'; // v95 — pallini selezione grandi, menu selezione con ingranaggio
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'Pannello QR connessione più compatto e tema chiaro · EduConnect si aggiorna da sola · Campanella foto visibile solo a schermo intero';
+const CHANGELOG  = 'Pallini di ridimensionamento più grandi · Menu selezione con ingranaggio espandibile · Auto-aggiornamento EduConnect';
 
 const urlsToCache = [
   '.',

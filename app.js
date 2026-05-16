@@ -3146,12 +3146,28 @@ class SelectManager {
         // Clipboard interna per copia/incolla selezione pixel
         this._pixelClipboard = null;
 
-        // Chiudi popup quando si clicca fuori dal pannello
+        // Gear button — apre/chiude la toolbar
+        const gearBtn = document.getElementById('ctx-gear-btn');
+        if (gearBtn) {
+            gearBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isOpen = panel.classList.toggle('ctx-panel--open');
+                gearBtn.classList.toggle('is-open', isOpen);
+                // Chiudi popup interno se chiudiamo il pannello
+                if (!isOpen) {
+                    const popup = document.getElementById('ctx-popup');
+                    if (popup) { popup.style.display = 'none'; popup.dataset.action = ''; }
+                }
+            });
+        }
+
+        // Chiudi toolbar quando si clicca fuori dal pannello
         document.addEventListener('pointerdown', (e) => {
-            const popup = document.getElementById('ctx-popup');
-            if (!popup) return;
             if (!panel.contains(e.target)) {
-                popup.style.display = 'none';
+                panel.classList.remove('ctx-panel--open');
+                if (gearBtn) gearBtn.classList.remove('is-open');
+                const popup = document.getElementById('ctx-popup');
+                if (popup) { popup.style.display = 'none'; popup.dataset.action = ''; }
             }
         }, true);
 
@@ -3686,9 +3702,13 @@ class SelectManager {
         }
 
         // Assicura che il pannello sia visibile nella viewport
-        panel.style.left = Math.min(screenX + (isPixelSelection ? 0 : obj.w * scale) + 8, window.innerWidth - 240) + 'px';
+        panel.style.left = Math.min(screenX + (isPixelSelection ? 0 : obj.w * scale) + 8, window.innerWidth - 260) + 'px';
         panel.style.top  = Math.max(Math.min(screenY, window.innerHeight - 60), 60) + 'px';
-        panel.style.display = 'block';
+        panel.style.display = 'flex';
+        // Ogni nuova selezione parte col pannello collassato (solo ingranaggio visibile)
+        panel.classList.remove('ctx-panel--open');
+        const gearBtn = document.getElementById('ctx-gear-btn');
+        if (gearBtn) gearBtn.classList.remove('is-open');
 
         // Chiudi popup interno se aperto
         const popup = document.getElementById('ctx-popup');
@@ -3750,17 +3770,16 @@ class SelectManager {
         ctx.lineWidth   = isObject ? 2 : 1.5;
         ctx.setLineDash([6, 3]);
         ctx.strokeRect(x, y, w, h);
-        // Handle angoli — più grandi per oggetti (facilitano il resize su LIM)
-        const handleR = isObject ? 6 : 5;
+        // Handle angoli — grandi per facilitare il tocco con il dito sulla LIM
+        const handleR = isObject ? 14 : 11;
         ctx.fillStyle   = 'white';
-        ctx.strokeStyle = isObject ? '#3b82f6' : '#3b82f6';
-        ctx.lineWidth   = 2;
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth   = 2.5;
         ctx.setLineDash([]);
         [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(([hx, hy]) => {
             ctx.beginPath();
             ctx.arc(hx, hy, handleR, 0, Math.PI * 2);
             ctx.fill();
-            ctx.strokeStyle = isObject ? '#3b82f6' : '#3b82f6';
             ctx.stroke();
         });
         ctx.restore();
@@ -3796,7 +3815,7 @@ class SelectManager {
                 { corner: 'bl', hx: obj.x,       hy: obj.y + obj.h },
                 { corner: 'br', hx: obj.x + obj.w, hy: obj.y + obj.h },
             ];
-            const HIT_RADIUS = 12; // px leggermente più grande dei cerchi visibili (6px) per facilità su LIM
+            const HIT_RADIUS = 22; // px — grande abbastanza per il tocco con dito su LIM
             for (const h of handles) {
                 if (Math.abs(x - h.hx) < HIT_RADIUS && Math.abs(y - h.hy) < HIT_RADIUS) {
                     if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
@@ -4074,10 +4093,10 @@ class SelectManager {
             ctx.setLineDash([6, 3]);
             ctx.strokeRect(newX, newY, w, h);
             // Handle angoli
-            const handleR = 5;
+            const handleR = 11;
             ctx.fillStyle   = 'white';
             ctx.strokeStyle = '#3b82f6';
-            ctx.lineWidth   = 2;
+            ctx.lineWidth   = 2.5;
             ctx.setLineDash([]);
             [[newX, newY], [newX + w, newY], [newX, newY + h], [newX + w, newY + h]].forEach(([hx, hy]) => {
                 ctx.beginPath();
