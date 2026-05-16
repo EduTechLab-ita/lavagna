@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v72'; // v72 — AudioContext unlock, foto bringToFront+riaggiungi, buzz overlay+suono
+const CACHE_NAME = 'eduboard-v73'; // v73 — bottone "Installa App" in header apre QR installazione EduBoard Connect
 const urlsToCache = [
   '.',
   './index.html',

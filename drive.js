@@ -2281,6 +2281,15 @@ class EduBoardConnect {
         document.getElementById('ec-view-install').style.display = 'flex';
     }
 
+    showInstallQR() {
+        // Apre il pannello EduBoard Connect direttamente sulla schermata di installazione
+        if (!this._panel || !document.body.contains(this._panel)) {
+            this.show(); // crea il pannello se non esiste
+        }
+        this._panel.style.display = 'flex';
+        this._switchToInstall();
+    }
+
     _switchToConnect() {
         document.getElementById('ec-view-connect').style.display = 'flex';
         document.getElementById('ec-view-install').style.display = 'none';
@@ -2636,6 +2645,10 @@ function initDrive() {
 
     document.getElementById('photo-bell-btn')?.addEventListener('click', () => {
         window.eduBoardConnect?.openPhotoPanel();
+    });
+
+    document.getElementById('btn-install-connect')?.addEventListener('click', () => {
+        window.eduBoardConnect?.showInstallQR();
     });
 
     // Esponi come globali window.* — necessario per AutoSaveManager (onDirty usa window.libraryMgr e window.driveMgr)
