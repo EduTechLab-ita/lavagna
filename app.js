@@ -1311,8 +1311,14 @@ class CanvasManager {
         }
     }
 
+    // Snapshot degli oggetti nel layer (riferimenti img stabili, nessuna serializzazione pesante)
+    _snapshotObjects() {
+        if (typeof objectLayer === 'undefined' || !objectLayer) return null;
+        return objectLayer.objects.map(o => ({ ...o })); // shallow copy
+    }
+
     _saveUndo(notifyDirty = false) {
-        this.undoStack.push(this.canvas.toDataURL());
+        this.undoStack.push({ canvas: this.canvas.toDataURL(), objects: this._snapshotObjects() });
         this._vectorStrokes.push(null); // placeholder, aggiornato in _onEnd
         if (this.undoStack.length > CONFIG.maxUndo) {
             this.undoStack.shift();
@@ -1326,20 +1332,29 @@ class CanvasManager {
         }
     }
 
+    _applyUndoEntry(entry) {
+        // Retrocompatibilità: entry può essere stringa (vecchio formato) o {canvas, objects}
+        const canvasUrl = (typeof entry === 'string') ? entry : entry.canvas;
+        const objs      = (typeof entry === 'string') ? null  : entry.objects;
+        this._loadURL(canvasUrl);
+        if (objs !== null && objs !== undefined && typeof objectLayer !== 'undefined' && objectLayer) {
+            objectLayer.objects = objs;
+            objectLayer.render();
+        }
+    }
+
     undo() {
         if (this.undoStack.length === 0) return;
-        this.redoStack.push(this.canvas.toDataURL());
+        this.redoStack.push({ canvas: this.canvas.toDataURL(), objects: this._snapshotObjects() });
         this._vectorStrokes.pop();
-        const prev = this.undoStack.pop();
-        this._loadURL(prev);
+        this._applyUndoEntry(this.undoStack.pop());
     }
 
     redo() {
         if (this.redoStack.length === 0) return;
-        this.undoStack.push(this.canvas.toDataURL());
-        this._vectorStrokes.push(null); // dati vettoriali non disponibili per redo
-        const next = this.redoStack.pop();
-        this._loadURL(next);
+        this.undoStack.push({ canvas: this.canvas.toDataURL(), objects: this._snapshotObjects() });
+        this._vectorStrokes.push(null);
+        this._applyUndoEntry(this.redoStack.pop());
     }
 
     _loadURL(url) {
@@ -3745,6 +3760,7 @@ class SelectManager {
             const HIT_RADIUS = 12; // px leggermente più grande dei cerchi visibili (6px) per facilità su LIM
             for (const h of handles) {
                 if (Math.abs(x - h.hx) < HIT_RADIUS && Math.abs(y - h.hy) < HIT_RADIUS) {
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
                     this.phase = 'object-resizing';
                     this._resizeHandle = {
                         corner: h.corner,
@@ -3832,6 +3848,7 @@ class SelectManager {
             if (hit) {
                 // Se avevo un oggetto selezionato e clicco su di lui → drag
                 if (this.phase === 'object-selected' && this.selectedObject?.id === hit.id) {
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
                     this.phase = 'object-dragging';
                     this._objDragStart = { x, y, origX: hit.x, origY: hit.y };
                     return true;
@@ -4224,6 +4241,7 @@ class SelectManager {
         if (e.key === 'Delete' || e.key === 'Backspace') {
             // Elimina oggetto ObjectLayer selezionato
             if ((this.phase === 'object-selected') && this.selectedObject) {
+                if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
                 objectLayer.removeObject(this.selectedObject.id);
                 this._clearSelection();
                 return;
