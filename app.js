@@ -7,6 +7,22 @@
 'use strict';
 
 // =============================================================================
+// SEZIONE 0 — PWA INSTALL (intercetta beforeinstallprompt il prima possibile)
+// =============================================================================
+let _pwaInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _pwaInstallPrompt = e;
+    const btn = document.getElementById('btn-install-pwa');
+    if (btn) btn.style.display = '';
+});
+window.addEventListener('appinstalled', () => {
+    _pwaInstallPrompt = null;
+    const btn = document.getElementById('btn-install-pwa');
+    if (btn) btn.style.display = 'none';
+});
+
+// =============================================================================
 // SEZIONE 1 — CONFIG GLOBALE
 // =============================================================================
 
@@ -5548,6 +5564,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-save').addEventListener('click',   () => projectMgr.save());
     document.getElementById('btn-export').addEventListener('click', () => handlePrint());
     document.getElementById('btn-new').addEventListener('click',    () => projectMgr.newBoard());
+
+    // Installa EduBoard come PWA sul PC
+    document.getElementById('btn-install-pwa')?.addEventListener('click', async () => {
+        if (!_pwaInstallPrompt) return;
+        await _pwaInstallPrompt.prompt();
+        const { outcome } = await _pwaInstallPrompt.userChoice;
+        if (outcome === 'accepted') _pwaInstallPrompt = null;
+    });
 
     // 3. Avviso modifiche non salvate alla chiusura finestra/tab
     window.addEventListener('beforeunload', (e) => {

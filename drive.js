@@ -2679,10 +2679,6 @@ function initDrive() {
         window.eduBoardConnect?.openPhotoPanel();
     });
 
-    document.getElementById('btn-install-connect')?.addEventListener('click', () => {
-        window.eduBoardConnect?.showInstallQR();
-    });
-
     // Esponi come globali window.* — necessario per AutoSaveManager (onDirty usa window.libraryMgr e window.driveMgr)
     window.driveMgr        = driveMgr;
     window.libraryMgr      = libraryMgr;
