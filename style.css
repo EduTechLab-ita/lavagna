@@ -1688,20 +1688,16 @@ button {
     transition: opacity 0.3s;
 }
 
-/* Tab libreria — ancorati agli angoli inferiori, allineati con la barra pagine.
+/* Tab libreria — fissi ai lati dello schermo a metà altezza, sempre visibili.
    NOTA: elementi FUORI da #library-panel (transform parent blocca position:fixed). */
 .library-tab {
     position: fixed;
-    bottom: 0;
-    top: auto;
-    transform: none;
-    width: 36px;
-    height: 36px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 56px;
     background: rgba(255, 255, 255, 0.97);
     border: 1px solid rgba(15, 23, 42, 0.1);
-    border-bottom: none;
-    border-radius: 8px 8px 0 0;
-    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.07);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -1712,10 +1708,16 @@ button {
     touch-action: none;
 }
 .library-tab--left {
-    left: 4px;
+    left: 0;
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.07);
 }
 .library-tab--right {
-    right: 4px;
+    right: 0;
+    border-right: none;
+    border-radius: 8px 0 0 8px;
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.07);
 }
 .library-tab:hover { background: #f1f5f9; color: var(--text); }
 /* Evidenzia il tab del lato aperto */
@@ -2089,7 +2091,7 @@ body.fullscreen-mode #canvas-area {
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 5px 12px 5px 48px;  /* padding-left: 48px — spazio per il tab-left (left:4px + w:36px + gap) */
+    padding: 5px 12px;
     background: transparent;
     z-index: 190;
     overflow-x: visible;
@@ -2146,9 +2148,9 @@ body.fullscreen-mode #canvas-area {
 }
 .page-del-btn:hover { background: #dc2626; }
 
-/* Sposta la toolbar-wrapper in alto di 38px quando la page-bar è visibile */
+/* Toolbar allineata con la barra pagine — stesso livello dei numeri pagina e zoom */
 body.has-page-bar #toolbar-wrapper {
-    bottom: 38px;
+    bottom: 0;
 }
 
 /* BUG 2 fix: quando il wrapper NON è visible, nascondi completamente il contenuto
@@ -2185,11 +2187,11 @@ body.has-page-bar #zoom-indicator {
     opacity: 1;
 }
 
-/* Badge zoom fisso — in basso a destra, spostato a sinistra del tab-right */
+/* Badge zoom fisso — in basso a destra */
 #zoom-badge {
     position: fixed;
     bottom: 6px;
-    right: 48px;
+    right: 24px;
     width: 52px;
     background: rgba(255, 255, 255, 0.92);
     backdrop-filter: blur(6px);

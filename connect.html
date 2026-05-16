@@ -43,11 +43,6 @@
       text-align: center;
     }
 
-    body.laser-active {
-      overflow: hidden;
-      padding: 0;
-    }
-
     /* ── Logo ── */
     .logo { margin-bottom: 24px; }
     .logo-title {
@@ -229,63 +224,6 @@
       white-space: nowrap; transition: background 0.15s;
     }
     .manual-confirm-btn:hover { background: var(--accent-hover); }
-
-    /* ── Laser screen ── */
-    #screen-laser {
-      position: fixed; inset: 0; background: #000;
-      display: flex; flex-direction: column;
-      z-index: 9999; margin: 0; max-width: none; padding: 0;
-    }
-    .laser-header {
-      display: flex; align-items: center; gap: 12px;
-      padding: 16px 20px; background: rgba(0,0,0,0.85);
-      position: absolute; top: 0; left: 0; right: 0; z-index: 10;
-    }
-    .laser-back-btn {
-      background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25);
-      color: #fff; border-radius: 8px; padding: 8px 14px;
-      font-size: 0.9rem; cursor: pointer; font-family: inherit;
-    }
-    .laser-back-btn:hover { background: rgba(255,255,255,0.25); }
-    .laser-title { font-size: 1rem; font-weight: 600; color: #fff; }
-    .laser-area {
-      flex: 1; position: relative; touch-action: none;
-      display: flex; align-items: center; justify-content: center;
-      cursor: crosshair;
-    }
-    .laser-instruction { color: rgba(255,255,255,0.25); font-size: 1rem; pointer-events: none; user-select: none; }
-    .laser-dot {
-      position: absolute; width: 22px; height: 22px;
-      background: radial-gradient(circle, #ff4444 0%, rgba(255,0,0,0.5) 60%, transparent 100%);
-      border-radius: 50%; transform: translate(-50%, -50%);
-      pointer-events: none; box-shadow: 0 0 16px #ff4444;
-    }
-
-    /* ── Laser giroscopio ── */
-    .laser-gyro-area {
-      flex: 1; display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 24px; padding: 24px;
-    }
-    .laser-gyro-btn {
-      width: 160px; height: 160px; border-radius: 50%;
-      background: radial-gradient(circle, #ff3333 0%, #991b1b 100%);
-      border: 4px solid rgba(255,100,100,0.4);
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 8px; cursor: pointer; user-select: none;
-      box-shadow: 0 0 40px rgba(255,50,50,0.3);
-      transition: transform 0.1s, box-shadow 0.1s;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: none;
-    }
-    .laser-gyro-btn.active {
-      transform: scale(0.94);
-      box-shadow: 0 0 60px rgba(255,50,50,0.7);
-    }
-    .laser-gyro-icon { font-size: 2.8rem; line-height: 1; }
-    .laser-gyro-label { font-size: 0.8rem; color: rgba(255,255,255,0.85); font-weight: 600; text-align: center; }
-    .laser-gyro-hint { font-size: 0.78rem; color: rgba(255,255,255,0.45); text-align: center; line-height: 1.5; }
-    .laser-gyro-status { font-size: 0.75rem; color: rgba(255,150,150,0.7); min-height: 18px; text-align: center; }
 
     /* ── Timer screen ── */
     #screen-timer {
@@ -612,10 +550,6 @@
         <span class="feature-icon">📷</span>
         <span class="feature-label">Invia foto</span>
       </button>
-      <button class="feature-btn" id="btn-laser">
-        <span class="feature-icon">🔴</span>
-        <span class="feature-label">Laser</span>
-      </button>
       <button class="feature-btn" id="btn-timer">
         <span class="feature-icon">⏱️</span>
         <span class="feature-label">Timer</span>
@@ -632,26 +566,6 @@
 
     <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
     <div id="photo-status" class="status-line"></div>
-  </div>
-
-  <!-- ════════════════════════════════════════════════════ -->
-  <!-- Screen: Laser                                       -->
-  <!-- ════════════════════════════════════════════════════ -->
-  <div id="screen-laser" class="screen hidden">
-    <div class="laser-header">
-      <button class="laser-back-btn" id="btn-laser-back">✕ Esci</button>
-      <div class="laser-title">🔴 Laser Pointer</div>
-    </div>
-    <div class="laser-gyro-area">
-      <div id="laser-gyro-status" class="laser-gyro-status"></div>
-      <div id="laser-gyro-btn" class="laser-gyro-btn">
-        <span class="laser-gyro-icon">🔴</span>
-        <span class="laser-gyro-label">TIENI PREMUTO</span>
-      </div>
-      <div class="laser-gyro-hint">
-        Tieni premuto e punta il telefono<br>verso la lavagna
-      </div>
-    </div>
   </div>
 
   <!-- ════════════════════════════════════════════════════ -->
@@ -707,10 +621,10 @@
   const ALL_SCREENS = [
     'screen-browser', 'screen-installed', 'screen-loading', 'screen-scanner', 'screen-saved',
     'screen-login', 'screen-connecting', 'screen-success',
-    'screen-laser', 'screen-timer', 'screen-error'
+    'screen-timer', 'screen-error'
   ];
   // Schermate con position:fixed (gestite con style.display, non classList)
-  const FIXED_SCREENS = new Set(['screen-laser', 'screen-timer']);
+  const FIXED_SCREENS = new Set(['screen-timer']);
 
   // ══════════════════════════════════════════════════════════════
   // STATO GLOBALE
@@ -720,25 +634,17 @@
   let gisClient        = null;
   let scannerStream    = null;
   let scannerAnimFrame = null;
-  let laserThrottle    = null;
   let deferredInstall  = null; // BeforeInstallPromptEvent
 
   // ══════════════════════════════════════════════════════════════
   // SHOW SCREEN
   // ══════════════════════════════════════════════════════════════
   function showScreen(id) {
-    const isLaserLike = FIXED_SCREENS.has(id);
+    const isFixed = FIXED_SCREENS.has(id);
     const logo = document.getElementById('app-logo');
 
-    // Logo: mostra sempre tranne nelle schermate fullscreen
-    if (logo) logo.style.display = isLaserLike ? 'none' : '';
-
-    // Body class per laser (overflow hidden)
-    if (id === 'screen-laser') {
-      document.body.classList.add('laser-active');
-    } else {
-      document.body.classList.remove('laser-active');
-    }
+    // Logo: nascosto nelle schermate fullscreen (timer)
+    if (logo) logo.style.display = isFixed ? 'none' : '';
 
     ALL_SCREENS.forEach(sid => {
       const el = document.getElementById(sid);
@@ -927,132 +833,7 @@
     }
   }
 
-  // ══════════════════════════════════════════════════════════════
-  // LASER (giroscopio)
-  // ══════════════════════════════════════════════════════════════
-  let _gyroHandler = null;
-  let _gyroBaseGamma = null;
-  let _gyroBaseBeta  = null;
-  let _gyroActive    = false;
-  let _gyroThrottle  = null;
-
-  function startLaser() {
-    showScreen('screen-laser');
-    _gyroBaseGamma = null;
-    _gyroBaseBeta  = null;
-    _gyroActive    = false;
-
-    // Rimuovi listener precedenti clonando il bottone (evita accumulo su aperture multiple)
-    const oldBtn = document.getElementById('laser-gyro-btn');
-    const btn    = oldBtn.cloneNode(true);
-    oldBtn.replaceWith(btn);
-    const status = document.getElementById('laser-gyro-status');
-
-    // Controlla supporto giroscopio
-    if (typeof DeviceOrientationEvent === 'undefined') {
-      status.textContent = 'Giroscopio non disponibile su questo dispositivo';
-      return;
-    }
-
-    function startGyro() {
-      status.textContent = '';
-      if (_gyroHandler) return;
-      _gyroHandler = (e) => {
-        if (!_gyroActive) return;
-        const gamma = e.gamma ?? 0; // left/right: -90..90
-        const beta  = e.beta  ?? 0; // up/down: -180..180
-
-        // Calibra al primo tocco
-        if (_gyroBaseGamma === null) {
-          _gyroBaseGamma = gamma;
-          _gyroBaseBeta  = beta;
-          return;
-        }
-
-        // Delta rispetto alla calibrazione (range ±35°)
-        const dG = Math.max(-35, Math.min(35, gamma - _gyroBaseGamma));
-        const dB = Math.max(-35, Math.min(35, beta  - _gyroBaseBeta));
-        const x  = Math.max(0, Math.min(1, 0.5 + dG / 70));
-        const y  = Math.max(0, Math.min(1, 0.5 + dB / 70));
-
-        if (!_gyroThrottle) {
-          _gyroThrottle = setTimeout(() => { _gyroThrottle = null; }, 50);
-          fetch(`${CF_WORKER}/laser/${limId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ x, y, active: true })
-          }).catch(() => {});
-        }
-      };
-      window.addEventListener('deviceorientation', _gyroHandler);
-    }
-
-    function stopGyro() {
-      if (_gyroHandler) {
-        window.removeEventListener('deviceorientation', _gyroHandler);
-        _gyroHandler = null;
-      }
-      _gyroBaseGamma = null;
-      fetch(`${CF_WORKER}/laser/${limId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ active: false })
-      }).catch(() => {});
-    }
-
-    // Attiva laser alla pressione
-    function onPress(e) {
-      e.preventDefault();
-      _gyroActive = true;
-      _gyroBaseGamma = null; // reset calibrazione ad ogni pressione
-      btn.classList.add('active');
-      startGyro();
-    }
-
-    function onRelease(e) {
-      e.preventDefault();
-      _gyroActive = false;
-      btn.classList.remove('active');
-      stopGyro();
-    }
-
-    btn.addEventListener('touchstart',  onPress,   { passive: false });
-    btn.addEventListener('touchend',    onRelease, { passive: false });
-    btn.addEventListener('touchcancel', onRelease, { passive: false });
-    btn.addEventListener('mousedown',   onPress);
-    btn.addEventListener('mouseup',     onRelease);
-    btn.addEventListener('mouseleave',  onRelease);
-
-    // Richiedi permesso su iOS 13+
-    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-      status.textContent = 'Tocca il pulsante per abilitare il sensore...';
-      btn.addEventListener('click', () => {
-        DeviceOrientationEvent.requestPermission()
-          .then(state => {
-            if (state === 'granted') {
-              status.textContent = '';
-            } else {
-              status.textContent = 'Permesso sensore negato';
-            }
-          })
-          .catch(() => { status.textContent = 'Errore permesso sensore'; });
-      }, { once: true });
-    }
-  }
-
-  function closeLaser() {
-    fetch(`${CF_WORKER}/laser/${limId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ active: false })
-    }).catch(() => {});
-    if (_gyroHandler) {
-      window.removeEventListener('deviceorientation', _gyroHandler);
-      _gyroHandler = null;
-    }
-    _gyroActive = false;
-    showScreen('screen-success');
-  }
+  // (laser rimosso — usava troppe operazioni KV Cloudflare)
 
   // ══════════════════════════════════════════════════════════════
   // TIMER
@@ -1280,10 +1061,6 @@
     showScreen('screen-login');
     waitForGIS(null, () => {});
   });
-
-  // Laser
-  document.getElementById('btn-laser').addEventListener('click', startLaser);
-  document.getElementById('btn-laser-back').addEventListener('click', closeLaser);
 
   // Timer
   document.getElementById('btn-timer').addEventListener('click', openTimer);
