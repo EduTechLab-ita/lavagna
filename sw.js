@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v91'; // v87 — fix testo bianco su sfondo bianco (tema chiaro)
+const CACHE_NAME = 'eduboard-v92'; // v92 — Drive FAB tema chiaro: più piccolo, pannello bianco con avatar e icone SVG
 const urlsToCache = [
   '.',
   './index.html',

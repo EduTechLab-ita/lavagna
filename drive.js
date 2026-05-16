@@ -1987,32 +1987,44 @@ class DriveConnectButton {
                 position: fixed;
                 bottom: 84px;
                 right: 16px;
-                background: rgba(15,23,42,0.95);
-                backdrop-filter: blur(12px);
-                border: 1px solid rgba(148,163,184,0.2);
-                border-radius: 12px;
-                padding: 8px;
+                background: #ffffff;
+                border: 1px solid rgba(15,23,42,0.08);
+                border-radius: 16px;
+                padding: 6px;
                 z-index: 601;
-                min-width: 200px;
-                box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+                min-width: 220px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
                 display: flex;
                 flex-direction: column;
-                gap: 4px;
+                gap: 2px;
             `;
             const email = this.drive.userEmail || '';
             const name  = this.drive.userName  || '';
+            const photo = this.drive.userPhotoUrl || '';
+            const avatar = photo
+                ? `<img src="${this._esc(photo)}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0">`
+                : `<div style="width:36px;height:36px;border-radius:50%;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#3b82f6" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`;
             panel.innerHTML = `
-                <div style="padding:8px 10px;border-bottom:1px solid rgba(148,163,184,0.15);margin-bottom:4px">
-                    <div style="font-size:0.85rem;font-weight:600;color:#e2e8f0">${this._esc(name)}</div>
-                    <div style="font-size:0.72rem;color:#94a3b8">${this._esc(email)}</div>
+                <div style="display:flex;align-items:center;gap:10px;padding:10px 12px 10px 10px;border-bottom:1px solid rgba(15,23,42,0.07);margin-bottom:2px">
+                    ${avatar}
+                    <div style="min-width:0">
+                        <div style="font-size:0.88rem;font-weight:600;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${this._esc(name)}</div>
+                        <div style="font-size:0.72rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${this._esc(email)}</div>
+                    </div>
                 </div>
-                <button id="fab-panel-library" style="background:transparent;border:none;color:#e2e8f0;padding:8px 12px;text-align:left;border-radius:8px;cursor:pointer;font-size:0.85rem;transition:background 0.15s">📚 Apri libreria lezioni</button>
-                <button id="fab-panel-disconnect" style="background:transparent;border:none;color:#f87171;padding:8px 12px;text-align:left;border-radius:8px;cursor:pointer;font-size:0.85rem;transition:background 0.15s">🔌 Disconnetti</button>
+                <button id="fab-panel-library" style="background:transparent;border:none;color:#0f172a;padding:10px 14px;text-align:left;border-radius:10px;cursor:pointer;font-size:0.85rem;transition:background 0.15s;display:flex;align-items:center;gap:10px">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                    Apri libreria lezioni
+                </button>
+                <button id="fab-panel-disconnect" style="background:transparent;border:none;color:#ef4444;padding:10px 14px;text-align:left;border-radius:10px;cursor:pointer;font-size:0.85rem;transition:background 0.15s;display:flex;align-items:center;gap:10px">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Disconnetti
+                </button>
             `;
             document.body.appendChild(panel);
             // Hover
             panel.querySelectorAll('button').forEach(btn => {
-                btn.addEventListener('mouseenter', () => btn.style.background = 'rgba(148,163,184,0.1)');
+                btn.addEventListener('mouseenter', () => btn.style.background = '#f8fafc');
                 btn.addEventListener('mouseleave', () => btn.style.background = 'transparent');
             });
             document.getElementById('fab-panel-library')?.addEventListener('click', () => {
