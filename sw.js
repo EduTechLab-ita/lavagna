@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v92'; // v92 — Drive FAB tema chiaro: più piccolo, pannello bianco con avatar e icone SVG
+const CACHE_NAME = 'eduboard-v93'; // v93 — pannello QR light+compatto, campanella fullscreen solo in fullscreen
 const urlsToCache = [
   '.',
   './index.html',

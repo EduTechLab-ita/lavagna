@@ -2804,20 +2804,20 @@ body:not(.has-page-bar) #zoom-badge {
    ============================================================ */
 #ec-panel {
     position: fixed;
-    bottom: 84px;
-    right: 20px;
-    width: 260px;
-    background: rgba(15, 23, 42, 0.97);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 20px;
-    padding: 20px 16px 16px;
+    bottom: 72px;
+    right: 16px;
+    width: 220px;
+    background: #ffffff;
+    border: 1px solid rgba(15,23,42,0.12);
+    border-radius: 18px;
+    padding: 16px 14px 12px;
     z-index: 8000;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    box-shadow: 0 8px 32px rgba(15,23,42,0.14);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
-    color: #fff;
+    gap: 8px;
+    color: #0f172a;
     font-family: system-ui, sans-serif;
     animation: ec-slidein 0.25s ease;
 }
@@ -2826,24 +2826,24 @@ body:not(.has-page-bar) #zoom-badge {
     to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 .ec-header { text-align: center; }
-.ec-title   { display: block; font-weight: 700; font-size: 15px; }
-.ec-subtitle { display: block; font-size: 11px; color: #94a3b8; margin-top: 2px; }
+.ec-title   { display: block; font-weight: 700; font-size: 14px; color: #0f172a; }
+.ec-subtitle { display: block; font-size: 10px; color: #64748b; margin-top: 2px; }
 .ec-view {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
 }
 .ec-qr-wrap {
     position: relative;
-    width: 220px;
-    height: 220px;
+    width: 160px;
+    height: 160px;
     flex-shrink: 0;
 }
 .ec-qr-canvas canvas, .ec-qr-canvas img {
-    width: 220px !important;
-    height: 220px !important;
+    width: 160px !important;
+    height: 160px !important;
     border-radius: 0;
     display: block;
 }
@@ -2853,27 +2853,27 @@ body:not(.has-page-bar) #zoom-badge {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255,255,255,0.92);
-    border-radius: 12px;
+    background: rgba(241,245,249,0.95);
+    border-radius: 8px;
     color: #0f172a;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
 }
 .ec-code {
-    font-size: 11px;
+    font-size: 10px;
     color: #64748b;
     letter-spacing: 2px;
     font-family: monospace;
 }
 .ec-status {
-    font-size: 12px;
-    color: #94a3b8;
+    font-size: 11px;
+    color: #64748b;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
 }
 .ec-dot {
-    width: 7px; height: 7px;
+    width: 6px; height: 6px;
     border-radius: 50%;
     background: #f59e0b;
     animation: ec-pulse 1.2s ease-in-out infinite;
@@ -2885,62 +2885,63 @@ body:not(.has-page-bar) #zoom-badge {
 .ec-actions {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
     width: 100%;
 }
 .ec-btn-install {
-    background: rgba(59,130,246,0.2);
-    border: 1px solid rgba(59,130,246,0.4);
-    color: #93c5fd;
-    border-radius: 10px;
-    padding: 8px 12px;
-    font-size: 12px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1d4ed8;
+    border-radius: 9px;
+    padding: 7px 10px;
+    font-size: 11px;
+    font-weight: 600;
     cursor: pointer;
     transition: background 0.2s;
     width: 100%;
 }
-.ec-btn-install:hover { background: rgba(59,130,246,0.35); }
+.ec-btn-install:hover { background: #dbeafe; }
 .ec-btn-skip {
-    background: rgba(255,255,255,0.07);
-    border: 1px solid rgba(255,255,255,0.18);
-    color: #cbd5e1;
-    font-size: 13px;
+    background: #f8fafc;
+    border: 1px solid rgba(15,23,42,0.12);
+    color: #475569;
+    font-size: 12px;
     font-weight: 500;
     cursor: pointer;
-    padding: 10px 12px;
-    border-radius: 10px;
+    padding: 8px 10px;
+    border-radius: 9px;
     text-align: center;
     transition: background 0.2s;
     width: 100%;
 }
-.ec-btn-skip:hover { background: rgba(255,255,255,0.14); color: #fff; }
+.ec-btn-skip:hover { background: #e2e8f0; color: #0f172a; }
 .ec-btn-back {
-    background: rgba(255,255,255,0.07);
-    border: 1px solid rgba(255,255,255,0.18);
-    color: #94a3b8;
-    font-size: 12px;
+    background: #f8fafc;
+    border: 1px solid rgba(15,23,42,0.12);
+    color: #64748b;
+    font-size: 11px;
     cursor: pointer;
-    padding: 8px 12px;
-    border-radius: 10px;
+    padding: 7px 10px;
+    border-radius: 9px;
     text-align: center;
     transition: background 0.2s;
     width: 100%;
 }
-.ec-btn-back:hover { background: rgba(255,255,255,0.14); color: #fff; }
+.ec-btn-back:hover { background: #e2e8f0; color: #0f172a; }
 .ec-btn-manual {
     background: none;
     border: none;
-    color: #475569;
-    font-size: 11px;
+    color: #94a3b8;
+    font-size: 10px;
     cursor: pointer;
-    padding: 4px 8px;
+    padding: 3px 8px;
     text-align: center;
     transition: color 0.2s;
     width: 100%;
     text-decoration: underline;
     text-underline-offset: 3px;
 }
-.ec-btn-manual:hover { color: #94a3b8; }
+.ec-btn-manual:hover { color: #64748b; }
 .ec-view-title {
     font-size: 13px;
     font-weight: 600;

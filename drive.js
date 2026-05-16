@@ -2211,9 +2211,9 @@ class EduBoardConnect {
                     <div id="ec-qr-canvas" class="ec-qr-canvas"></div>
                     <div class="ec-qr-loading" id="ec-qr-loading">Generazione QR...</div>
                 </div>
-                <div style="margin-top:12px; font-size:0.75rem; color:#64748b; text-align:center">
+                <div style="margin-top:8px; font-size:0.7rem; color:#64748b; text-align:center">
                     Oppure apri <strong>EduBoard Connect</strong> e inserisci il codice:<br>
-                    <code id="ec-lim-code" style="font-size:1.1rem; color:#94a3b8; letter-spacing:0.15em"></code>
+                    <code id="ec-lim-code" style="font-size:1rem; color:#0f172a; letter-spacing:0.15em; font-weight:700"></code>
                 </div>
                 <div class="ec-status" id="ec-status">
                     <span class="ec-dot"></span> In attesa del telefono...
@@ -2297,15 +2297,15 @@ class EduBoardConnect {
         if (!popup) {
             popup = document.createElement('div');
             popup.id = 'ec-install-popup';
-            popup.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;';
+            popup.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(15,23,42,0.5);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
             popup.innerHTML = `
-                <div style="background:#1e293b;border-radius:16px;padding:32px 28px;text-align:center;color:#f1f5f9;max-width:300px;width:90%">
-                    <div style="font-size:1.1rem;font-weight:700;margin-bottom:6px">📱 Installa EduBoard Connect</div>
-                    <div style="font-size:0.78rem;color:#94a3b8;margin-bottom:20px">Scansiona con il telefono e aggiungi alla schermata Home</div>
+                <div style="background:#ffffff;border-radius:20px;padding:28px 24px;text-align:center;color:#0f172a;max-width:280px;width:90%;box-shadow:0 16px 48px rgba(15,23,42,0.2);border:1px solid rgba(15,23,42,0.1)">
+                    <div style="font-size:1rem;font-weight:700;margin-bottom:4px">📱 Installa EduBoard Connect</div>
+                    <div style="font-size:0.75rem;color:#64748b;margin-bottom:16px">Scansiona con il telefono e aggiungi alla schermata Home</div>
                     <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=M&data=https%3A%2F%2Fboard.edutechlab.it%2Fconnect.html%3Finstall%3D1"
-                         style="width:220px;height:220px;display:block;margin:0 auto 16px" alt="QR install">
-                    <div style="font-size:0.68rem;color:#64748b;margin-bottom:20px">board.edutechlab.it/connect.html</div>
-                    <button id="ec-install-popup-close" style="background:#3b82f6;color:#fff;border:none;padding:9px 28px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:600">Chiudi</button>
+                         style="width:180px;height:180px;display:block;margin:0 auto 12px" alt="QR install">
+                    <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:16px">board.edutechlab.it/connect.html</div>
+                    <button id="ec-install-popup-close" style="background:#3b82f6;color:#fff;border:none;padding:8px 24px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:600">Chiudi</button>
                 </div>`;
             document.body.appendChild(popup);
             popup.querySelector('#ec-install-popup-close').addEventListener('click', () => { popup.style.display = 'none'; });
@@ -2443,11 +2443,12 @@ class EduBoardConnect {
         const isNew = count > this._lastPhotoCount;
         if (isNew) this._beep(523, 0.3, 0.4);
         this._lastPhotoCount = count;
-        // Campanella foto in fullscreen — compare solo se ci sono foto in attesa
+        // Campanella foto in fullscreen — compare SOLO quando si è in fullscreen e ci sono foto
         const fsBell  = document.getElementById('fs-photo-bell');
         const fsBadge = document.getElementById('fs-photo-badge');
         if (!fsBell) return;
-        if (count > 0) {
+        const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        if (count > 0 && isFullscreen) {
             fsBell.style.display = 'flex';
             if (isNew) {
                 // Riscatta l'animazione rimuovendo e riaggingendo la classe
@@ -2463,7 +2464,7 @@ class EduBoardConnect {
         }
         if (fsBadge) {
             fsBadge.textContent = count > 9 ? '9+' : String(count);
-            fsBadge.style.display = count > 0 ? 'flex' : 'none';
+            fsBadge.style.display = (count > 0 && isFullscreen) ? 'flex' : 'none';
         }
     }
 
@@ -2679,6 +2680,11 @@ function initDrive() {
     document.getElementById('fs-photo-bell')?.addEventListener('click', () => {
         window.eduBoardConnect?.openPhotoPanel();
     });
+
+    // Aggiorna la campanella fullscreen quando si entra/esce dal fullscreen
+    const _onFullscreenChange = () => window.eduBoardConnect?._updateBell();
+    document.addEventListener('fullscreenchange',       _onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', _onFullscreenChange);
 
     // Esponi come globali window.* — necessario per AutoSaveManager (onDirty usa window.libraryMgr e window.driveMgr)
     window.driveMgr        = driveMgr;
