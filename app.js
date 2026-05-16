@@ -4678,18 +4678,20 @@ class PageManager {
             off.getContext('2d').drawImage(drawCanvas, -r.px, -r.py);
             drawImageData = off.toDataURL('image/png');
         }
-        // Calcola offset foglio per salvare coordinate oggetti relative al foglio A4
-        const objR = (W > 0 && typeof bgMgr !== 'undefined') ? bgMgr._getPageRect(W, H) : { px: 0, py: 0 };
+        // Calcola offset foglio per salvare coordinate oggetti come frazione del foglio A4.
+        // Questo rende le coordinate indipendenti dalla risoluzione canvas (schermo diverso = stessa posizione).
+        const objR = (W > 0 && typeof bgMgr !== 'undefined') ? bgMgr._getPageRect(W, H) : { px: 0, py: 0, pw: W || 1, ph: H || 1 };
         return {
             canvasWidth: W,
             pagePx: null,   // non più necessario (mantenuto per retrocompatibilità)
             pagePy: null,
-            drawFormat: 'page',     // drawImageData è il ritaglio del foglio A4
-            objectFormat: 'page-relative',  // coordinate oggetti relative al foglio A4
+            drawFormat: 'page',      // drawImageData è il ritaglio del foglio A4
+            objectFormat: 'page-fraction',  // coordinate oggetti come frazione del foglio A4 (risoluzione-indipendente)
             drawImageData,
             objects: JSON.parse(JSON.stringify(this.objectLayerRef.objects.map(o => {
-                // Serializza l'immagine come dataUrl per il salvataggio in memoria
-                // Coordinate salvate relative al foglio A4 (come i disegni)
+                // Serializza l'immagine come dataUrl per il salvataggio in memoria.
+                // Coordinate e dimensioni salvate come frazione del foglio A4 (0.0–1.0)
+                // così si ripristinano correttamente su qualsiasi schermo/risoluzione.
                 try {
                     const tmp = document.createElement('canvas');
                     const srcW = o.img.naturalWidth || o.img.width || o.w;
@@ -4698,7 +4700,10 @@ class PageManager {
                     tmp.height = srcH;
                     tmp.getContext('2d').drawImage(o.img, 0, 0);
                     return { ...o, img: null, dataUrl: tmp.toDataURL(),
-                        x: o.x - objR.px, y: o.y - objR.py };
+                        x: (o.x - objR.px) / objR.pw,
+                        y: (o.y - objR.py) / objR.ph,
+                        w: o.w / objR.pw,
+                        h: o.h / objR.ph };
                 } catch (_) {
                     return { ...o, img: null, dataUrl: null };
                 }
@@ -4718,10 +4723,10 @@ class PageManager {
         if (pageData.drawImageData) {
             const img = new Image();
             if (pageData.drawFormat === 'page' && typeof bgMgr !== 'undefined') {
-                // Nuovo formato: drawImageData è il ritaglio del foglio A4.
-                // Calcola la posizione corrente del foglio e disegnaci l'immagine sopra.
+                // Formato corrente: drawImageData è il ritaglio del foglio A4.
+                // Disegna SCALANDO alla dimensione corrente del foglio → funziona su qualsiasi schermo.
                 const r = bgMgr._getPageRect(drawCanvas.width, drawCanvas.height);
-                img.onload = () => { ctx.drawImage(img, r.px, r.py); };
+                img.onload = () => { ctx.drawImage(img, r.px, r.py, r.pw, r.ph); };
             } else {
                 // Vecchio formato: drawImageData è l'intero canvas.
                 // Usa il meccanismo offset (pagePx/pagePy) per compensare dimensioni diverse.
@@ -4736,16 +4741,29 @@ class PageManager {
             img.src = pageData.drawImageData;
         }
         // Ripristina objects
-        // Se salvati con objectFormat:'page-relative', riconverti in coordinate assolute canvas
         this.objectLayerRef.objects = [];
-        const usePageCoords = pageData.objectFormat === 'page-relative' && typeof bgMgr !== 'undefined';
-        const objOffset = usePageCoords ? bgMgr._getPageRect(drawCanvas.width, drawCanvas.height) : { px: 0, py: 0 };
+        const r2 = (typeof bgMgr !== 'undefined') ? bgMgr._getPageRect(drawCanvas.width, drawCanvas.height) : { px: 0, py: 0, pw: drawCanvas.width, ph: drawCanvas.height };
         const loadPromises = (pageData.objects || []).map(o => new Promise(resolve => {
             if (!o.dataUrl) { resolve(); return; }
             const img = new Image();
             img.onload = () => {
-                this.objectLayerRef.objects.push({ ...o, img,
-                    x: o.x + objOffset.px, y: o.y + objOffset.py });
+                let x, y, w, h;
+                if (pageData.objectFormat === 'page-fraction') {
+                    // Formato corrente: coordinate e dimensioni come frazione del foglio.
+                    // Moltiplica per le dimensioni correnti del foglio → risoluzione-indipendente.
+                    x = o.x * r2.pw + r2.px;
+                    y = o.y * r2.ph + r2.py;
+                    w = o.w * r2.pw;
+                    h = o.h * r2.ph;
+                } else if (pageData.objectFormat === 'page-relative') {
+                    // Vecchio formato: coordinate in pixel-canvas relative all'origine del foglio.
+                    x = o.x + r2.px;
+                    y = o.y + r2.py;
+                    w = o.w; h = o.h;
+                } else {
+                    x = o.x; y = o.y; w = o.w; h = o.h;
+                }
+                this.objectLayerRef.objects.push({ ...o, img, x, y, w, h });
                 resolve();
             };
             img.onerror = resolve;
