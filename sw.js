@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v74'; // v74 — popup QR installazione standalone (fix bottone Installa App)
+const CACHE_NAME = 'eduboard-v75'; // v75 — ?reinstall=1 forza screen-browser anche in standalone (fix reinstallazione PWA)
 const urlsToCache = [
   '.',
   './index.html',

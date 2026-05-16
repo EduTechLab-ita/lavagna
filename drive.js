@@ -2291,7 +2291,7 @@ class EduBoardConnect {
                 <div style="background:#1e293b;border-radius:16px;padding:32px 28px;text-align:center;color:#f1f5f9;max-width:300px;width:90%">
                     <div style="font-size:1.1rem;font-weight:700;margin-bottom:6px">📱 Installa EduBoard Connect</div>
                     <div style="font-size:0.78rem;color:#94a3b8;margin-bottom:20px">Scansiona con il telefono e aggiungi alla schermata Home</div>
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=M&data=https%3A%2F%2Fboard.edutechlab.it%2Fconnect.html"
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=M&data=https%3A%2F%2Fboard.edutechlab.it%2Fconnect.html%3Freinstall%3D1"
                          style="width:220px;height:220px;display:block;margin:0 auto 16px" alt="QR install">
                     <div style="font-size:0.68rem;color:#64748b;margin-bottom:20px">board.edutechlab.it/connect.html</div>
                     <button id="ec-install-popup-close" style="background:#3b82f6;color:#fff;border:none;padding:9px 28px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:600">Chiudi</button>

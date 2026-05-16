@@ -1077,8 +1077,9 @@
     const params = new URLSearchParams(window.location.search);
     const urlLid = params.get('lid');
 
-    // Modalità BROWSER: mostra schermata installazione
-    if (!isStandalone()) {
+    // Modalità BROWSER o reinstall forzato: mostra schermata installazione
+    const forceInstall = params.get('reinstall') === '1';
+    if (!isStandalone() || forceInstall) {
       const banner = document.getElementById('browser-lid-banner');
       if (urlLid) {
         banner.textContent = 'Per connetterti alla lavagna installa prima EduBoard Connect.';
