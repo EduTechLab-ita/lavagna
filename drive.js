@@ -2428,8 +2428,31 @@ class EduBoardConnect {
         else           bell.classList.remove('bell-has-photos');
         // Beep di notifica quando arrivano foto nuove
         if (this._lastPhotoCount === undefined) this._lastPhotoCount = 0;
-        if (count > this._lastPhotoCount) this._beep(523, 0.3, 0.4);
+        const isNew = count > this._lastPhotoCount;
+        if (isNew) this._beep(523, 0.3, 0.4);
         this._lastPhotoCount = count;
+        // Campanella foto in fullscreen — compare solo se ci sono foto in attesa
+        const fsBell  = document.getElementById('fs-photo-bell');
+        const fsBadge = document.getElementById('fs-photo-badge');
+        if (!fsBell) return;
+        if (count > 0) {
+            fsBell.style.display = 'flex';
+            if (isNew) {
+                // Riscatta l'animazione rimuovendo e riaggingendo la classe
+                fsBell.classList.remove('has-photos');
+                void fsBell.offsetWidth; // reflow
+                fsBell.classList.add('has-photos');
+            } else {
+                fsBell.classList.add('has-photos');
+            }
+        } else {
+            fsBell.style.display = 'none';
+            fsBell.classList.remove('has-photos');
+        }
+        if (fsBadge) {
+            fsBadge.textContent = count > 9 ? '9+' : String(count);
+            fsBadge.style.display = count > 0 ? 'flex' : 'none';
+        }
     }
 
     openPhotoPanel() {
@@ -2639,6 +2662,9 @@ function initDrive() {
     window.eduBoardConnect.startTimerPolling();
 
     document.getElementById('photo-bell-btn')?.addEventListener('click', () => {
+        window.eduBoardConnect?.openPhotoPanel();
+    });
+    document.getElementById('fs-photo-bell')?.addEventListener('click', () => {
         window.eduBoardConnect?.openPhotoPanel();
     });
 

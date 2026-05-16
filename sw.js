@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v89'; // v87 — fix testo bianco su sfondo bianco (tema chiaro)
+const CACHE_NAME = 'eduboard-v90'; // v87 — fix testo bianco su sfondo bianco (tema chiaro)
 const urlsToCache = [
   '.',
   './index.html',
