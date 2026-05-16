@@ -27,6 +27,18 @@
     --laser:       #ef4444;
 }
 
+/* Tema chiaro — scoped sui pannelli principali (header, toolbar, libreria) */
+#app-header,
+#toolbar-toggle,
+#floating-toolbar,
+.library-panel,
+.library-tab {
+    --text:        #0f172a;
+    --text-muted:  #64748b;
+    --bg-elevated: #f1f5f9;
+    --border:      rgba(15, 23, 42, 0.1);
+}
+
 
 /* --------------------------------------------------------------------------
    RESET & BASE
@@ -67,10 +79,11 @@ button {
     left: 0;
     right: 0;
     height: 56px;
-    background: rgba(30, 41, 59, 0.95);
+    background: rgba(255, 255, 255, 0.97);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.07);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -136,7 +149,7 @@ button {
     transition: border-color 0.15s, color 0.15s;
 }
 #project-name:hover {
-    border-color: rgba(255,255,255,0.15);
+    border-color: rgba(15, 23, 42, 0.2);
     color: var(--text);
 }
 #project-name.editing {
@@ -299,12 +312,13 @@ button {
     align-items: center;
     justify-content: center;
     padding: 6px 32px;
-    background: rgba(30, 41, 59, 0.95);
+    background: rgba(255, 255, 255, 0.97);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border: 1px solid var(--border);
+    border: 1px solid rgba(15, 23, 42, 0.1);
     border-bottom: none;
     border-radius: 20px 20px 0 0;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
     cursor: pointer;
     color: var(--text-muted);
     transition: background 0.18s ease, color 0.18s ease;
@@ -312,7 +326,7 @@ button {
 }
 
 #toolbar-toggle:hover {
-    background: var(--bg-elevated);
+    background: #f1f5f9;
     color: var(--text);
 }
 
@@ -333,10 +347,11 @@ button {
    Pannello toolbar principale (#floating-toolbar)
    -------------------------------------------------------------------------- */
 #floating-toolbar {
-    background: rgba(15, 23, 42, 0.95);
+    background: rgba(255, 255, 255, 0.97);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border-top: 1px solid var(--border);
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
     padding: 6px 12px 12px;
     width: 100%;
 }
@@ -1415,10 +1430,11 @@ button {
     width: 300px;
     height: calc(100vh - 56px);     /* fallback per browser senza dvh */
     height: calc(100dvh - 56px);
-    background: rgba(15, 23, 42, 0.97);
+    background: rgba(255, 255, 255, 0.97);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border-right: 1px solid var(--border);
+    border-right: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.08);
     z-index: 250;
     display: flex;
     flex-direction: column;
@@ -1672,16 +1688,20 @@ button {
     transition: opacity 0.3s;
 }
 
-/* Tab libreria — fissi ai lati dello schermo, sempre visibili.
+/* Tab libreria — ancorati agli angoli inferiori, allineati con la barra pagine.
    NOTA: elementi FUORI da #library-panel (transform parent blocca position:fixed). */
 .library-tab {
     position: fixed;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 28px;
-    height: 56px;
-    background: rgba(30, 41, 59, 0.97);
-    border: 1px solid var(--border);
+    bottom: 0;
+    top: auto;
+    transform: none;
+    width: 36px;
+    height: 36px;
+    background: rgba(255, 255, 255, 0.97);
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.07);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -1692,18 +1712,14 @@ button {
     touch-action: none;
 }
 .library-tab--left {
-    left: 0;
-    border-left: none;
-    border-radius: 0 8px 8px 0;
+    left: 4px;
 }
 .library-tab--right {
-    right: 0;
-    border-right: none;
-    border-radius: 8px 0 0 8px;
+    right: 4px;
 }
-.library-tab:hover { background: rgba(51, 65, 85, 0.97); color: var(--text); }
+.library-tab:hover { background: #f1f5f9; color: var(--text); }
 /* Evidenzia il tab del lato aperto */
-.library-tab.active { background: rgba(59, 130, 246, 0.6); color: #fff; }
+.library-tab.active { background: rgba(59, 130, 246, 0.12); color: #3b82f6; border-color: rgba(59, 130, 246, 0.3); }
 
 /* Libreria aperta da destra */
 .library-panel.from-right {
@@ -2073,7 +2089,7 @@ body.fullscreen-mode #canvas-area {
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 5px 12px;
+    padding: 5px 12px 5px 48px;  /* padding-left: 48px — spazio per il tab-left (left:4px + w:36px + gap) */
     background: transparent;
     z-index: 190;
     overflow-x: visible;
@@ -2085,22 +2101,23 @@ body.fullscreen-mode #canvas-area {
 .page-btn {
     min-width: 28px;
     height: 28px;
-    border: 1px solid rgba(148,163,184,0.3);
+    border: 1px solid rgba(15, 23, 42, 0.15);
     border-radius: 6px;
-    background: rgba(30,41,59,0.8);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
     cursor: pointer;
     font-size: 12px;
     font-weight: 500;
-    color: #94a3b8;
+    color: #475569;
     padding: 0 6px;
     flex-shrink: 0;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
     font-family: inherit;
 }
-.page-btn:hover { background: rgba(51,65,85,0.9); color: #e2e8f0; }
-.page-btn--active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.page-btn--add { border-style: dashed; color: var(--accent); font-size: 16px; font-weight: 700; }
-.page-btn--add:hover { background: rgba(59,130,246,0.15); }
+.page-btn:hover { background: #f1f5f9; color: #0f172a; }
+.page-btn--active { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: 0 1px 6px rgba(59,130,246,0.3); }
+.page-btn--add { border-style: dashed; color: var(--accent); font-size: 16px; font-weight: 700; background: rgba(255,255,255,0.85); }
+.page-btn--add:hover { background: rgba(59,130,246,0.08); }
 
 /* FIX PAGINE B: container pagina con pulsante X visibile */
 .page-container {
@@ -2168,21 +2185,22 @@ body.has-page-bar #zoom-indicator {
     opacity: 1;
 }
 
-/* Badge zoom fisso — in basso a destra, piccolo sfondo grigio per leggibilità */
+/* Badge zoom fisso — in basso a destra, spostato a sinistra del tab-right */
 #zoom-badge {
     position: fixed;
     bottom: 6px;
-    right: 24px;
+    right: 48px;
     width: 52px;
-    background: rgba(15, 23, 42, 0.55);
+    background: rgba(255, 255, 255, 0.92);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
-    border: 1px solid rgba(148, 163, 184, 0.18);
+    border: 1px solid rgba(15, 23, 42, 0.1);
     border-radius: 6px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
     padding: 3px 0;
     font-size: 0.82rem;
     font-weight: 500;
-    color: #94a3b8;
+    color: #64748b;
     z-index: 200;
     cursor: pointer;
     user-select: none;
