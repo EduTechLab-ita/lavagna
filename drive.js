@@ -211,6 +211,12 @@ class DriveManager {
 
     // Chiamato da EduBoardConnect quando il telefono invia il token
     async _onExternalToken(token, email, expiry) {
+        // Controllo token mancante (CF Worker non aggiornato o vecchia versione)
+        if (!token) {
+            if (typeof toast === 'function') toast('⚠️ Token mancante — aggiorna il Worker Cloudflare e riprova', 'error');
+            console.error('[EduBoard] _onExternalToken: token mancante', { email, expiry });
+            return;
+        }
         // 1. Connetti subito — la UI si aggiorna immediatamente (senza aspettare le cartelle)
         this.accessToken = token;
         this.userEmail   = email;
@@ -2148,14 +2154,15 @@ const CONNECT_SERVER = 'https://eduboard-connect.edutechlab-ita.workers.dev';
 
 class EduBoardConnect {
     constructor() {
-        this._limId         = this._getLimId();
-        this._pollInt       = null;
-        this._photoInt      = null;
-        this._laserInt      = null;
-        this._timerInt      = null;
-        this._buzzInt       = null;
-        this._panel         = null;
+        this._limId          = this._getLimId();
+        this._pollInt        = null;
+        this._photoInt       = null;
+        this._laserInt       = null;
+        this._timerInt       = null;
+        this._buzzInt        = null;
+        this._panel          = null;
         this._phoneConnected = false;
+        this._timerWasActive = false;
     }
 
     // ID stabile per questa LIM (persiste in localStorage)
@@ -2384,7 +2391,7 @@ class EduBoardConnect {
         // Mostra la campanella solo se il telefono è connesso
         bell.style.display = this._phoneConnected ? 'flex' : 'none';
         if (!badge) return;
-        const count = (this._pendingPhotos || []).length;
+        const count = (this._pendingPhotos || []).filter(p => !p.added).length;
         badge.textContent = count > 9 ? '9+' : String(count);
         badge.style.display = count > 0 ? 'flex' : 'none';
         if (count > 0) bell.classList.add('bell-has-photos');
@@ -2467,18 +2474,24 @@ class EduBoardConnect {
         const img = new Image();
         img.onload = () => {
             if (window.objectLayer?.addObject) {
-                // Posiziona al centro del viewport visibile
-                const W = img.naturalWidth;
-                const H = img.naturalHeight;
+                // Scala la foto per adattarla al 60% del canvas, mantenendo le proporzioni
                 const canvasArea = document.getElementById('canvas-area');
-                let x = 100, y = 100;
+                let areaW = 1280, areaH = 720;
+                let scrollX = 0, scrollY = 0;
                 if (canvasArea) {
                     const rect = canvasArea.getBoundingClientRect();
-                    const scrollX = canvasArea.scrollLeft || 0;
-                    const scrollY = canvasArea.scrollTop  || 0;
-                    x = scrollX + rect.width  / 2 - W / 2;
-                    y = scrollY + rect.height / 2 - H / 2;
+                    areaW   = rect.width;
+                    areaH   = rect.height;
+                    scrollX = canvasArea.scrollLeft || 0;
+                    scrollY = canvasArea.scrollTop  || 0;
                 }
+                const maxW = areaW * 0.6;
+                const maxH = areaH * 0.6;
+                const scale = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
+                const W = Math.round(img.naturalWidth  * scale);
+                const H = Math.round(img.naturalHeight * scale);
+                const x = scrollX + areaW / 2 - W / 2;
+                const y = scrollY + areaH / 2 - H / 2;
                 window.objectLayer.addObject('image', img, x, y, W, H);
                 if (typeof toast === 'function') toast('Foto aggiunta alla lavagna', 'success');
                 // Marca come aggiunta (non rimuovere dalla lista — resta nel pannello con stile "aggiunta")
@@ -2502,13 +2515,39 @@ class EduBoardConnect {
         }, 500);
     }
 
+    _playTimerAlarm() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            [0, 500, 1000].forEach(delay => {
+                setTimeout(() => {
+                    const osc  = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.frequency.value = 880;
+                    gain.gain.setValueAtTime(0.35, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + 0.45);
+                }, delay);
+            });
+        } catch(_) {}
+    }
+
     _updateTimer(data) {
         // Crea/aggiorna overlay timer sulla LIM
         let overlay = document.getElementById('eduboard-timer-overlay');
         if (!data.active) {
+            if (this._timerWasActive) {
+                // Transizione attivo→scaduto: suona l'allarme
+                this._playTimerAlarm();
+                if (typeof toast === 'function') toast('⏰ Tempo scaduto!', 'info');
+            }
+            this._timerWasActive = false;
             if (overlay) overlay.style.display = 'none';
             return;
         }
+        this._timerWasActive = true;
         if (!overlay) {
             overlay = document.createElement('div');
             overlay.id = 'eduboard-timer-overlay';

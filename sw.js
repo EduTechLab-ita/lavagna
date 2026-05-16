@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v70'; // v70 — scope drive→drive.file (no limite 100 utenti), upload sfondi da LIM
+const CACHE_NAME = 'eduboard-v71'; // v71 — fix: token null check, foto scala+centra, badge azzera, timer suona
 const urlsToCache = [
   '.',
   './index.html',
