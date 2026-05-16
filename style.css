@@ -37,6 +37,7 @@
     --text-muted:  #64748b;
     --bg-elevated: #f1f5f9;
     --border:      rgba(15, 23, 42, 0.1);
+    color: var(--text);
 }
 
 
@@ -381,9 +382,9 @@ button {
 .eraser-mode-btn {
     padding: 3px 9px;
     border-radius: 14px;
-    border: 1.5px solid rgba(255,255,255,0.2);
+    border: 1.5px solid rgba(15, 23, 42, 0.15);
     background: transparent;
-    color: rgba(255,255,255,0.65);
+    color: var(--text-muted);
     font-size: 11px;
     cursor: pointer;
     display: flex;
@@ -393,13 +394,13 @@ button {
     white-space: nowrap;
 }
 .eraser-mode-btn.active {
-    background: rgba(59,130,246,0.35);
+    background: rgba(59,130,246,0.12);
     border-color: #3b82f6;
-    color: white;
+    color: #3b82f6;
 }
 .eraser-mode-btn:hover:not(.active) {
-    background: rgba(255,255,255,0.1);
-    color: rgba(255,255,255,0.85);
+    background: var(--bg-elevated);
+    color: var(--text);
 }
 
 /* Divisore verticale tra gruppi di opzioni */
