@@ -541,7 +541,7 @@
   // COSTANTI
   // ══════════════════════════════════════════════════════════════
   const CLIENT_ID   = '374342529488-c123a5j5v8hnfs241udbl55fos5thfq6.apps.googleusercontent.com';
-  const SCOPE       = 'openid email profile';
+  const SCOPE       = 'https://www.googleapis.com/auth/drive email profile';
   const CF_WORKER   = 'https://eduboard-connect.edutechlab-ita.workers.dev';
   const STORAGE_EMAIL = 'ec_saved_email';
   const LIM_ID_KEY    = 'ec_last_lim_id';
@@ -671,13 +671,17 @@
       return;
     }
 
-    // Connessione sessione LIM — invia SOLO email (non token)
+    // Connessione sessione LIM — invia token + email + expiry alla LIM tramite CF Worker
     showScreen('screen-connecting');
     try {
       const res = await fetch(`${CF_WORKER}/session/${limId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({
+          token:  accessToken,
+          email,
+          expiry: Date.now() + (response.expires_in ? response.expires_in * 1000 : 3600000)
+        })
       }).then(r => r.json());
 
       if (!res.ok) throw new Error(res.error || 'Errore server');

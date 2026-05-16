@@ -28,7 +28,7 @@ export default {
 
     // ── POST /session/:limId — telefono invia token ──────────────────────────
     if (request.method === 'POST' && resource === 'session' && id) {
-      const { email } = await request.json();
+      const { token, email, expiry } = await request.json();
 
       // Se c'è un'altra LIM connessa con questo account, notificala del trasferimento
       const existingLimId = await env.SESSIONS.get(`account:${email}`);
@@ -42,7 +42,7 @@ export default {
 
       await env.SESSIONS.put(
         `session:${id}`,
-        JSON.stringify({ status: 'connected', email }),
+        JSON.stringify({ status: 'connected', token, email, expiry: expiry || Date.now() + 3600000 }),
         { expirationTtl: 300 }
       );
       await env.SESSIONS.put(`account:${email}`, id, { expirationTtl: 3600 });
@@ -63,7 +63,9 @@ export default {
       }
       return json({
         status: 'connected',
-        email: session.email,
+        token:  session.token,
+        email:  session.email,
+        expiry: session.expiry,
       });
     }
 
