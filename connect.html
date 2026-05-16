@@ -327,13 +327,7 @@
     .connected-label strong { display: block; font-size: 0.88rem; color: var(--text); font-weight: 600; margin-top: 1px; }
     .connected-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 6px #4ade80; }
 
-    /* ── Buzz feedback ── */
-    @keyframes buzz-pulse {
-      0%   { transform: scale(0.95); }
-      50%  { transform: scale(1.05); }
-      100% { transform: scale(1); }
-    }
-    .buzz-sent { animation: buzz-pulse 0.3s ease; border-color: #4ade80 !important; }
+
   </style>
 </head>
 <body>
@@ -554,10 +548,7 @@
         <span class="feature-icon">⏱️</span>
         <span class="feature-label">Timer</span>
       </button>
-      <button class="feature-btn" id="btn-buzz">
-        <span class="feature-icon">🔔</span>
-        <span class="feature-label">Buzz</span>
-      </button>
+
       <button class="feature-btn" id="btn-disconnect" style="border-color:transparent">
         <span class="feature-icon">🚪</span>
         <span class="feature-label">Disconnetti</span>
@@ -885,30 +876,6 @@
     }
   }
 
-  // ══════════════════════════════════════════════════════════════
-  // BUZZ
-  // ══════════════════════════════════════════════════════════════
-  async function sendBuzz() {
-    const btn = document.getElementById('btn-buzz');
-    const statusEl = document.getElementById('photo-status'); // riusa il campo status
-    btn.disabled = true;
-    btn.classList.add('buzz-sent');
-    statusEl.textContent = 'Buzz inviato!';
-    statusEl.className = 'status-line ok';
-    try {
-      await fetch(`${CF_WORKER}/buzz/${limId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-      });
-    } catch (_) {}
-    setTimeout(() => {
-      btn.disabled = false;
-      btn.classList.remove('buzz-sent');
-      statusEl.textContent = '';
-      statusEl.className = 'status-line';
-    }, 2000);
-  }
 
   // ══════════════════════════════════════════════════════════════
   // FOTO
@@ -1067,9 +1034,6 @@
   document.getElementById('btn-timer-back').addEventListener('click', () => showScreen('screen-success'));
   document.getElementById('btn-timer-start').addEventListener('click', timerStart);
   document.getElementById('btn-timer-stop').addEventListener('click', timerStop);
-
-  // Buzz
-  document.getElementById('btn-buzz').addEventListener('click', sendBuzz);
 
   // Disconnetti
   document.getElementById('btn-disconnect').addEventListener('click', disconnect);

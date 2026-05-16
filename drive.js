@@ -2159,7 +2159,6 @@ class EduBoardConnect {
         this._photoInt       = null;
         this._laserInt       = null;
         this._timerInt       = null;
-        this._buzzInt        = null;
         this._panel          = null;
         this._phoneConnected = false;
         this._timerWasActive = false;
@@ -2615,41 +2614,6 @@ class EduBoardConnect {
         overlay.style.color = remaining < 10 ? '#ef4444' : '#f1f5f9';
     }
 
-    // Polling buzz — avviato da initDrive
-    startBuzzPolling() {
-        if (this._buzzInt) return;
-        this._buzzInt = setInterval(async () => {
-            if (!this._phoneConnected) return;
-            try {
-                const res = await fetch(`${CONNECT_SERVER}/buzz/${this._limId}`).then(r => r.json());
-                if (res.buzz) this._triggerBuzz();
-            } catch(_) {}
-        }, 1000);
-    }
-
-    _triggerBuzz() {
-        // Flash overlay sopra tutti i canvas
-        let overlay = document.getElementById('buzz-flash-overlay');
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.id = 'buzz-flash-overlay';
-            overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:0;background:rgba(59,130,246,0.45);transition:opacity 0.15s';
-            document.body.appendChild(overlay);
-        }
-        overlay.style.opacity = '1';
-        setTimeout(() => { overlay.style.opacity = '0'; }, 300);
-        // Assicura che l'AudioContext sia inizializzato (il buzz è esso stesso un gesto-sistema:
-        // la LIM potrebbe non aver ancora ricevuto un gesto utente esplicito)
-        if (!this._audioCtx) {
-            try { this._audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(_) {}
-        }
-        if (this._audioCtx?.state === 'suspended') this._audioCtx.resume().catch(() => {});
-        // Suono
-        this._beep(660, 0.3, 0.4);
-        setTimeout(() => this._beep(880, 0.25, 0.3), 200);
-        // Toast
-        if (typeof toast === 'function') toast('🔔 Attenzione!', 'info');
-    }
 }
 
 // =============================================================================
@@ -2673,7 +2637,6 @@ function initDrive() {
     window.eduBoardConnect.startPhotoPolling();
     window.eduBoardConnect.startLaserPolling();
     window.eduBoardConnect.startTimerPolling();
-    window.eduBoardConnect.startBuzzPolling();
 
     document.getElementById('photo-bell-btn')?.addEventListener('click', () => {
         window.eduBoardConnect?.openPhotoPanel();
