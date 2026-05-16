@@ -5290,70 +5290,105 @@ class TimerWidget {
 
 class SpotlightTool {
     constructor() {
-        this.el      = null;
-        this.visible = false;
-        this._x      = window.innerWidth  / 2;
-        this._y      = window.innerHeight / 2;
-        this._r      = 120; // raggio px
-        this._drag   = { on: false };
-        this._shape  = 'circle'; // 'circle' | 'rect'
+        this.el        = null;
+        this.visible   = false;
+        this._x        = window.innerWidth  / 2;
+        this._y        = window.innerHeight / 2;
+        this._r        = 120;
+        this._shape    = 'circle'; // 'circle' | 'rect'
+        this._opacity  = 0.80;
+        this._pointers = new Map();
     }
 
     create() {
         const el = document.createElement('canvas');
         el.id = 'spotlight-canvas';
-        el.style.cssText = `
-            position:fixed; top:0; left:0; pointer-events:none;
-            z-index:160; display:none;`;
+        el.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:160;display:none;';
         document.body.appendChild(el);
         this.el = el;
 
-        // Controlli spotlight
+        // Pannello controlli — pill verticale
         const ctrl = document.createElement('div');
         ctrl.id = 'spotlight-ctrl';
-        ctrl.innerHTML = `
-            <button class="spotlight-btn" id="spotlight-smaller" title="Più piccolo">−</button>
-            <button class="spotlight-btn" id="spotlight-larger"  title="Più grande">+</button>
-            <button class="spotlight-btn" id="spotlight-shape"   title="Forma: cerchio / rettangolo">⬤</button>
-            <button class="spotlight-btn" id="spotlight-close"   title="Chiudi">×</button>`;
+        ctrl.className = 'overlay-pill';
         ctrl.style.display = 'none';
+        ctrl.innerHTML = `
+            <button class="overlay-pill-btn active" id="spotlight-circle" title="Cerchio">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
+            </button>
+            <button class="overlay-pill-btn" id="spotlight-rect" title="Rettangolo">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="2"/></svg>
+            </button>
+            <div class="overlay-pill-sep"></div>
+            <button class="overlay-pill-btn" id="spotlight-opacity-btn" title="Oscurità">
+                <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3z" fill="currentColor" opacity="0.25"/><path d="M12 3a9 9 0 0 1 0 18V3z" fill="currentColor"/></svg>
+            </button>
+            <button class="overlay-pill-btn" id="spotlight-close" title="Chiudi Focus">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <div class="overlay-opacity-popup" id="spotlight-opacity-popup" style="display:none">
+                <svg viewBox="0 0 24 24" width="15" height="15" style="flex-shrink:0"><path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3z" fill="currentColor" opacity="0.25"/><path d="M12 3a9 9 0 0 1 0 18V3z" fill="currentColor"/></svg>
+                <input type="range" id="spotlight-opacity-input" min="40" max="97" value="80" style="width:110px">
+            </div>`;
         document.body.appendChild(ctrl);
         this._ctrl = ctrl;
 
-        ctrl.querySelector('#spotlight-smaller').addEventListener('click', () => {
-            this._r = Math.max(40, this._r - 20);
+        ctrl.querySelector('#spotlight-circle').addEventListener('click', () => {
+            this._shape = 'circle';
+            ctrl.querySelector('#spotlight-circle').classList.add('active');
+            ctrl.querySelector('#spotlight-rect').classList.remove('active');
             this._render();
         });
-        ctrl.querySelector('#spotlight-larger').addEventListener('click', () => {
-            this._r = Math.min(400, this._r + 20);
+        ctrl.querySelector('#spotlight-rect').addEventListener('click', () => {
+            this._shape = 'rect';
+            ctrl.querySelector('#spotlight-rect').classList.add('active');
+            ctrl.querySelector('#spotlight-circle').classList.remove('active');
+            this._render();
+        });
+        ctrl.querySelector('#spotlight-opacity-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const p = document.getElementById('spotlight-opacity-popup');
+            p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+        });
+        ctrl.querySelector('#spotlight-opacity-input').addEventListener('input', (e) => {
+            this._opacity = e.target.value / 100;
             this._render();
         });
         ctrl.querySelector('#spotlight-close').addEventListener('click', () => this.hide());
-        ctrl.querySelector('#spotlight-shape').addEventListener('click', () => {
-            this._shape = this._shape === 'circle' ? 'rect' : 'circle';
-            ctrl.querySelector('#spotlight-shape').textContent = this._shape === 'circle' ? '⬤' : '▬';
-            this._render();
-        });
 
-        // Trascina il foro (click sul canvas spotlight per muoverlo)
-        el.style.pointerEvents = 'none'; // non blocca gli eventi sotto
-        // Usiamo un div trasparente sopra per il drag
+        // Drag area — 1 dito: sposta; 2 dita: ridimensiona (pinch)
         const dragArea = document.createElement('div');
         dragArea.id = 'spotlight-drag-area';
-        dragArea.style.cssText = `
-            position:fixed; top:0; left:0; width:100%; height:100%;
-            z-index:161; display:none; cursor:none;`;
+        dragArea.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:161;display:none;cursor:none;touch-action:none;';
         document.body.appendChild(dragArea);
         this._dragArea = dragArea;
 
+        dragArea.addEventListener('pointerdown', (e) => {
+            dragArea.setPointerCapture(e.pointerId);
+            this._pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
+        });
         dragArea.addEventListener('pointermove', (e) => {
-            this._x = e.clientX;
-            this._y = e.clientY;
+            if (!this._pointers.has(e.pointerId)) return;
+            const evts = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+            for (const ev of evts) {
+                const prev = this._pointers.get(ev.pointerId);
+                if (!prev) continue;
+                if (this._pointers.size === 1) {
+                    this._x = ev.clientX;
+                    this._y = ev.clientY;
+                } else if (this._pointers.size === 2) {
+                    const otherId = [...this._pointers.keys()].find(id => id !== ev.pointerId);
+                    const other   = this._pointers.get(otherId);
+                    const prevD   = Math.hypot(prev.x - other.x, prev.y - other.y);
+                    const newD    = Math.hypot(ev.clientX - other.x, ev.clientY - other.y);
+                    if (prevD > 10) this._r = Math.max(40, Math.min(400, this._r * (newD / prevD)));
+                }
+                this._pointers.set(ev.pointerId, {x: ev.clientX, y: ev.clientY});
+            }
             this._render();
         });
-        dragArea.addEventListener('pointerdown', (e) => {
-            // Click fuori dal foro → niente (il foro segue il cursore automaticamente)
-        });
+        dragArea.addEventListener('pointerup',     (e) => this._pointers.delete(e.pointerId));
+        dragArea.addEventListener('pointercancel', (e) => this._pointers.delete(e.pointerId));
     }
 
     _render() {
@@ -5364,18 +5399,13 @@ class SpotlightTool {
         const ctx = this.el.getContext('2d');
         ctx.clearRect(0, 0, W, H);
 
-        // Overlay scuro con foro
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.fillStyle = `rgba(0,0,0,${this._opacity})`;
         ctx.fillRect(0, 0, W, H);
 
-        // Foro trasparente (rimuovi il nero nell'area illuminata)
         ctx.save();
         ctx.globalCompositeOperation = 'destination-out';
         if (this._shape === 'circle') {
-            const grad = ctx.createRadialGradient(
-                this._x, this._y, this._r * 0.7,
-                this._x, this._y, this._r
-            );
+            const grad = ctx.createRadialGradient(this._x, this._y, this._r * 0.7, this._x, this._y, this._r);
             grad.addColorStop(0, 'rgba(0,0,0,1)');
             grad.addColorStop(1, 'rgba(0,0,0,0)');
             ctx.fillStyle = grad;
@@ -5383,35 +5413,31 @@ class SpotlightTool {
             ctx.arc(this._x, this._y, this._r, 0, Math.PI * 2);
             ctx.fill();
         } else {
-            // Forma rettangolare con bordi morbidi tramite shadow
-            const hw = this._r * 1.4; // semi-larghezza
-            const hh = this._r * 0.9; // semi-altezza
-            ctx.shadowColor = 'rgba(0,0,0,0)';
+            const hw = this._r * 1.4, hh = this._r * 0.9;
             ctx.fillStyle = 'rgba(0,0,0,1)';
             ctx.beginPath();
-            const rx = this._x - hw, ry = this._y - hh;
-            const rw = hw * 2, rh = hh * 2, rad = 18;
+            const rx = this._x - hw, ry = this._y - hh, rw = hw * 2, rh = hh * 2, rad = 18;
             ctx.moveTo(rx + rad, ry);
-            ctx.arcTo(rx + rw, ry,     rx + rw, ry + rh, rad);
-            ctx.arcTo(rx + rw, ry + rh, rx,     ry + rh, rad);
-            ctx.arcTo(rx,      ry + rh, rx,     ry,       rad);
+            ctx.arcTo(rx + rw, ry,      rx + rw, ry + rh, rad);
+            ctx.arcTo(rx + rw, ry + rh, rx,      ry + rh, rad);
+            ctx.arcTo(rx,      ry + rh, rx,      ry,      rad);
             ctx.arcTo(rx,      ry,      rx + rw, ry,      rad);
             ctx.closePath();
             ctx.fill();
         }
         ctx.restore();
 
-        // Posiziona ctrl accanto allo spotlight
+        // Posiziona pill a destra del foro
         if (this._ctrl) {
-            this._ctrl.style.left = Math.min(this._x + this._r + 10, W - 130) + 'px';
-            this._ctrl.style.top  = Math.max(this._y - 20, 10) + 'px';
+            this._ctrl.style.left = Math.min(this._x + this._r + 12, W - 58) + 'px';
+            this._ctrl.style.top  = Math.max(this._y - 80, 10) + 'px';
         }
     }
 
     show() {
         this._x = window.innerWidth  / 2;
         this._y = window.innerHeight / 2;
-        this.el.style.display      = 'block';
+        this.el.style.display        = 'block';
         this._dragArea.style.display = 'block';
         if (this._ctrl) this._ctrl.style.display = 'flex';
         this._render();
@@ -5422,6 +5448,7 @@ class SpotlightTool {
         this.el.style.display        = 'none';
         this._dragArea.style.display = 'none';
         if (this._ctrl) this._ctrl.style.display = 'none';
+        this._pointers.clear();
         this.visible = false;
         const btn = document.getElementById('btn-spotlight');
         if (btn) btn.classList.remove('active');
@@ -5434,53 +5461,98 @@ class SpotlightTool {
 
 class TendinaTool {
     constructor() {
-        this.el      = null;
-        this.visible = false;
-        this._h      = 0;    // altezza coperta dall'alto (px)
-        this._drag   = { on: false, startY: 0, origH: 0 };
-        this._dir    = 'top'; // 'top' | 'bottom' | 'left' | 'right'
+        this.el         = null;
+        this.visible    = false;
+        this._h         = 0;
+        this._drag      = { on: false, startY: 0, origH: 0 };
+        this._bgOpacity = 0.93;
+        this._imgUrl    = null;
+    }
+
+    _applyBg() {
+        if (this._imgUrl) {
+            this.el.style.background = `linear-gradient(rgba(0,0,0,${(this._bgOpacity * 0.65).toFixed(2)}),rgba(0,0,0,${(this._bgOpacity * 0.65).toFixed(2)})),url(${this._imgUrl}) top center/cover no-repeat`;
+        } else {
+            this.el.style.background = `rgba(15,15,20,${this._bgOpacity})`;
+        }
     }
 
     create() {
         const el = document.createElement('div');
         el.id = 'tendina-cover';
-        el.style.cssText = `
-            position:fixed; top:0; left:0; width:100%; height:0;
-            background:#1e293b; z-index:155; display:none;
-            transition: none;`;
+        el.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:0;z-index:155;display:none;transition:none;';
         document.body.appendChild(el);
         this.el = el;
+        this._applyBg();
 
-        // Handle trascinamento nella parte bassa della tendina
+        // Etichetta sopra la barra
+        const label = document.createElement('div');
+        label.id = 'tendina-label';
+        label.textContent = 'trascina per aprire / chiudere';
+        el.appendChild(label);
+
+        // Barra di trascinamento con bottoni integrati
         const handle = document.createElement('div');
         handle.id = 'tendina-handle';
-        handle.innerHTML = '⋯ trascina per rivelare';
+        handle.innerHTML = `
+            <div class="tendina-drag-zone">
+                <div class="tendina-bar-dot"></div>
+            </div>
+            <div class="tendina-actions">
+                <button class="tendina-action-btn" id="tendina-opacity-btn" title="Opacità tendina">
+                    <svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3z" fill="currentColor" opacity="0.3"/><path d="M12 3a9 9 0 0 1 0 18V3z" fill="currentColor"/></svg>
+                </button>
+                <button class="tendina-action-btn" id="tendina-import-btn" title="Importa immagine">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><polyline points="21 15 16 10 5 21"/></svg>
+                </button>
+                <button class="tendina-action-btn" id="tendina-close" title="Chiudi tendina">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="tendina-opacity-popup" id="tendina-opacity-popup" style="display:none">
+                <svg viewBox="0 0 24 24" width="14" height="14" style="flex-shrink:0"><path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3z" fill="currentColor" opacity="0.3"/><path d="M12 3a9 9 0 0 1 0 18V3z" fill="currentColor"/></svg>
+                <input type="range" id="tendina-opacity-input" min="20" max="100" value="93" style="width:100px">
+            </div>`;
         el.appendChild(handle);
 
-        // Bottoni controllo
-        const ctrl = document.createElement('div');
-        ctrl.id = 'tendina-ctrl';
-        ctrl.innerHTML = `
-            <span style="font-size:11px;color:#aaa;white-space:nowrap">↕ trascina il bordo</span>
-            <button class="tendina-btn" id="tendina-close" title="Chiudi">×</button>`;
-        ctrl.style.display = 'none';
-        document.body.appendChild(ctrl);
-        this._ctrl = ctrl;
+        // File input nascosto per importare foto
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.style.display = 'none';
+        document.body.appendChild(fileInput);
 
-        ctrl.querySelector('#tendina-close').addEventListener('click', () => this.hide());
+        handle.querySelector('#tendina-opacity-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const p = document.getElementById('tendina-opacity-popup');
+            p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+        });
+        handle.querySelector('#tendina-opacity-input').addEventListener('input', (e) => {
+            this._bgOpacity = e.target.value / 100;
+            this._applyBg();
+        });
+        handle.querySelector('#tendina-import-btn').addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (this._imgUrl) URL.revokeObjectURL(this._imgUrl);
+            this._imgUrl = URL.createObjectURL(file);
+            this._applyBg();
+            fileInput.value = '';
+        });
+        handle.querySelector('#tendina-close').addEventListener('click', () => this.hide());
 
-        handle.addEventListener('pointerdown', (e) => {
+        // Drag — solo sulla zona centrale
+        const dragZone = handle.querySelector('.tendina-drag-zone');
+        dragZone.addEventListener('pointerdown', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            handle.setPointerCapture(e.pointerId);
+            dragZone.setPointerCapture(e.pointerId);
             this._drag = { on: true, startY: e.clientY, origH: this._h };
         });
         window.addEventListener('pointermove', (e) => {
             if (!this._drag.on) return;
-            this._h = Math.max(0, Math.min(
-                window.innerHeight - 40,
-                this._drag.origH + (e.clientY - this._drag.startY)
-            ));
+            this._h = Math.max(0, Math.min(window.innerHeight - 44, this._drag.origH + (e.clientY - this._drag.startY)));
             this._applyHeight();
         });
         window.addEventListener('pointerup', () => { this._drag.on = false; });
@@ -5488,24 +5560,18 @@ class TendinaTool {
 
     _applyHeight() {
         this.el.style.height = this._h + 'px';
-        if (this._ctrl) {
-            this._ctrl.style.top  = (this._h + 4) + 'px';
-            this._ctrl.style.left = '50%';
-            this._ctrl.style.transform = 'translateX(-50%)';
-        }
     }
 
     show() {
-        this._h = Math.round(window.innerHeight * 0.3); // copre il 30% iniziale
-        this.el.style.display      = 'block';
-        if (this._ctrl) this._ctrl.style.display = 'flex';
+        this._h = Math.round(window.innerHeight * 0.3);
+        this._applyBg();
+        this.el.style.display = 'block';
         this._applyHeight();
         this.visible = true;
     }
 
     hide() {
-        this.el.style.display        = 'none';
-        if (this._ctrl) this._ctrl.style.display = 'none';
+        this.el.style.display = 'none';
         this.visible = false;
         const btn = document.getElementById('btn-tendina');
         if (btn) btn.classList.remove('active');

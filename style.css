@@ -2653,34 +2653,62 @@ body:not(.has-page-bar) #zoom-badge {
     display: none;
 }
 #spotlight-canvas.visible { display: block; }
-#spotlight-ctrl {
+/* ── Pill verticale condivisa (Focus + altri futuri tool) ── */
+.overlay-pill {
     position: fixed;
-    bottom: 70px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: transparent;
-    display: none;
-    align-items: center;
-    gap: 6px;
     z-index: 8500;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.18), 0 1px 6px rgba(0,0,0,0.10);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4px;
+    gap: 2px;
 }
-#spotlight-ctrl button {
-    background: rgba(15,23,42,0.82);
-    border: 1px solid rgba(255,255,255,0.2);
-    color: #fff;
-    border-radius: 50%;
+.overlay-pill-btn {
     width: 40px;
     height: 40px;
-    font-size: 18px;
+    border: none;
+    background: transparent;
+    border-radius: 12px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.2s;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-    touch-action: none;
+    color: #334155;
+    transition: background 0.15s;
+    touch-action: manipulation;
+    flex-shrink: 0;
 }
-#spotlight-ctrl button:hover { background: rgba(30,40,70,0.95); }
+.overlay-pill-btn:hover  { background: #f1f5f9; }
+.overlay-pill-btn.active { background: #eff6ff; color: #3b82f6; }
+.overlay-pill-sep {
+    width: 28px;
+    height: 1px;
+    background: rgba(15,23,42,0.1);
+    margin: 2px 0;
+    flex-shrink: 0;
+}
+.overlay-opacity-popup {
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 1;
+    white-space: nowrap;
+}
+.overlay-opacity-popup input[type=range] { accent-color: #3b82f6; }
+
+/* ── Focus (spotlight) — posizione gestita da JS ── */
+#spotlight-ctrl { position: fixed; }
 
 /* --- Tendina --- */
 #tendina-cover {
@@ -2688,62 +2716,91 @@ body:not(.has-page-bar) #zoom-badge {
     top: 0;
     left: 0;
     right: 0;
-    background: rgba(15,15,20,0.93);
     z-index: 7500;
     display: none;
     pointer-events: none;
 }
-#tendina-cover.visible { display: block; }
+#tendina-label {
+    position: absolute;
+    bottom: 44px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.45);
+    pointer-events: none;
+    padding-bottom: 5px;
+    text-transform: uppercase;
+}
 #tendina-handle {
     position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
     height: 44px;
-    background: rgba(255,255,255,0.1);
-    cursor: ns-resize;
+    background: rgba(255,255,255,0.08);
+    display: flex;
+    align-items: center;
+    pointer-events: auto;
+    touch-action: none;
+    gap: 0;
+}
+.tendina-drag-zone {
+    flex: 1;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    pointer-events: auto;
-    border-radius: 0 0 4px 4px;
+    cursor: ns-resize;
     touch-action: none;
 }
-#tendina-handle::after {
-    content: '';
-    width: 60px;
+.tendina-bar-dot {
+    width: 56px;
     height: 5px;
     border-radius: 3px;
-    background: rgba(255,255,255,0.5);
+    background: rgba(255,255,255,0.45);
+    pointer-events: none;
 }
-#tendina-ctrl {
-    position: fixed;
-    bottom: 70px;
-    right: 20px;
-    background: transparent;
-    display: none;
+.tendina-actions {
+    display: flex;
     align-items: center;
-    gap: 6px;
-    z-index: 7600;
+    gap: 2px;
+    padding-right: 8px;
+    flex-shrink: 0;
 }
-#tendina-ctrl button {
-    background: rgba(15,23,42,0.82);
-    border: 1px solid rgba(255,255,255,0.2);
-    color: #fff;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    font-size: 18px;
+.tendina-action-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: transparent;
+    border-radius: 10px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.2s;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-    touch-action: none;
+    color: rgba(255,255,255,0.65);
+    transition: background 0.15s, color 0.15s;
+    touch-action: manipulation;
 }
-#tendina-ctrl button:hover { background: rgba(30,40,70,0.95); }
-#tendina-ctrl span { display: none; }
+.tendina-action-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.tendina-opacity-popup {
+    position: absolute;
+    right: 8px;
+    bottom: calc(100% + 8px);
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 7700;
+    white-space: nowrap;
+    color: #334155;
+}
+.tendina-opacity-popup input[type=range] { accent-color: #3b82f6; }
 
 /* ============================================================
    EduBoard Connect — pannello QR connessione Drive
