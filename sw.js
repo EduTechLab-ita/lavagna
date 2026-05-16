@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v66'; // v65 — mini app PWA: scanner QR, laser pointer, campanella foto; fix endpoint /photo e /laser Worker
+const CACHE_NAME = 'eduboard-v67'; // v67 — EduBoard Connect riscritta: scope openid (no limite 100 utenti), modalità browser/standalone, timer, buzz, fix laser/foto
 const urlsToCache = [
   '.',
   './index.html',

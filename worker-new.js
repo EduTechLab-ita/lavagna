@@ -28,7 +28,7 @@ export default {
 
     // ── POST /session/:limId — telefono invia token ──────────────────────────
     if (request.method === 'POST' && resource === 'session' && id) {
-      const { token, email, expiry } = await request.json();
+      const { email } = await request.json();
 
       // Se c'è un'altra LIM connessa con questo account, notificala del trasferimento
       const existingLimId = await env.SESSIONS.get(`account:${email}`);
@@ -42,7 +42,7 @@ export default {
 
       await env.SESSIONS.put(
         `session:${id}`,
-        JSON.stringify({ status: 'connected', token, email, expiry: expiry || Date.now() + 3600000 }),
+        JSON.stringify({ status: 'connected', email }),
         { expirationTtl: 300 }
       );
       await env.SESSIONS.put(`account:${email}`, id, { expirationTtl: 3600 });
@@ -63,9 +63,7 @@ export default {
       }
       return json({
         status: 'connected',
-        token:  session.token,
-        email:  session.email,
-        expiry: session.expiry,
+        email: session.email,
       });
     }
 
@@ -130,6 +128,49 @@ export default {
       }
 
       return json({ active: true, x: data.x, y: data.y });
+    }
+
+    // ── POST /timer/:limId — telefono avvia/ferma timer ──────────────────────
+    if (request.method === 'POST' && resource === 'timer' && id) {
+      const body = await request.json();
+      if (body.action === 'stop') {
+        await env.SESSIONS.delete(`timer:${id}`);
+      } else {
+        await env.SESSIONS.put(
+          `timer:${id}`,
+          JSON.stringify({ active: true, seconds: body.seconds, startedAt: Date.now() }),
+          { expirationTtl: body.seconds + 60 }
+        );
+      }
+      return json({ ok: true });
+    }
+
+    // ── GET /timer/:limId — LIM fa polling timer ──────────────────────────────
+    if (request.method === 'GET' && resource === 'timer' && id) {
+      const raw = await env.SESSIONS.get(`timer:${id}`);
+      if (!raw) return json({ active: false });
+      const data = JSON.parse(raw);
+      // Auto-scade se tempo esaurito
+      const elapsed = Math.floor((Date.now() - data.startedAt) / 1000);
+      if (elapsed >= data.seconds) {
+        await env.SESSIONS.delete(`timer:${id}`);
+        return json({ active: false });
+      }
+      return json({ active: true, seconds: data.seconds, startedAt: data.startedAt });
+    }
+
+    // ── POST /buzz/:limId — telefono invia buzz ───────────────────────────────
+    if (request.method === 'POST' && resource === 'buzz' && id) {
+      await env.SESSIONS.put(`buzz:${id}`, '1', { expirationTtl: 5 });
+      return json({ ok: true });
+    }
+
+    // ── GET /buzz/:limId — LIM fa polling buzz ────────────────────────────────
+    if (request.method === 'GET' && resource === 'buzz' && id) {
+      const raw = await env.SESSIONS.get(`buzz:${id}`);
+      if (!raw) return json({ buzz: false });
+      await env.SESSIONS.delete(`buzz:${id}`);
+      return json({ buzz: true });
     }
 
     return json({ error: 'not found' }, 404);

@@ -5472,6 +5472,7 @@ document.addEventListener('DOMContentLoaded', () => {
     laserMgr   = new LaserManager(document.getElementById('overlay-canvas'));
     canvasMgr  = new CanvasManager(bgMgr, brush, laserMgr);
     objectLayer = new ObjectLayer();
+    window.objectLayer = objectLayer; // esposto per drive.js (EduBoardConnect._addPhotoToCanvas)
     selectMgr  = new SelectManager(
         document.getElementById('draw-canvas'),
         document.getElementById('bg-canvas')

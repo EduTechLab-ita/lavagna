@@ -2171,10 +2171,14 @@ const CONNECT_SERVER = 'https://eduboard-connect.edutechlab-ita.workers.dev';
 
 class EduBoardConnect {
     constructor() {
-        this._limId      = this._getLimId();
-        this._pollInt    = null;
-        this._photoInt   = null;
-        this._panel      = null;
+        this._limId         = this._getLimId();
+        this._pollInt       = null;
+        this._photoInt      = null;
+        this._laserInt      = null;
+        this._timerInt      = null;
+        this._buzzInt       = null;
+        this._panel         = null;
+        this._phoneConnected = false;
     }
 
     // ID stabile per questa LIM (persiste in localStorage)
@@ -2203,6 +2207,10 @@ class EduBoardConnect {
                     <div id="ec-qr-canvas" class="ec-qr-canvas"></div>
                     <div class="ec-qr-loading" id="ec-qr-loading">Generazione QR...</div>
                 </div>
+                <div style="margin-top:12px; font-size:0.75rem; color:#64748b; text-align:center">
+                    Oppure apri <strong>EduBoard Connect</strong> e inserisci il codice:<br>
+                    <code id="ec-lim-code" style="font-size:1.1rem; color:#94a3b8; letter-spacing:0.15em"></code>
+                </div>
                 <div class="ec-status" id="ec-status">
                     <span class="ec-dot"></span> In attesa del telefono...
                 </div>
@@ -2225,6 +2233,10 @@ class EduBoardConnect {
             </div>`;
         document.body.appendChild(panel);
         this._panel = panel;
+
+        // Popola codice LIM (8 caratteri maiuscoli)
+        const limCodeEl = document.getElementById('ec-lim-code');
+        if (limCodeEl) limCodeEl.textContent = this._limId.substring(0, 8).toUpperCase();
 
         panel.querySelector('#ec-btn-install').addEventListener('click', () => this._switchToInstall());
         panel.querySelector('#ec-btn-back').addEventListener('click',    () => this._switchToConnect());
@@ -2307,7 +2319,7 @@ class EduBoardConnect {
                 // Nascondi pannello PRIMA di aprire lezione (evita decentramento canvas)
                 setTimeout(() => {
                     this.hide();
-                    if (window.driveMgr) window.driveMgr._onExternalToken(res.token, res.email, res.expiry);
+                    this._onExternalConnect(res.email);
                 }, 800);
             } else if (res.status === 'transferred') {
                 // Questa LIM è stata scalzata da un'altra sessione dello stesso account
@@ -2319,13 +2331,23 @@ class EduBoardConnect {
         } catch(e) { /* silenzioso — polling continua */ }
     }
 
+    _onExternalConnect(email) {
+        this._phoneConnected = true;
+        this._phoneEmail = email;
+        // Toast sulla LIM
+        if (typeof toast === 'function') toast('Telefono connesso come ' + email, 'success');
+        // Aggiorna campanella foto e pulsante connect
+        this._updateBell();
+        if (window.driveConnectBtn) window.driveConnectBtn.update();
+    }
+
     // Polling foto dal telefono — avviato da initDrive dopo la connessione
     startPhotoPolling() {
         if (this._photoInt) return;
         this._pendingPhotos = this._pendingPhotos || [];
 
         this._photoInt = setInterval(async () => {
-            if (!window.driveMgr?.isConnected()) return;
+            if (!this._phoneConnected) return;
             try {
                 const res = await fetch(`${CONNECT_SERVER}/photos/${this._limId}`).then(r => r.json());
                 if (!res.photos?.length) return;
@@ -2341,7 +2363,7 @@ class EduBoardConnect {
     startLaserPolling() {
         if (this._laserInt) return;
         this._laserInt = setInterval(async () => {
-            if (!window.driveMgr?.isConnected()) return;
+            if (!this._phoneConnected) return;
             try {
                 const res = await fetch(`${CONNECT_SERVER}/laser/${this._limId}`).then(r => r.json());
                 this._updateLaser(res);
@@ -2384,8 +2406,8 @@ class EduBoardConnect {
         const bell  = document.getElementById('photo-bell-btn');
         const badge = document.getElementById('photo-bell-badge');
         if (!bell) return;
-        // Mostra la campanella solo se Drive è connesso
-        bell.style.display = window.driveMgr?.isConnected() ? 'flex' : 'none';
+        // Mostra la campanella solo se il telefono è connesso
+        bell.style.display = this._phoneConnected ? 'flex' : 'none';
         if (!badge) return;
         const count = (this._pendingPhotos || []).length;
         badge.textContent = count > 9 ? '9+' : String(count);
@@ -2416,11 +2438,14 @@ class EduBoardConnect {
                 ${photos.length === 0
                     ? '<div class="pnp-empty">Nessuna foto ricevuta</div>'
                     : photos.map((p, i) => `
-                        <div class="pnp-item" data-idx="${i}">
+                        <div class="pnp-item${p.added ? ' pnp-item-added' : ''}" data-idx="${i}" style="${p.added ? 'opacity:0.5' : ''}">
                             <img src="${p.dataUrl}" alt="${p.name}" class="pnp-thumb">
                             <div class="pnp-item-info">
                                 <div class="pnp-item-name">${p.name}</div>
-                                <button class="pnp-add-btn" data-idx="${i}">Aggiungi alla lavagna</button>
+                                ${p.added
+                                    ? '<button class="pnp-add-btn pnp-add-done" data-idx="' + i + '" disabled>✓ Aggiunta</button>'
+                                    : '<button class="pnp-add-btn" data-idx="' + i + '">Aggiungi alla lavagna</button>'
+                                }
                             </div>
                             <button class="pnp-del-btn" data-idx="${i}" title="Rimuovi">✕</button>
                         </div>
@@ -2463,17 +2488,95 @@ class EduBoardConnect {
 
     _addPhotoToCanvas(idx) {
         const photo = (this._pendingPhotos || [])[idx];
-        if (!photo) return;
+        if (!photo || photo.added) return;
         const img = new Image();
         img.onload = () => {
-            if (window.objectLayer?.addImage) {
-                window.objectLayer.addImage(img, photo.name);
-                if (typeof toast === 'function') toast('Foto aggiunta alla lavagna');
+            if (window.objectLayer?.addObject) {
+                // Posiziona al centro del viewport visibile
+                const W = img.naturalWidth;
+                const H = img.naturalHeight;
+                const canvasArea = document.getElementById('canvas-area');
+                let x = 100, y = 100;
+                if (canvasArea) {
+                    const rect = canvasArea.getBoundingClientRect();
+                    const scrollX = canvasArea.scrollLeft || 0;
+                    const scrollY = canvasArea.scrollTop  || 0;
+                    x = scrollX + rect.width  / 2 - W / 2;
+                    y = scrollY + rect.height / 2 - H / 2;
+                }
+                window.objectLayer.addObject('image', img, x, y, W, H);
+                if (typeof toast === 'function') toast('Foto aggiunta alla lavagna', 'success');
+                // Marca come aggiunta (non rimuovere dalla lista — resta nel pannello con stile "aggiunta")
+                photo.added = true;
+            } else {
+                if (typeof toast === 'function') toast('Errore: objectLayer non disponibile', 'error');
             }
         };
         img.src = photo.dataUrl;
-        // Rimuovi dalla lista pending dopo aggiunta
-        this._pendingPhotos.splice(idx, 1);
+    }
+
+    // Polling timer — avviato da initDrive
+    startTimerPolling() {
+        if (this._timerInt) return;
+        this._timerInt = setInterval(async () => {
+            if (!this._phoneConnected) return;
+            try {
+                const res = await fetch(`${CONNECT_SERVER}/timer/${this._limId}`).then(r => r.json());
+                this._updateTimer(res);
+            } catch(_) {}
+        }, 500);
+    }
+
+    _updateTimer(data) {
+        // Crea/aggiorna overlay timer sulla LIM
+        let overlay = document.getElementById('eduboard-timer-overlay');
+        if (!data.active) {
+            if (overlay) overlay.style.display = 'none';
+            return;
+        }
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'eduboard-timer-overlay';
+            overlay.style.cssText = `
+                position:fixed; top:20px; right:20px; z-index:8000;
+                background:rgba(15,23,42,0.92); color:#f1f5f9;
+                border-radius:16px; padding:16px 24px; font-size:2.5rem;
+                font-weight:700; font-family:system-ui; letter-spacing:0.05em;
+                box-shadow:0 8px 32px rgba(0,0,0,0.4); backdrop-filter:blur(8px);
+                border:1px solid rgba(255,255,255,0.1); min-width:120px; text-align:center;
+            `;
+            document.body.appendChild(overlay);
+        }
+        overlay.style.display = 'block';
+        // Calcola tempo rimanente
+        const elapsed = Math.floor((Date.now() - data.startedAt) / 1000);
+        const remaining = Math.max(0, data.seconds - elapsed);
+        const m = Math.floor(remaining / 60);
+        const s = remaining % 60;
+        overlay.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        // Rosso quando < 10 secondi
+        overlay.style.color = remaining < 10 ? '#ef4444' : '#f1f5f9';
+    }
+
+    // Polling buzz — avviato da initDrive
+    startBuzzPolling() {
+        if (this._buzzInt) return;
+        this._buzzInt = setInterval(async () => {
+            if (!this._phoneConnected) return;
+            try {
+                const res = await fetch(`${CONNECT_SERVER}/buzz/${this._limId}`).then(r => r.json());
+                if (res.buzz) this._triggerBuzz();
+            } catch(_) {}
+        }, 1000);
+    }
+
+    _triggerBuzz() {
+        // Effetto visivo flash + vibrazione audio
+        document.body.style.transition = 'background 0.1s';
+        document.body.style.background = 'rgba(59,130,246,0.3)';
+        setTimeout(() => { document.body.style.background = ''; }, 300);
+        // Toast
+        if (typeof toast === 'function') toast('🔔 Attenzione!', 'info');
     }
 }
 
@@ -2497,6 +2600,8 @@ function initDrive() {
     window.eduBoardConnect = new EduBoardConnect();
     window.eduBoardConnect.startPhotoPolling();
     window.eduBoardConnect.startLaserPolling();
+    window.eduBoardConnect.startTimerPolling();
+    window.eduBoardConnect.startBuzzPolling();
 
     document.getElementById('photo-bell-btn')?.addEventListener('click', () => {
         window.eduBoardConnect?.openPhotoPanel();
