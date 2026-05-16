@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v73'; // v73 — bottone "Installa App" in header apre QR installazione EduBoard Connect
+const CACHE_NAME = 'eduboard-v74'; // v74 — popup QR installazione standalone (fix bottone Installa App)
 const urlsToCache = [
   '.',
   './index.html',
