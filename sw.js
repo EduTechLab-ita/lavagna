@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v83'; // v78 — QR1(?install=1): installa/già installata. QR2(?lid): connette/chiede install
+const CACHE_NAME = 'eduboard-v84'; // v78 — QR1(?install=1): installa/già installata. QR2(?lid): connette/chiede install
 const urlsToCache = [
   '.',
   './index.html',

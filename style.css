@@ -1563,23 +1563,26 @@ button {
 
 /* Azioni in fondo al pannello */
 .library-actions {
-    padding: 12px;
+    padding: 8px;
     border-top: 1px solid var(--border);
     display: flex;
-    gap: 8px;
+    gap: 4px;
     flex-shrink: 0;
 }
 .library-actions button {
     flex: 1;
-    padding: 8px 6px;
-    border-radius: 8px;
+    padding: 6px 2px;
+    border-radius: 6px;
     border: 1px solid var(--border);
     background: var(--bg-elevated);
     color: var(--text);
     cursor: pointer;
-    font-size: 0.78rem;
+    font-size: 0.68rem;
     transition: background 0.15s, border-color 0.15s;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 .library-actions button:hover {
     background: var(--accent);
@@ -2066,17 +2069,14 @@ body.fullscreen-mode #canvas-area {
     position: fixed;
     bottom: 0;
     left: 0;
-    right: 0;
+    /* right: 0 rimosso — la barra non si estende a tutta larghezza, così il canvas rimane cliccabile */
     display: flex;
     align-items: center;
     gap: 4px;
     padding: 5px 12px;
-    background: rgba(15, 23, 42, 0.92);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-top: 1px solid var(--border);
+    background: transparent;
     z-index: 190;
-    overflow-x: auto;
+    overflow-x: visible;
     scrollbar-width: thin;
 }
 #page-bar::-webkit-scrollbar { height: 4px; }
@@ -2168,18 +2168,21 @@ body.has-page-bar #zoom-indicator {
     opacity: 1;
 }
 
-/* Badge zoom fisso — centrato nella page-bar in basso a destra */
+/* Badge zoom fisso — in basso a destra, piccolo sfondo grigio per leggibilità */
 #zoom-badge {
     position: fixed;
-    bottom: 9px;        /* centra verticalmente nella page-bar (h≈38px) */
+    bottom: 6px;
     right: 24px;
     width: 52px;
-    background: transparent;
-    border: none;
-    padding: 2px 0;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 6px;
+    padding: 3px 0;
     font-size: 0.82rem;
     font-weight: 500;
-    color: rgba(71, 85, 105, 0.95);
+    color: #94a3b8;
     z-index: 200;
     cursor: pointer;
     user-select: none;
@@ -2187,7 +2190,7 @@ body.has-page-bar #zoom-indicator {
     line-height: 1;
 }
 body:not(.has-page-bar) #zoom-badge {
-    bottom: 4px;        /* fallback senza page-bar */
+    bottom: 6px;
 }
 #zoom-badge:hover {
     color: #3b82f6;
