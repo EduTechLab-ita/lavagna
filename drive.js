@@ -2334,11 +2334,33 @@ class EduBoardConnect {
     _onExternalConnect(email) {
         this._phoneConnected = true;
         this._phoneEmail = email;
-        // Toast sulla LIM
         if (typeof toast === 'function') toast('Telefono connesso come ' + email, 'success');
-        // Aggiorna campanella foto e pulsante connect
         this._updateBell();
         if (window.driveConnectBtn) window.driveConnectBtn.update();
+
+        // Se Drive non è già connesso, tenta il login silenzioso con l'account del telefono.
+        // prompt:'' → nessun popup se il docente ha già dato il consenso in precedenza.
+        // Se fallisce (primo accesso), Drive rimane non connesso → il docente clicca il FAB.
+        if (window.driveMgr && !window.driveMgr.isConnected()) {
+            window.driveMgr.reconnect(email)
+                .then(ok => {
+                    if (ok) {
+                        if (window.driveConnectBtn) window.driveConnectBtn.update();
+                        if (window.libraryMgr) window.libraryMgr.refresh();
+                        setTimeout(() => _autoOpenLastLesson(), 800);
+                    } else {
+                        // Primo accesso: invita a fare login Drive dalla LIM
+                        if (typeof toast === 'function') toast('Clicca il pulsante Drive per connettere il salvataggio.', 'info');
+                    }
+                })
+                .catch(() => {
+                    if (typeof toast === 'function') toast('Clicca il pulsante Drive per connettere il salvataggio.', 'info');
+                });
+        } else if (window.driveMgr?.isConnected()) {
+            // Drive già connesso: aggiorna libreria e apri ultima lezione
+            if (window.libraryMgr) window.libraryMgr.refresh();
+            setTimeout(() => _autoOpenLastLesson(), 800);
+        }
     }
 
     // Polling foto dal telefono — avviato da initDrive dopo la connessione
