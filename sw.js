@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v69'; // v67 — EduBoard Connect riscritta: scope openid (no limite 100 utenti), modalità browser/standalone, timer, buzz, fix laser/foto
+const CACHE_NAME = 'eduboard-v70'; // v70 — scope drive→drive.file (no limite 100 utenti), upload sfondi da LIM
 const urlsToCache = [
   '.',
   './index.html',

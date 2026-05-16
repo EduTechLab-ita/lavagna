@@ -64,7 +64,7 @@ class DriveManager {
     constructor() {
         // OAuth2 — stesso CLIENT_ID usato da CAArtella, ValPrimaria, ComportamentoScuola
         this.CLIENT_ID  = '374342529488-c123a5j5v8hnfs241udbl55fos5thfq6.apps.googleusercontent.com';
-        this.SCOPE      = 'https://www.googleapis.com/auth/drive email profile';
+        this.SCOPE      = 'https://www.googleapis.com/auth/drive.file email profile';
 
         // Token OAuth2 — letto da sessionStorage all'avvio
         this.accessToken = null;
@@ -495,44 +495,21 @@ class DriveManager {
      */
     async listBackgrounds() {
         this._checkConnected();
-        // Cerca tutte le cartelle chiamate "Sfondi" nel Drive (ovunque)
-        const folderQ = encodeURIComponent(
-            `name = 'Sfondi' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
+        // Con drive.file possiamo leggere solo file creati dall'app: usa sempre EduBoard/Sfondi
+        await this._ensureBgFolder();
+        if (!this.bgFolderId) return [];
+
+        const q = encodeURIComponent(
+            `'${this.bgFolderId}' in parents and (mimeType contains 'image/' or mimeType='application/pdf') and trashed=false`
         );
-        let folders = [];
         try {
-            const folderResp = await this._apiFetch(
-                `https://www.googleapis.com/drive/v3/files?q=${folderQ}&fields=files(id,name)&pageSize=10`
+            const resp = await this._apiFetch(
+                `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType,thumbnailLink,webContentLink)&orderBy=name&pageSize=50`
             );
-            folders = folderResp.files || [];
-        } catch (_) {}
-
-        // Fallback: usa la cartella EduBoard/Sfondi creata dall'app
-        if (!folders.length) {
-            await this._ensureBgFolder();
-            if (this.bgFolderId) folders.push({ id: this.bgFolderId });
+            return resp.files || [];
+        } catch (_) {
+            return [];
         }
-
-        // Lista file immagine/PDF in TUTTE le cartelle "Sfondi" trovate
-        const allFiles = [];
-        const seenIds = new Set();
-        for (const folder of folders) {
-            const q = encodeURIComponent(
-                `'${folder.id}' in parents and (mimeType contains 'image/' or mimeType='application/pdf') and trashed=false`
-            );
-            try {
-                const resp = await this._apiFetch(
-                    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType,thumbnailLink,webContentLink)&orderBy=name&pageSize=50`
-                );
-                for (const f of (resp.files || [])) {
-                    if (!seenIds.has(f.id)) {
-                        seenIds.add(f.id);
-                        allFiles.push(f);
-                    }
-                }
-            } catch (_) {}
-        }
-        return allFiles;
     }
 
     /**

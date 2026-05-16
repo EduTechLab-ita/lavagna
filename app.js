@@ -4409,6 +4409,35 @@ async function loadDriveBackgrounds() {
     }
 
     section.style.display = 'block';
+
+    // Inizializza upload bottone (una sola volta)
+    const uploadBtn   = document.getElementById('bg-upload-btn');
+    const uploadInput = document.getElementById('bg-upload-input');
+    if (uploadBtn && uploadInput && !uploadBtn.dataset.init) {
+        uploadBtn.dataset.init = '1';
+        uploadBtn.addEventListener('click', () => uploadInput.click());
+        uploadInput.addEventListener('change', async () => {
+            const file = uploadInput.files[0];
+            uploadInput.value = '';
+            if (!file) return;
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = 'Caricamento...';
+            try {
+                await driveMgr.uploadBackground(file);
+                toast('Sfondo caricato!', 'success');
+                await loadDriveBackgrounds();
+            } catch (err) {
+                toast('Errore upload: ' + err.message, 'error');
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = '+ Carica sfondo';
+            }
+        });
+    }
+    if (uploadBtn) {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = '+ Carica sfondo';
+    }
+
     grid.innerHTML = '<div class="bg-drive-loading">Caricamento...</div>';
 
     try {
