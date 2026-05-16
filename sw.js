@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eduboard-v76'; // v76 — guida installazione visuale per piattaforma (Android/iOS), no alert()
+const CACHE_NAME = 'eduboard-v77'; // v77 — standalone+reinstall: banner "Apri in Chrome" per forzare browser mode
 const urlsToCache = [
   '.',
   './index.html',
