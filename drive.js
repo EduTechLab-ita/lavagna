@@ -2185,12 +2185,14 @@ class EduBoardConnect {
         ['click','touchstart','keydown'].forEach(ev => document.addEventListener(ev, unlockAudio, { once: false, passive: true }));
     }
 
-    // ID stabile per questa LIM (persiste in localStorage)
+    // ID univoco per questa finestra LIM — sessionStorage (per-tab) evita che
+    // due finestre dello stesso profilo Chrome condividano lo stesso ID e si
+    // "rubino" la sessione EduConnect a vicenda.
     _getLimId() {
-        let id = localStorage.getItem('ec_lim_id');
+        let id = sessionStorage.getItem('ec_lim_id');
         if (!id) {
             id = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 18));
-            localStorage.setItem('ec_lim_id', id);
+            sessionStorage.setItem('ec_lim_id', id);
         }
         return id;
     }

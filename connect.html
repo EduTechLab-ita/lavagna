@@ -1236,9 +1236,10 @@
     }
   }
 
-  // Carica subito avatar se già autenticato
-  updateUserHeader();
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', () => {
+    updateUserHeader(); // DOM pronto → avatar caricato correttamente
+    init();
+  });
 
   // ══════════════════════════════════════════════════════════════
   // SERVICE WORKER — auto-aggiornamento silenzioso
