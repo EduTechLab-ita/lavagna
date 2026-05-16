@@ -2427,6 +2427,10 @@ class EduBoardConnect {
         badge.style.display = count > 0 ? 'flex' : 'none';
         if (count > 0) bell.classList.add('bell-has-photos');
         else           bell.classList.remove('bell-has-photos');
+        // Beep di notifica quando arrivano foto nuove
+        if (this._lastPhotoCount === undefined) this._lastPhotoCount = 0;
+        if (count > this._lastPhotoCount) this._beep(523, 0.3, 0.4);
+        this._lastPhotoCount = count;
     }
 
     openPhotoPanel() {
@@ -2502,24 +2506,33 @@ class EduBoardConnect {
         const img = new Image();
         img.onload = () => {
             if (window.objectLayer?.addObject) {
-                // Scala la foto per adattarla al 60% del canvas, mantenendo le proporzioni
-                const canvasArea = document.getElementById('canvas-area');
-                let areaW = 1280, areaH = 720;
-                let scrollX = 0, scrollY = 0;
-                if (canvasArea) {
-                    const rect = canvasArea.getBoundingClientRect();
-                    areaW   = rect.width;
-                    areaH   = rect.height;
-                    scrollX = canvasArea.scrollLeft || 0;
-                    scrollY = canvasArea.scrollTop  || 0;
+                // Calcola il centro dell'area visibile in coordinate canvas,
+                // tenendo conto di pan (_dx/_dy) e zoom (_scale) del PanManager.
+                const viewportW = window.innerWidth;
+                const viewportH = window.innerHeight;
+                let centerX, centerY, maxW, maxH;
+                if (typeof panMgr !== 'undefined' && panMgr) {
+                    const _dx    = panMgr.dx;
+                    const _dy    = panMgr.dy;
+                    const _scale = panMgr.scale;
+                    centerX = (viewportW / 2 - _dx) / _scale;
+                    centerY = (viewportH / 2 - _dy) / _scale;
+                    // Dimensioni massime in coordinate canvas (60% dell'area visibile)
+                    maxW = (viewportW * 0.6) / _scale;
+                    maxH = (viewportH * 0.6) / _scale;
+                } else {
+                    // Fallback: usa le dimensioni del canvas element
+                    const drawCanvas = document.getElementById('draw-canvas');
+                    centerX = drawCanvas ? drawCanvas.width  / 2 : 640;
+                    centerY = drawCanvas ? drawCanvas.height / 2 : 360;
+                    maxW = (drawCanvas ? drawCanvas.width  : 1280) * 0.6;
+                    maxH = (drawCanvas ? drawCanvas.height : 720)  * 0.6;
                 }
-                const maxW = areaW * 0.6;
-                const maxH = areaH * 0.6;
                 const scale = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
                 const W = Math.round(img.naturalWidth  * scale);
                 const H = Math.round(img.naturalHeight * scale);
-                const x = scrollX + areaW / 2 - W / 2;
-                const y = scrollY + areaH / 2 - H / 2;
+                const x = centerX - W / 2;
+                const y = centerY - H / 2;
                 const obj = window.objectLayer.addObject('image', img, x, y, W, H);
                 if (obj) window.objectLayer.bringToFront(obj.id);
                 if (typeof toast === 'function') toast('Foto aggiunta alla lavagna', 'success');
@@ -2625,6 +2638,12 @@ class EduBoardConnect {
         }
         overlay.style.opacity = '1';
         setTimeout(() => { overlay.style.opacity = '0'; }, 300);
+        // Assicura che l'AudioContext sia inizializzato (il buzz è esso stesso un gesto-sistema:
+        // la LIM potrebbe non aver ancora ricevuto un gesto utente esplicito)
+        if (!this._audioCtx) {
+            try { this._audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(_) {}
+        }
+        if (this._audioCtx?.state === 'suspended') this._audioCtx.resume().catch(() => {});
         // Suono
         this._beep(660, 0.3, 0.4);
         setTimeout(() => this._beep(880, 0.25, 0.3), 200);
