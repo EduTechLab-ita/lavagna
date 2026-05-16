@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v100'; // v96 — EduConnect: token in cache (no popup ripetuto), foto account, esci account
+const CACHE_NAME = 'eduboard-v101'; // v101 — Fix: foto account, Drive 401, disconnessione automatica altra classe
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'EduConnect: login Google una volta sola, foto account in alto, pulsante Esci account';
+const CHANGELOG  = 'Fix: foto account visibile, errore Drive 401, disconnessione automatica cambio classe';
 
 const urlsToCache = [
   '.',

@@ -720,6 +720,7 @@
       const show = !NO_HEADER.has(id) && !!localStorage.getItem(STORAGE_EMAIL);
       uh.style.display = show ? 'flex' : 'none';
       document.body.classList.toggle('has-user-header', show);
+      if (show) updateUserHeader();
     }
   }
 

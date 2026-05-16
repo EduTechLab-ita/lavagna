@@ -249,6 +249,14 @@ class DriveManager {
                 await this._ensureBgFolder();
                 this._saveSession();
             } catch (err) {
+                if (err.message && err.message.includes('401')) {
+                    // Token non valido o scaduto — disconnetti e chiedi riconnessione
+                    this.disconnect();
+                    if (window.driveConnectBtn) window.driveConnectBtn.update();
+                    if (window.eduBoardConnect) window.eduBoardConnect.show();
+                    if (typeof toast === 'function') toast('Sessione Drive scaduta — riconnetti con EduConnect.', 'error');
+                    return;
+                }
                 console.warn('[EduBoardConnect] folders:', err.message);
             }
             if (window.libraryMgr) window.libraryMgr.refresh();
@@ -2323,7 +2331,7 @@ class EduBoardConnect {
     }
 
     hide() {
-        this._stopPolling();
+        if (this._pollInt) { clearInterval(this._pollInt); this._pollInt = null; }
         if (this._panel) { this._panel.style.display = 'none'; }
     }
 
@@ -2334,6 +2342,7 @@ class EduBoardConnect {
 
     _stopPolling() {
         if (this._pollInt) { clearInterval(this._pollInt); this._pollInt = null; }
+        if (this._transferPollInt) { clearInterval(this._transferPollInt); this._transferPollInt = null; }
     }
 
     async _poll() {
@@ -2349,6 +2358,8 @@ class EduBoardConnect {
                     this.hide();
                     if (window.driveMgr) window.driveMgr._onExternalToken(res.token, res.email, res.expiry);
                     this._onExternalConnect(res.email);
+                    // Poll lento (10s) per rilevare se questa LIM viene scalzata da un'altra classe
+                    this._transferPollInt = setInterval(() => this._pollTransfer(), 10000);
                 }, 800);
             } else if (res.status === 'transferred') {
                 // Questa LIM è stata scalzata da un'altra sessione dello stesso account
@@ -2358,6 +2369,20 @@ class EduBoardConnect {
                 if (window.driveConnectBtn) window.driveConnectBtn.update();
             }
         } catch(e) { /* silenzioso — polling continua */ }
+    }
+
+    // Poll lento post-connessione: controlla solo se la sessione è stata trasferita
+    async _pollTransfer() {
+        try {
+            const res = await fetch(`${CONNECT_SERVER}/session/${this._limId}`).then(r => r.json());
+            if (res.status === 'transferred') {
+                clearInterval(this._transferPollInt);
+                this._transferPollInt = null;
+                toast('Sessione Drive trasferita ad un\'altra classe.', 'info');
+                if (window.driveMgr) window.driveMgr.disconnect();
+                if (window.driveConnectBtn) window.driveConnectBtn.update();
+            }
+        } catch(e) { /* silenzioso */ }
     }
 
     _onExternalConnect(email) {
