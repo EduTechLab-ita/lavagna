@@ -672,6 +672,7 @@
   // STATO GLOBALE
   // ══════════════════════════════════════════════════════════════
   let limId            = null;
+  let prevLimId        = null; // vecchio limId da disconnettere quando si cambia LIM
   let savedEmail       = null;
   let gisClient        = null;
   let scannerStream    = null;
@@ -800,6 +801,15 @@
   // CONNESSIONE LIM (usata sia da token fresco che da cache)
   // ══════════════════════════════════════════════════════════════
   async function connectToLim(token, expiry, email) {
+    // Se c'è una vecchia LIM diversa, segnalale di disconnettersi dal Drive
+    if (prevLimId) {
+      fetch(`${CF_WORKER}/session/${prevLimId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'transferred' })
+      }).catch(() => {}); // silenzioso — non bloccante
+      prevLimId = null;
+    }
     showScreen('screen-connecting');
     try {
       const res = await fetch(`${CF_WORKER}/session/${limId}`, {
@@ -919,6 +929,9 @@
   }
 
   function afterLidDetected(lid) {
+    // Salva il vecchio limId prima di sovrascriverlo (servirà per disconnettere la vecchia LIM)
+    prevLimId = localStorage.getItem(LIM_ID_KEY);
+    if (prevLimId === lid) prevLimId = null; // stessa LIM, non serve disconnettere
     limId = lid;
     localStorage.setItem(LIM_ID_KEY, limId);
     savedEmail = localStorage.getItem(STORAGE_EMAIL);
