@@ -1269,17 +1269,22 @@ class LibraryManager {
             this._attachReorderHandle(item, file.id, parentId, container);
 
             // Swipe orizzontale → indent/dedent visivo (stile OneNote)
-            let _swX = 0, _swY = 0, _swOk = false;
+            let _swX = 0, _swY = 0, _swOk = false, _swPid = -1;
             item.addEventListener('pointerdown', e => {
                 if (e.target.classList.contains('drag-handle')) return;
                 if (e.target.closest('.tree-actions')) return;
-                _swX = e.clientX; _swY = e.clientY; _swOk = true;
-            }, { passive: true });
+                _swX = e.clientX; _swY = e.clientY; _swOk = true; _swPid = e.pointerId;
+                // Pointer capture: garantisce pointerup anche se il dito esce dall'elemento
+                try { item.setPointerCapture(e.pointerId); } catch(_) {}
+            });
             item.addEventListener('pointerup', async e => {
-                if (!_swOk) return;
+                if (!_swOk || e.pointerId !== _swPid) return;
                 _swOk = false;
+                try { item.releasePointerCapture(e.pointerId); } catch(_) {}
                 const dx = e.clientX - _swX, dy = e.clientY - _swY;
-                if (Math.abs(dx) < 40 || Math.abs(dy) > 30) return;
+                if (Math.abs(dx) < 25 || Math.abs(dy) > 35) return; // soglia 25px
+                // Previeni il click che aprirebbe la lezione
+                item.addEventListener('click', ev => ev.stopPropagation(), { once: true, capture: true });
                 const cur  = parseInt(item.dataset.indent || '0');
                 const next = dx > 0 ? Math.min(cur + 1, 1) : Math.max(cur - 1, 0);
                 if (next === cur) return;
@@ -1291,7 +1296,7 @@ class LibraryManager {
                 const order = [...container.querySelectorAll(`.tree-item.lesson[data-folder-id="${parentId}"]`)]
                     .map(el => el.dataset.fileId);
                 await this._saveOrder(parentId, order, this._indentCache[parentId]);
-            }, { passive: true });
+            });
         }
     }
 

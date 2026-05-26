@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v125'; // v125 — Cartelle come linguette colorate + swipe per indentare lezioni
+const CACHE_NAME = 'eduboard-v126'; // v126 — Fix critico: oggetti/disegni non si spostano più cambiando pagina
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'Cartelle come linguette colorate (stile OneNote). Swipe orizzontale su una lezione per renderla sotto-lezione.';
+const CHANGELOG  = 'Fix critico: i contenuti del canvas ora rimangono esattamente dove li hai messi anche cambiando pagina o lezione.';
 
 const urlsToCache = [
   '.',

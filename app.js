@@ -4839,26 +4839,44 @@ class PageManager {
     }
 
     _restorePage(pageData) {
+        this._restoring = true;
+
+        // ── 0. Ripristina orientamento/sfondo PRIMA di qualsiasi _getPageRect ──
+        // CRITICO: _getPageRect usa bgMgr.orientation. Se fosse ancora impostato
+        // sull'orientamento della pagina precedente, disegno e oggetti sarebbero
+        // posizionati con pw/px/py SBAGLIATI → oggetti spostati/ridimensionati.
+        if (pageData.background && typeof bgMgr !== 'undefined') {
+            bgMgr.orientation = pageData.background.orientation || 'landscape';
+        }
+
         const drawCanvas = document.getElementById('draw-canvas');
         const ctx = drawCanvas.getContext('2d');
         ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+
+        const allRestorePromises = [];
+
         if (pageData.drawImageData) {
             const img = new Image();
             if (pageData.drawFormat === 'page' && typeof bgMgr !== 'undefined') {
                 // Formato corrente: drawImageData è il ritaglio del foglio A4.
                 // Disegna SCALANDO alla dimensione corrente del foglio → funziona su qualsiasi schermo.
                 const r = bgMgr._getPageRect(drawCanvas.width, drawCanvas.height);
-                img.onload = () => { ctx.drawImage(img, r.px, r.py, r.pw, r.ph); };
+                allRestorePromises.push(new Promise(res => {
+                    img.onload = () => { ctx.drawImage(img, r.px, r.py, r.pw, r.ph); res(); };
+                    img.onerror = res;
+                }));
             } else {
                 // Vecchio formato: drawImageData è l'intero canvas.
-                // Usa il meccanismo offset (pagePx/pagePy) per compensare dimensioni diverse.
                 let offsetX = 0, offsetY = 0;
                 if (pageData.pagePx != null && typeof bgMgr !== 'undefined') {
                     const curr = bgMgr._getPageRect(drawCanvas.width, drawCanvas.height);
                     offsetX = curr.px - pageData.pagePx;
                     offsetY = curr.py - pageData.pagePy;
                 }
-                img.onload = () => { ctx.drawImage(img, offsetX, offsetY); };
+                allRestorePromises.push(new Promise(res => {
+                    img.onload = () => { ctx.drawImage(img, offsetX, offsetY); res(); };
+                    img.onerror = res;
+                }));
             }
             img.src = pageData.drawImageData;
         }
@@ -4891,9 +4909,12 @@ class PageManager {
             img.onerror = resolve;
             img.src = o.dataUrl;
         }));
-        Promise.all(loadPromises).then(() => this.objectLayerRef.render());
+        Promise.all([...allRestorePromises, ...loadPromises]).then(() => {
+            this.objectLayerRef.render();
+            this._restoring = false;
+        });
 
-        // Ripristina sfondo
+        // Ripristina sfondo (orientamento già impostato sopra — aggiorna solo il resto dell'UI)
         if (pageData.background) {
             this.backgroundManager.currentBg = pageData.background.type || 'white';
             this.backgroundManager.bgColor = pageData.background.color || '#ffffff';
@@ -4916,7 +4937,11 @@ class PageManager {
 
     goToPage(index) {
         if (index < 0 || index >= this.pages.length) return;
-        this.pages[this.currentIndex] = this._captureCurrentPage();
+        // Non sovrascrivere la pagina corrente se è ancora in fase di ripristino
+        // (race condition: capture avverrebbe su canvas ancora vuoto/parziale)
+        if (!this._restoring) {
+            this.pages[this.currentIndex] = this._captureCurrentPage();
+        }
         this.currentIndex = index;
         this._restorePage(this.pages[this.currentIndex]);
         this._updatePageBar();
