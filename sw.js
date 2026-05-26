@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v127'; // v127 — Pulsante ↳/↑ per sotto-lezione nella libreria // v126 — Fix critico: oggetti/disegni non si spostano più cambiando pagina
+const CACHE_NAME = 'eduboard-v128'; // v128 — Fix EduConnect: token scaduto gestito correttamente (silent refresh → popup esplicito)
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'Pulsante ↳ per rendere una lezione sotto-lezione della precedente, ↑ per riportarla al livello principale.';
+const CHANGELOG  = 'Fix connessione QR: se la sessione Google è scaduta sul telefono, ora viene chiesto di accedere di nuovo invece di mostrare un errore.';
 
 const urlsToCache = [
   '.',
