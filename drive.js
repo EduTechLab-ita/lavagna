@@ -866,6 +866,9 @@ class LibraryManager {
 
         // Cache ordini per cartella: { [folderId]: { orderId: string|null } }
         this._orderCache = {};
+
+        // Cache indentazioni lezioni: { [folderId]: { fileId: 1 } }
+        this._indentCache = {};
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1166,11 +1169,9 @@ class LibraryManager {
             const item = this._createTreeItem('folder', '📁', folder.name, 0, depth);
             container.appendChild(item);
 
-            // Sfondo colorato sulla riga
-            const folderColor = localStorage.getItem('folder-color-' + folder.id);
-            if (folderColor) {
-                item.style.background = _hexToRgba(folderColor, 0.15);
-            }
+            // Stile linguetta colorata
+            const folderColor = localStorage.getItem('folder-color-' + folder.id) || null;
+            this._applyFolderTabStyle(item, folderColor);
             item.dataset.folderId = folder.id;
 
             // Cerchietto colore cartella
@@ -1238,12 +1239,19 @@ class LibraryManager {
             this._makeDropTarget(item, subContainer, folder.id);
         }
 
+        // Cache indentazioni per questa cartella
+        if (!this._indentCache) this._indentCache = {};
+        this._indentCache[parentId] = orderData.indents || {};
+
         // --- File lezioni ---
         for (const file of files) {
-            const name = file.name.replace(/\.json$/, '');
-            const item = this._createTreeItem('lesson', '📄', name, 0, depth + 1);
-            item.dataset.fileId  = file.id;  // necessario per _highlightCurrentLesson()
-            item.dataset.folderId = parentId; // necessario per il riordino
+            const name   = file.name.replace(/\.json$/, '');
+            const indent = orderData.indents?.[file.id] || 0;
+            const item   = this._createTreeItem('lesson', '📄', name, indent, depth + 1);
+            item.dataset.fileId   = file.id;
+            item.dataset.folderId = parentId;
+            item.dataset.indent   = indent;
+            if (indent > 0) item.classList.add('lesson-indented');
             container.appendChild(item);
 
             // Click su file: apre la lezione
@@ -1254,11 +1262,36 @@ class LibraryManager {
 
             this._addContextButtons(item, { id: file.id, name }, 'lesson');
 
-            // Drag-and-drop spostamento cartella — i file sono solo draggable (non drop target)
+            // Drag-and-drop spostamento cartella
             this._makeDraggable(item, file.id, parentId, file.name, 'lesson');
 
             // Drag handle per riordino nella stessa cartella
             this._attachReorderHandle(item, file.id, parentId, container);
+
+            // Swipe orizzontale → indent/dedent visivo (stile OneNote)
+            let _swX = 0, _swY = 0, _swOk = false;
+            item.addEventListener('pointerdown', e => {
+                if (e.target.classList.contains('drag-handle')) return;
+                if (e.target.closest('.tree-actions')) return;
+                _swX = e.clientX; _swY = e.clientY; _swOk = true;
+            }, { passive: true });
+            item.addEventListener('pointerup', async e => {
+                if (!_swOk) return;
+                _swOk = false;
+                const dx = e.clientX - _swX, dy = e.clientY - _swY;
+                if (Math.abs(dx) < 40 || Math.abs(dy) > 30) return;
+                const cur  = parseInt(item.dataset.indent || '0');
+                const next = dx > 0 ? Math.min(cur + 1, 1) : Math.max(cur - 1, 0);
+                if (next === cur) return;
+                item.dataset.indent = next;
+                if (next > 0) item.classList.add('lesson-indented');
+                else          item.classList.remove('lesson-indented');
+                if (!this._indentCache[parentId]) this._indentCache[parentId] = {};
+                this._indentCache[parentId][file.id] = next;
+                const order = [...container.querySelectorAll(`.tree-item.lesson[data-folder-id="${parentId}"]`)]
+                    .map(el => el.dataset.fileId);
+                await this._saveOrder(parentId, order, this._indentCache[parentId]);
+            }, { passive: true });
         }
     }
 
@@ -1642,6 +1675,18 @@ class LibraryManager {
             .replace(/"/g, '&quot;');
     }
 
+    /** Applica lo stile "linguetta colorata" a una riga cartella. */
+    _applyFolderTabStyle(itemEl, color) {
+        itemEl.classList.add('folder-tab');
+        if (color) {
+            itemEl.style.background  = _hexToRgba(color, 0.30);
+            itemEl.style.borderLeft  = '3px solid ' + color;
+        } else {
+            itemEl.style.background  = '';
+            itemEl.style.borderLeft  = '3px solid rgba(255,255,255,0.10)';
+        }
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // COLORI CARTELLE
     // ──────────────────────────────────────────────────────────────────────────
@@ -1688,13 +1733,13 @@ class LibraryManager {
                 localStorage.setItem(storageKey, color);
                 dotEl.style.backgroundColor = color;
                 dotEl.classList.remove('no-color');
-                if (itemEl) itemEl.style.background = _hexToRgba(color, 0.15);
+                if (itemEl) this._applyFolderTabStyle(itemEl, color);
             } else {
                 // Rimuovi colore
                 localStorage.removeItem(storageKey);
                 dotEl.style.backgroundColor = '';
                 dotEl.classList.add('no-color');
-                if (itemEl) itemEl.style.background = '';
+                if (itemEl) this._applyFolderTabStyle(itemEl, null);
             }
             popup.remove();
             window.driveMgr?._saveFolderColors();
@@ -1835,15 +1880,15 @@ class LibraryManager {
         // Legge il nuovo ordine dal DOM (solo file della stessa cartella)
         const newOrder = [...container.querySelectorAll(`.tree-item.lesson[data-folder-id="${folderId}"]`)]
             .map(el => el.dataset.fileId);
-        this._saveOrder(folderId, newOrder);
+        this._saveOrder(folderId, newOrder, this._indentCache?.[folderId] || {});
     }
 
-    /** Salva l'ordine in _order.json nella cartella su Drive. */
-    async _saveOrder(folderId, fileIds) {
+    /** Salva l'ordine (e le indentazioni) in _order.json nella cartella su Drive. */
+    async _saveOrder(folderId, fileIds, indents = {}) {
         try {
             const cache   = this._orderCache?.[folderId];
             const orderId = cache?.orderId ?? null;
-            const payload = { v: 1, folderId, order: fileIds, updatedAt: new Date().toISOString() };
+            const payload = { v: 2, folderId, order: fileIds, indents, updatedAt: new Date().toISOString() };
             const newId   = await this.drive._uploadMultipart('_order.json', payload, orderId, folderId);
             if (!this._orderCache) this._orderCache = {};
             this._orderCache[folderId] = { orderId: newId || orderId };
@@ -1860,13 +1905,13 @@ class LibraryManager {
                 `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1`
             );
             const found = (resp.files || [])[0];
-            if (!found) return { orderId: null, order: [] };
+            if (!found) return { orderId: null, order: [], indents: {} };
             const raw = await this.drive._apiFetch(
                 `https://www.googleapis.com/drive/v3/files/${found.id}?alt=media`
             );
-            return { orderId: found.id, order: Array.isArray(raw?.order) ? raw.order : [] };
+            return { orderId: found.id, order: Array.isArray(raw?.order) ? raw.order : [], indents: raw?.indents || {} };
         } catch (_) {
-            return { orderId: null, order: [] };
+            return { orderId: null, order: [], indents: {} };
         }
     }
 
@@ -2279,17 +2324,24 @@ function _injectDriveStyles() {
     padding-left: 8px;
     border-left: 1.5px solid rgba(148,163,184,0.20);
 }
-/* Riga cartella con sfondo colorato: hover e selected usano blend */
-.tree-item.folder[style*="background"] {
-    transition: background 0.15s, filter 0.15s;
+/* ── Linguetta cartella (stile OneNote verticale) ── */
+.tree-item.folder-tab {
+    border-radius: 0 5px 5px 0;
+    transition: background 0.15s, filter 0.15s, border-left-color 0.15s;
 }
-.tree-item.folder[style*="background"]:hover {
-    filter: brightness(1.28);
+.tree-item.folder-tab:hover {
+    filter: brightness(1.35);
 }
-.tree-item.folder[style*="background"].selected {
-    filter: brightness(1.45) saturate(1.3);
-    outline: 1px solid rgba(59,130,246,0.35);
+.tree-item.folder-tab.selected {
+    filter: brightness(1.55) saturate(1.2);
+    outline: 1px solid rgba(255,255,255,0.20);
     outline-offset: -1px;
+}
+/* ── Lezione indentata (sotto-pagina stile OneNote) ── */
+.tree-item.lesson.lesson-indented {
+    padding-left: 24px;
+    opacity: 0.88;
+    font-size: 0.93em;
 }
 
 /* ── Drag and drop ── */

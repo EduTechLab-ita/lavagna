@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v124'; // v124 — Libreria ricorda quali cartelle hai aperto (default chiuse)
+const CACHE_NAME = 'eduboard-v125'; // v125 — Cartelle come linguette colorate + swipe per indentare lezioni
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'La libreria ora ricorda quali cartelle hai aperto — solo quelle rimangono espanse.';
+const CHANGELOG  = 'Cartelle come linguette colorate (stile OneNote). Swipe orizzontale su una lezione per renderla sotto-lezione.';
 
 const urlsToCache = [
   '.',
