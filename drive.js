@@ -858,10 +858,11 @@ class LibraryManager {
         // FileId dell'ultima lezione aperta/salvata (per ripristino posizione)
         this.currentFileId = null;
 
-        // Stato cartelle COLLASSATE manualmente: sopravvive al refresh.
-        // Per default TUTTE le cartelle sono espanse (OneNote-style) —
-        // solo quelle che l'utente chiude esplicitamente finiscono qui.
-        this._collapsedFolders = new Set();
+        // Cartelle espanse dall'utente: sopravvive al refresh (localStorage).
+        // Default: CHIUSE — solo quelle che l'utente apre esplicitamente (o che
+        // contengono la lezione corrente) vengono espanse.
+        const _saved = JSON.parse(localStorage.getItem('eduboard-expanded-folders') || '[]');
+        this._expandedFolders = new Set(_saved);
 
         // Cache ordini per cartella: { [folderId]: { orderId: string|null } }
         this._orderCache = {};
@@ -870,6 +871,11 @@ class LibraryManager {
     // ──────────────────────────────────────────────────────────────────────────
     // APERTURA / CHIUSURA
     // ──────────────────────────────────────────────────────────────────────────
+
+    /** Persiste _expandedFolders in localStorage. */
+    _saveExpandedFolders() {
+        localStorage.setItem('eduboard-expanded-folders', JSON.stringify([...this._expandedFolders]));
+    }
 
     toggle() {
         const isOpen = this.panel.classList.contains('open');
@@ -1092,9 +1098,9 @@ class LibraryManager {
                         const icon = folderRow.querySelector('.tree-icon');
                         if (icon) icon.textContent = '📂';
                     }
-                    // Assicura che la cartella genitore non sia marcata come collassata
+                    // Assicura che la cartella genitore risulti espansa
                     const fid = p.dataset.folderId;
-                    if (fid) this._collapsedFolders.delete(fid);
+                    if (fid) { this._expandedFolders.add(fid); this._saveExpandedFolders(); }
                 }
                 p = p.parentElement;
             }
@@ -1210,16 +1216,17 @@ class LibraryManager {
                     subContainer.style.display = 'none';
                     const iconEl = item.querySelector('.tree-icon');
                     if (iconEl) iconEl.textContent = '📁';
-                    this._collapsedFolders.add(folder.id); // utente ha chiuso: ricorda
+                    this._expandedFolders.delete(folder.id); // utente ha chiuso
+                    this._saveExpandedFolders();
                 } else {
-                    this._collapsedFolders.delete(folder.id); // utente ha riaperto
+                    this._expandedFolders.add(folder.id); // utente ha aperto
+                    this._saveExpandedFolders();
                     await expandFolder();
                 }
             });
 
-            // Espandi SEMPRE tutte le cartelle (OneNote-style),
-            // tranne quelle che l'utente ha esplicitamente chiuso (_collapsedFolders).
-            if (!this._collapsedFolders.has(folder.id)) {
+            // Espandi solo le cartelle che l'utente ha aperto esplicitamente.
+            if (this._expandedFolders.has(folder.id)) {
                 expandFolder(); // non awaita per non bloccare il render iniziale
             }
 

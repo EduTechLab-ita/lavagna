@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v123'; // v123 — Colori cartelle salvati su Drive (persistono su tutti i browser)
+const CACHE_NAME = 'eduboard-v124'; // v124 — Libreria ricorda quali cartelle hai aperto (default chiuse)
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'I colori delle cartelle ora si salvano su Drive — rimangono anche se cambi browser o dispositivo.';
+const CHANGELOG  = 'La libreria ora ricorda quali cartelle hai aperto — solo quelle rimangono espanse.';
 
 const urlsToCache = [
   '.',
