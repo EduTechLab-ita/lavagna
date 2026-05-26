@@ -1262,6 +1262,28 @@ class LibraryManager {
 
             this._addContextButtons(item, { id: file.id, name }, 'lesson');
 
+            // Pulsante indent/dedent: ↳ = rendi sotto-lezione, ↑ = riporta al livello
+            const _actEl = item.querySelector('.tree-actions');
+            const _indBtn = document.createElement('button');
+            _indBtn.className = 'tree-btn';
+            _indBtn.dataset.action = 'indent';
+            _indBtn.title  = indent > 0 ? 'Riporta al livello principale' : 'Rendi sotto-lezione';
+            _indBtn.textContent = indent > 0 ? '↑' : '↳';
+            _actEl.insertBefore(_indBtn, _actEl.firstChild);
+            _indBtn.addEventListener('click', async e => {
+                e.stopPropagation();
+                const cur  = parseInt(item.dataset.indent || '0');
+                const next = cur === 0 ? 1 : 0;
+                item.dataset.indent = next;
+                if (next > 0) { item.classList.add('lesson-indented');    _indBtn.textContent = '↑'; _indBtn.title = 'Riporta al livello principale'; }
+                else          { item.classList.remove('lesson-indented'); _indBtn.textContent = '↳'; _indBtn.title = 'Rendi sotto-lezione'; }
+                if (!this._indentCache[parentId]) this._indentCache[parentId] = {};
+                this._indentCache[parentId][file.id] = next;
+                const order = [...container.querySelectorAll(`.tree-item.lesson[data-folder-id="${parentId}"]`)]
+                    .map(el => el.dataset.fileId);
+                await this._saveOrder(parentId, order, this._indentCache[parentId]);
+            });
+
             // Drag-and-drop spostamento cartella
             this._makeDraggable(item, file.id, parentId, file.name, 'lesson');
 

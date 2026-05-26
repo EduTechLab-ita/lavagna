@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v126'; // v126 — Fix critico: oggetti/disegni non si spostano più cambiando pagina
+const CACHE_NAME = 'eduboard-v127'; // v127 — Pulsante ↳/↑ per sotto-lezione nella libreria // v126 — Fix critico: oggetti/disegni non si spostano più cambiando pagina
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'Fix critico: i contenuti del canvas ora rimangono esattamente dove li hai messi anche cambiando pagina o lezione.';
+const CHANGELOG  = 'Pulsante ↳ per rendere una lezione sotto-lezione della precedente, ↑ per riportarla al livello principale.';
 
 const urlsToCache = [
   '.',
