@@ -80,6 +80,7 @@ class DriveManager {
         this.rootFolderId    = null;   // "EduBoard"
         this.lessonsFolderId = null;   // "EduBoard/Lezioni"
         this.bgFolderId      = null;   // "EduBoard/Sfondi"
+        this._folderColorsId = null;   // "_folder_colors.json" in EduBoard
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -119,6 +120,7 @@ class DriveManager {
                         await this._ensureRootFolder();
                         await this._ensureLessonsFolder();
                         await this._ensureBgFolder();
+                        await this._loadFolderColors();
 
                         this.connected = true;
                         this._saveSession();
@@ -177,6 +179,7 @@ class DriveManager {
                             await this._ensureRootFolder();
                             await this._ensureLessonsFolder();
                             await this._ensureBgFolder();
+                            await this._loadFolderColors();
                         } catch (_) {}
 
                         resolve(true);
@@ -204,6 +207,7 @@ class DriveManager {
         this.rootFolderId    = null;
         this.lessonsFolderId = null;
         this.bgFolderId      = null;
+        this._folderColorsId = null;
         sessionStorage.removeItem('eduboard_drive_session');
         localStorage.removeItem('eduboard_drive_session');
         localStorage.removeItem('eduboard_user_email');
@@ -247,6 +251,7 @@ class DriveManager {
                 await this._ensureRootFolder();
                 await this._ensureLessonsFolder();
                 await this._ensureBgFolder();
+                await this._loadFolderColors();
                 this._saveSession();
             } catch (err) {
                 const errMsg = err.message || 'errore sconosciuto';
@@ -347,6 +352,43 @@ class DriveManager {
         this.bgFolderId = await this._findOrCreateFolder('Sfondi', this.rootFolderId);
         this._saveSession();
         return this.bgFolderId;
+    }
+
+    /** Carica i colori cartelle da Drive (_folder_colors.json) e li applica a localStorage. */
+    async _loadFolderColors() {
+        if (!this.rootFolderId) return;
+        try {
+            const fileId = await this._findFileInFolder('_folder_colors.json', this.rootFolderId);
+            if (!fileId) return;
+            this._folderColorsId = fileId;
+            const data = await this._apiFetch(
+                `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
+            );
+            if (data && typeof data === 'object') {
+                for (const [id, color] of Object.entries(data)) {
+                    if (color) localStorage.setItem('folder-color-' + id, color);
+                    else localStorage.removeItem('folder-color-' + id);
+                }
+            }
+        } catch (_) {}
+    }
+
+    /** Salva i colori cartelle (da localStorage) su Drive come _folder_colors.json. */
+    async _saveFolderColors() {
+        if (!this.rootFolderId) return;
+        const colors = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('folder-color-')) {
+                colors[key.replace('folder-color-', '')] = localStorage.getItem(key);
+            }
+        }
+        try {
+            const newId = await this._uploadMultipart(
+                '_folder_colors.json', colors, this._folderColorsId || null, this.rootFolderId
+            );
+            if (newId) this._folderColorsId = newId;
+        } catch (_) {}
     }
 
     /**
@@ -1648,6 +1690,7 @@ class LibraryManager {
                 if (itemEl) itemEl.style.background = '';
             }
             popup.remove();
+            window.driveMgr?._saveFolderColors();
         };
 
         // ── Pulsante "Nessun colore" ───────────────────────────────────────

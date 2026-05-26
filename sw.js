@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v122'; // v122 — Libreria OneNote-style: rimane aperta, highlight immediato
+const CACHE_NAME = 'eduboard-v123'; // v123 — Colori cartelle salvati su Drive (persistono su tutti i browser)
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'La libreria rimane aperta quando selezioni una lezione — passa velocemente da una all\'altra come in OneNote.';
+const CHANGELOG  = 'I colori delle cartelle ora si salvano su Drive — rimangono anche se cambi browser o dispositivo.';
 
 const urlsToCache = [
   '.',
