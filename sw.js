@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v121'; // v121 — Fix highlight lezione aperta nella libreria
+const CACHE_NAME = 'eduboard-v122'; // v122 — Libreria OneNote-style: rimane aperta, highlight immediato
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'La libreria ora evidenzia correttamente la lezione attualmente aperta.';
+const CHANGELOG  = 'La libreria rimane aperta quando selezioni una lezione — passa velocemente da una all\'altra come in OneNote.';
 
 const urlsToCache = [
   '.',

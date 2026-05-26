@@ -1341,6 +1341,8 @@ class LibraryManager {
             toast('Lezione "' + name + '" caricata!', 'success');
             // Memorizza fileId corrente per ripristino posizione
             this.currentFileId = fileId;
+            // Evidenzia subito la lezione nel pannello (se aperto) o alla prossima apertura
+            setTimeout(() => this._highlightCurrentLesson(), 100);
             window.autoSaveMgr?.endLoading();
             // Reset isDirty con delay: le operazioni asincrone di ripristino (img.onload, ecc.)
             // potrebbero impostare isDirty=true dopo il reset sincrono — lo riesegiamo dopo
@@ -1350,21 +1352,9 @@ class LibraryManager {
             }, 500);
             // Memorizza come ultima lezione aperta per auto-open al prossimo avvio
             localStorage.setItem('eduboard_last_lesson', JSON.stringify({ fileId, fileName, userEmail: this.drive?.userEmail || null }));
-            // Chiude il pannello, poi aspetta il resize effettivo del canvas prima di centerView.
-            // Il pannello che si chiude allarga il viewport → il canvas si ridimensiona →
-            // solo DOPO il resize centerView calcola le proporzioni corrette.
-            this.close();
-            const _ca = document.getElementById('canvas-area');
-            if (_ca && typeof ResizeObserver !== 'undefined' && panMgr) {
-                let _cvDone = false;
-                const _cvOnce = () => { if (_cvDone) return; _cvDone = true; panMgr.centerView(); };
-                const _ro = new ResizeObserver(() => { _ro.disconnect(); _cvOnce(); });
-                _ro.observe(_ca);
-                // Fallback: pannello già chiuso (nessun resize) o PC molto lento
-                setTimeout(() => { _ro.disconnect(); _cvOnce(); }, 500);
-            } else {
-                setTimeout(() => panMgr?.centerView(), 500);
-            }
+            // NON chiude il pannello: rimane aperto stile OneNote per passare velocemente tra lezioni.
+            // centerView si adatta alle dimensioni correnti (pannello aperto o chiuso).
+            setTimeout(() => panMgr?.centerView(), 100);
         } catch (err) {
             window.autoSaveMgr?.endLoading();
             toast('Errore apertura lezione: ' + err.message, 'error');
