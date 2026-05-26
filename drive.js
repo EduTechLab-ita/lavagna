@@ -836,10 +836,10 @@ class LibraryManager {
         } else {
             this.panel.classList.add('open');
             this.refresh();
-            // Aggiorna highlight immediatamente se l'albero è già in memoria
-            // (evita di aspettare il re-render: la lezione corrente si evidenzia subito)
-            if (this._treeLoaded && this.treeEl.hasChildNodes() && this.currentFileId) {
-                setTimeout(() => this._highlightCurrentLesson(), 100);
+            // Evidenzia la lezione corrente ogni volta che il pannello si apre.
+            // _highlightCurrentLesson ha già i retry interni per gestire il tree ancora in caricamento.
+            if (this.currentFileId) {
+                setTimeout(() => this._highlightCurrentLesson(), 400);
             }
         }
     }

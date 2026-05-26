@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v120'; // v120 — Fix cerchietti colore cartelle libreria invisibili su sfondo chiaro
+const CACHE_NAME = 'eduboard-v121'; // v121 — Fix highlight lezione aperta nella libreria
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'Correzione: i cerchietti per colorare le cartelle nella libreria sono di nuovo visibili.';
+const CHANGELOG  = 'La libreria ora evidenzia correttamente la lezione attualmente aperta.';
 
 const urlsToCache = [
   '.',
