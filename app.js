@@ -2313,23 +2313,34 @@ class ProjectManager {
             const ok = await confirmIfDirty();
             if (!ok) return;
         }
+        // Leggi preferenze utente salvate nelle Impostazioni
+        const _prefs = (() => { try { return JSON.parse(localStorage.getItem('eduboard-prefs-v1') || '{}'); } catch(e) { return {}; } })();
+        const defBg    = _prefs.defaultBg    || 'white';
+        const defTool  = _prefs.defaultTool  || 'pen';
+        const defColor = _prefs.defaultColor || '#000000';
+
         canvasMgr.clear();
         if (typeof objectLayer !== 'undefined' && objectLayer) objectLayer.clear();
         // FIX newBoard: reset PageManager → pagine vecchie non restano in memoria
         if (window.pageMgr) {
-            window.pageMgr.pages = [{ drawImageData: null, objects: [], background: { type: 'white', color: '#ffffff', orientation: 'landscape' } }];
+            window.pageMgr.pages = [{ drawImageData: null, objects: [], background: { type: defBg, color: '#ffffff', orientation: 'landscape' } }];
             window.pageMgr.currentIndex = 0;
             window.pageMgr._renderPageBar();
         }
-        bgMgr.setBackground('white');
+        bgMgr.setBackground(defBg);
         CONFIG.projectName = 'Nuova Lavagna';
         CONFIG.isDirty = false;
         window.autoSaveMgr?.reset();
         if (typeof libraryMgr !== 'undefined' && libraryMgr) libraryMgr.currentFileId = null;
         document.getElementById('project-name').textContent = CONFIG.projectName;
         document.querySelectorAll('.bg-opt').forEach(b => b.classList.remove('active'));
-        const whiteBtn = document.querySelector('.bg-opt[data-bg="white"]');
-        if (whiteBtn) whiteBtn.classList.add('active');
+        const defBgBtn = document.querySelector(`.bg-opt[data-bg="${defBg}"]`);
+        if (defBgBtn) defBgBtn.classList.add('active');
+        // Applica strumento e colore di default
+        document.querySelector(`.tool-btn[data-tool="${defTool}"]`)?.click();
+        CONFIG.currentColor = defColor;
+        if (typeof brush !== 'undefined' && brush) brush.color = defColor;
+        document.dispatchEvent(new CustomEvent('minicolor:update', { detail: { color: defColor } }));
     }
 }
 

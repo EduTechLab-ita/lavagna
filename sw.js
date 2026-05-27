@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v130'; // v130 — Pulsante "Nuova" in header accanto a Stampa
+const CACHE_NAME = 'eduboard-v131'; // v131 — Nuova Lavagna applica sfondo/strumento/colore dalle Impostazioni
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'Aggiunto pulsante Nuova Lavagna in alto accanto a Stampa.';
+const CHANGELOG  = 'Nuova Lavagna ora apre con lo sfondo, lo strumento e il colore salvati nelle Impostazioni.';
 
 const urlsToCache = [
   '.',
