@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v128'; // v128 — Fix EduConnect: token scaduto gestito correttamente (silent refresh → popup esplicito)
+const CACHE_NAME = 'eduboard-v129'; // v129 — Fix mini bar colori/dimensioni: pointer-events:auto ripristinato
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'Fix connessione QR: se la sessione Google è scaduta sul telefono, ora viene chiesto di accedere di nuovo invece di mostrare un errore.';
+const CHANGELOG  = 'Fix mini barre rapide: i pulsanti colore e dimensione accanto agli strumenti ora rispondono al tocco.';
 
 const urlsToCache = [
   '.',
