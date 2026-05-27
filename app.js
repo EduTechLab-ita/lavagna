@@ -5783,6 +5783,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Pulsanti header
     document.getElementById('btn-save').addEventListener('click',   () => projectMgr.save());
     document.getElementById('btn-export').addEventListener('click', () => handlePrint());
+    document.getElementById('btn-new-board-header')?.addEventListener('click', () => projectMgr.newBoard());
 
     // Installa EduBoard come PWA sul PC
     document.getElementById('btn-install-pwa')?.addEventListener('click', async () => {

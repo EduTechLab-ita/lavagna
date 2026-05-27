@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v129'; // v129 — Fix mini bar colori/dimensioni: pointer-events:auto ripristinato
+const CACHE_NAME = 'eduboard-v130'; // v130 — Pulsante "Nuova" in header accanto a Stampa
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'Fix mini barre rapide: i pulsanti colore e dimensione accanto agli strumenti ora rispondono al tocco.';
+const CHANGELOG  = 'Aggiunto pulsante Nuova Lavagna in alto accanto a Stampa.';
 
 const urlsToCache = [
   '.',
