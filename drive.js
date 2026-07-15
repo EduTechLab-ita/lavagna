@@ -55,6 +55,68 @@ function _hexToRgba(hex, alpha) {
     return `rgba(${r},${g},${b},${alpha})`;
 }
 
+/**
+ * fetch() con timeout. Su connessione instabile una richiesta a Google Drive può
+ * restare "appesa" a tempo indeterminato (la risposta si perde ma il server ha
+ * già eseguito l'operazione) — senza timeout l'app resta bloccata in "salvataggio
+ * in corso" per minuti invece di fallire subito con un messaggio chiaro (visto
+ * in sessione dal vivo l'11/07/2026, connessione da hotspot in montagna).
+ * @param {string} url
+ * @param {Object} options    - stesse opzioni di fetch()
+ * @param {number} timeoutMs  - default 25s: generoso per WiFi scolastico lento, ma non infinito
+ */
+async function _fetchWithTimeout(url, options = {}, timeoutMs = 25000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            throw new Error(`Connessione troppo lenta o assente (timeout dopo ${Math.round(timeoutMs / 1000)}s)`);
+        }
+        throw err;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/**
+ * Upload con progresso reale (byte inviati/totali) — richiede XMLHttpRequest,
+ * fetch() non espone questa informazione durante l'invio. Usato per il
+ * salvataggio delle lezioni così l'anello attorno all'icona Drive può mostrare
+ * una percentuale vera invece di un'animazione indeterminata (richiesto da
+ * Fabio dopo un test dal vivo con connessione lenta, 11/07/2026).
+ * @param {string} url
+ * @param {string} method
+ * @param {*} body
+ * @param {Object} headers
+ * @param {number} timeoutMs
+ * @param {(fraction: number) => void} [onProgress] - 0..1
+ * @returns {Promise<Object>} risposta JSON
+ */
+function _uploadWithProgress(url, method, body, headers, timeoutMs, onProgress) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open(method, url);
+        Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+        xhr.timeout = timeoutMs;
+        xhr.upload.onprogress = (e) => {
+            if (onProgress && e.lengthComputable) onProgress(e.loaded / e.total);
+        };
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try { resolve(JSON.parse(xhr.responseText)); }
+                catch (_) { reject(new Error('Risposta Drive non valida')); }
+            } else {
+                reject(new Error('Salvataggio Drive fallito (' + xhr.status + ')'));
+            }
+        };
+        xhr.onerror   = () => reject(new Error('Errore di rete durante il salvataggio'));
+        xhr.ontimeout = () => reject(new Error(`Connessione troppo lenta o assente (timeout dopo ${Math.round(timeoutMs / 1000)}s)`));
+        xhr.send(body);
+    });
+}
+
 // =============================================================================
 // SEZIONE 1 — DriveManager
 // Gestisce autenticazione OAuth2 e tutte le operazioni su Drive API v3
@@ -195,11 +257,9 @@ class DriveManager {
         });
     }
 
-    /** Revoca il token e pulisce lo stato. */
+    /** Pulisce lo stato Drive (senza revocare il token: potrebbe essere in uso su EduConnect,
+     *  e scade comunque entro ~1 ora per policy Google). */
     async disconnect() {
-        if (this.accessToken && typeof google !== 'undefined' && google.accounts) {
-            google.accounts.oauth2.revoke(this.accessToken);
-        }
         this.accessToken     = null;
         this.tokenExpiry     = 0;
         this.connected       = false;
@@ -208,9 +268,20 @@ class DriveManager {
         this.lessonsFolderId = null;
         this.bgFolderId      = null;
         this._folderColorsId = null;
+        this._prefsFileId    = null;
         sessionStorage.removeItem('eduboard_drive_session');
         localStorage.removeItem('eduboard_drive_session');
         localStorage.removeItem('eduboard_user_email');
+        // La prossima connessione (stesso account o un altro) deve ricaricare la libreria
+        // da zero — altrimenti _onExternalToken non può più rilevare un cambio account
+        // (userEmail è già vuoto qui) e la scorciatoia _treeLoaded mostrerebbe ancora
+        // l'albero di chi era connesso prima del disconnetti.
+        if (window.libraryMgr) {
+            window.libraryMgr._treeLoaded    = false;
+            window.libraryMgr._lastBgRefresh = 0;
+            window.libraryMgr.currentFileId  = null;
+        }
+        try { localStorage.removeItem('eduboard-lib-cache'); } catch (_) {}
     }
 
     // Chiamato da EduBoardConnect quando il telefono invia il token
@@ -221,6 +292,27 @@ class DriveManager {
             console.error('[EduBoard] _onExternalToken: token mancante', { email, expiry });
             return;
         }
+        // 0. Cambio account rispetto alla sessione precedente: le cartelle Drive cache
+        // (rootFolderId/lessonsFolderId/bgFolderId) appartengono all'account vecchio e non
+        // sono valide per il nuovo → vanno azzerate, altrimenti _ensureRootFolder() le
+        // riusa senza cercare/creare quelle del nuovo account (silenziosamente non salva nulla).
+        if (this.userEmail && email && this.userEmail !== email) {
+            this.rootFolderId    = null;
+            this.lessonsFolderId = null;
+            this.bgFolderId      = null;
+            this._folderColorsId = null;
+            this._prefsFileId    = null;
+            // Anche la libreria ha uno stato "già caricato" che altrimenti farebbe
+            // solo un background refresh soggetto a cooldown di 3 min, mostrando
+            // ancora l'albero del vecchio account.
+            if (window.libraryMgr) {
+                window.libraryMgr._treeLoaded    = false;
+                window.libraryMgr._lastBgRefresh = 0;
+                window.libraryMgr.currentFileId  = null;
+            }
+            try { localStorage.removeItem('eduboard-lib-cache'); } catch (_) {}
+        }
+
         // 1. Connetti subito — la UI si aggiorna immediatamente (senza aspettare le cartelle)
         this.accessToken = token;
         this.userEmail   = email;
@@ -371,6 +463,34 @@ class DriveManager {
                 }
             }
         } catch (_) {}
+    }
+
+    /**
+     * Salva le preferenze utente su Drive come _prefs.json nella cartella EduBoard.
+     * Usato per rendere il ripristino dell'ultima lezione indipendente dalla cache del browser.
+     * Fire-and-forget: gli errori vengono silenziati.
+     */
+    async _savePrefs(data) {
+        if (!this.rootFolderId) return;
+        try {
+            if (!this._prefsFileId) {
+                this._prefsFileId = await this._findFileInFolder('_prefs.json', this.rootFolderId);
+            }
+            const newId = await this._uploadMultipart('_prefs.json', data, this._prefsFileId || null, this.rootFolderId);
+            if (newId) this._prefsFileId = newId;
+        } catch (_) {}
+    }
+
+    /** Carica le preferenze utente da _prefs.json su Drive. Restituisce l'oggetto o null. */
+    async _loadPrefs() {
+        if (!this.rootFolderId) return null;
+        try {
+            if (!this._prefsFileId) {
+                this._prefsFileId = await this._findFileInFolder('_prefs.json', this.rootFolderId);
+            }
+            if (!this._prefsFileId) return null;
+            return await this.loadLesson(this._prefsFileId); // loadLesson legge qualsiasi JSON da Drive
+        } catch (_) { return null; }
     }
 
     /** Salva i colori cartelle (da localStorage) su Drive come _folder_colors.json. */
@@ -526,7 +646,7 @@ class DriveManager {
      */
     async loadLesson(fileId) {
         this._checkConnected();
-        const resp = await fetch(
+        const resp = await _fetchWithTimeout(
             `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
             { headers: { Authorization: 'Bearer ' + this.accessToken } }
         );
@@ -608,7 +728,7 @@ class DriveManager {
         combined.set(bytes,     offset); offset += bytes.length;
         combined.set(endBytes,  offset);
 
-        const resp = await fetch(
+        const resp = await _fetchWithTimeout(
             'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webContentLink',
             {
                 method:  'POST',
@@ -617,7 +737,8 @@ class DriveManager {
                     'Content-Type': `multipart/related; boundary=${boundary}`
                 },
                 body: combined
-            }
+            },
+            60000 // upload immagine: può pesare qualche MB, timeout più generoso
         );
         if (!resp.ok) throw new Error('Caricamento sfondo fallito (' + resp.status + ')');
         return resp.json();
@@ -630,9 +751,10 @@ class DriveManager {
      */
     async loadBackgroundAsDataURL(fileId) {
         this._checkConnected();
-        const resp = await fetch(
+        const resp = await _fetchWithTimeout(
             `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-            { headers: { Authorization: 'Bearer ' + this.accessToken } }
+            { headers: { Authorization: 'Bearer ' + this.accessToken } },
+            60000 // download immagine: stesso discorso, no fretta di abortire
         );
         if (!resp.ok) throw new Error('Errore download sfondo (' + resp.status + ')');
         const blob   = await resp.blob();
@@ -681,13 +803,14 @@ class DriveManager {
 
     /**
      * Upload multipart su Drive API v3 (per file JSON).
-     * @param {string}      name      - nome file
-     * @param {Object}      data      - oggetto JS da serializzare come JSON
-     * @param {string|null} fileId    - se non null: PATCH (aggiornamento)
-     * @param {string|null} parentId  - solo per nuovi file: cartella destinazione
+     * @param {string}      name        - nome file
+     * @param {Object}      data        - oggetto JS da serializzare come JSON
+     * @param {string|null} fileId      - se non null: PATCH (aggiornamento)
+     * @param {string|null} parentId    - solo per nuovi file: cartella destinazione
+     * @param {(fraction: number) => void} [onProgress] - percentuale reale di invio (0..1)
      * @returns {string} ID file
      */
-    async _uploadMultipart(name, data, fileId, parentId) {
+    async _uploadMultipart(name, data, fileId, parentId, onProgress) {
         const boundary  = 'eduboard_' + Date.now();
         const payload   = JSON.stringify(data, null, 2);
         const metaObj   = fileId ? {} : { name, parents: parentId ? [parentId] : undefined };
@@ -703,16 +826,10 @@ class DriveManager {
             : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id';
         const method = fileId ? 'PATCH' : 'POST';
 
-        const resp = await fetch(url, {
-            method,
-            headers: {
-                Authorization:  'Bearer ' + this.accessToken,
-                'Content-Type': `multipart/related; boundary=${boundary}`
-            },
-            body
-        });
-        if (!resp.ok) throw new Error('Salvataggio Drive fallito (' + resp.status + ')');
-        const result = await resp.json();
+        const result = await _uploadWithProgress(url, method, body, {
+            Authorization:  'Bearer ' + this.accessToken,
+            'Content-Type': `multipart/related; boundary=${boundary}`
+        }, 45000, onProgress); // lezioni con più pagine/immagini possono pesare qualche MB
         return result.id;
     }
 
@@ -726,7 +843,7 @@ class DriveManager {
             opts.body                    = JSON.stringify(body);
             opts.headers['Content-Type'] = 'application/json';
         }
-        const resp = await fetch(url, opts);
+        const resp = await _fetchWithTimeout(url, opts);
         if (method === 'DELETE' && resp.status === 204) return null;
         if (!resp.ok) throw new Error(`Drive API error ${resp.status} — ${url}`);
         return resp.json();
@@ -765,6 +882,7 @@ class AutoSaveManager {
         if (!window.driveMgr?.isConnected()) return;
 
         clearTimeout(this._timer);
+        clearTimeout(this._retryTimer); // una nuova modifica programma già il proprio salvataggio
         this._setPending();
         this._timer = setTimeout(() => this._doSave(), this.DEBOUNCE_MS);
     }
@@ -778,15 +896,29 @@ class AutoSaveManager {
         this._saving = true;
         this._timer  = null;
         this._setSaving();
+        this._setProgress(0);
         try {
-            await window.libraryMgr.overwriteCurrentLesson(true); // silent = true
+            // onProgress: percentuale REALE di byte inviati (via XMLHttpRequest, vedi
+            // _uploadWithProgress) — così l'anello attorno all'icona Drive mostra a che
+            // punto è arrivato l'invio invece di una semplice rotazione indeterminata
+            // (richiesto da Fabio dopo un test dal vivo con connessione lenta, 11/07/2026).
+            await window.libraryMgr.overwriteCurrentLesson(true, (frac) => this._setProgress(frac));
             this._setSaved();
+            this._retryCount = 0;
         } catch (e) {
             console.warn('Auto-save fallito:', e);
-            this._setError();
+            this._setError(); // mostra il badge rosso e programma da sola un nuovo tentativo
         } finally {
             this._saving = false;
         }
+    }
+
+    /** Aggiorna la percentuale (0..1) mostrata dall'anello di progresso attorno all'icona Drive. */
+    _setProgress(fraction) {
+        const w = this._getWrapper();
+        if (!w) return;
+        const pct = Math.round(Math.max(0, Math.min(1, fraction)) * 100);
+        w.style.setProperty('--save-progress', pct);
     }
 
     /** True se un salvataggio è in corso (blocca la chiusura). */
@@ -795,12 +927,47 @@ class AutoSaveManager {
     /** True se ci sono modifiche in attesa di salvataggio. */
     hasPending() { return this._timer !== null; }
 
+    /** Salva subito, saltando i secondi di debounce rimasti (chiamato quando la
+     * pagina sta per essere nascosta/ricaricata — non tocca il debounce normale). */
+    flush() {
+        if (this._timer) {
+            clearTimeout(this._timer);
+            this._timer = null;
+            this._doSave();
+        }
+    }
+
     /** Cancella il timer e resetta lo stato (usato dopo caricamento lezione). */
     reset() {
         clearTimeout(this._timer);
-        this._timer  = null;
-        this._saving = false;
-        this._setError(); // rimuove tutti i badge
+        clearTimeout(this._retryTimer);
+        this._timer       = null;
+        this._saving      = false;
+        this._retryCount  = 0;
+        this._clearBadges(); // stato neutro, non è un errore: si usa anche dopo un caricamento lezione riuscito
+    }
+
+    /** Riprova subito il salvataggio, saltando l'attesa del backoff automatico —
+     * chiamato quando Fabio tocca il badge rosso di errore. */
+    retryNow() {
+        clearTimeout(this._retryTimer);
+        this._retryCount = 0;
+        this._doSave();
+    }
+
+    /** Dopo un fallimento, riprova da sola con backoff crescente (10s, 20s, 30s...
+     * fino a 60s), fino a un massimo di tentativi — così su una connessione che si
+     * riprende da sola l'utente non deve fare nulla. Oltre il limite si ferma per non
+     * martellare la rete all'infinito, ma il badge resta cliccabile per un tentativo
+     * manuale (richiesto da Fabio 11/07/2026: "come faccio a farlo ritentare?"). */
+    _scheduleRetry() {
+        clearTimeout(this._retryTimer);
+        this._retryCount = (this._retryCount || 0) + 1;
+        if (this._retryCount > 8) return;
+        const delayMs = Math.min(10000 * this._retryCount, 60000);
+        this._retryTimer = setTimeout(() => {
+            if (window.libraryMgr?.currentFileId) this._doSave();
+        }, delayMs);
     }
 
     _getWrapper() {
@@ -812,33 +979,76 @@ class AutoSaveManager {
     _setPending() {
         const w = this._getWrapper();
         if (!w) return;
-        w.classList.remove('autosave-saving', 'autosave-saved');
+        w.classList.remove('autosave-saving', 'autosave-saved', 'autosave-error');
         w.classList.add('autosave-pending');
     }
     _setSaving() {
         const w = this._getWrapper();
         if (!w) return;
-        w.classList.remove('autosave-pending', 'autosave-saved');
+        w.classList.remove('autosave-pending', 'autosave-saved', 'autosave-error');
         w.classList.add('autosave-saving');
     }
     _setSaved() {
         const w = this._getWrapper();
         if (!w) return;
-        w.classList.remove('autosave-saving', 'autosave-pending');
+        w.classList.remove('autosave-saving', 'autosave-pending', 'autosave-error');
         w.classList.add('autosave-saved');
+        this._setBadge('✓', 'Salvato su Drive');
         // Rimuovi il checkmark dopo 4 secondi
         clearTimeout(this._savedTimer);
         this._savedTimer = setTimeout(() => w.classList.remove('autosave-saved'), 4000);
     }
+    /** Stato di errore PERSISTENTE (non sparisce da solo) — badge rosso cliccabile
+     * per riprovare subito, mentre in background _scheduleRetry() ritenta comunque. */
     _setError() {
         const w = this._getWrapper();
         if (!w) return;
+        clearTimeout(this._savedTimer);
         w.classList.remove('autosave-saving', 'autosave-pending', 'autosave-saved');
+        w.classList.add('autosave-error');
+        this._setBadge('↻', 'Salvataggio non riuscito — tocca per riprovare subito');
+        this._scheduleRetry();
+    }
+    /** Stato neutro (nessun badge visibile) — per il caricamento lezione, non è un errore. */
+    _clearBadges() {
+        const w = this._getWrapper();
+        if (!w) return;
+        clearTimeout(this._savedTimer);
+        w.classList.remove('autosave-saving', 'autosave-pending', 'autosave-saved', 'autosave-error');
+    }
+    _setBadge(text, title) {
+        const w = this._getWrapper();
+        const badge = w?.querySelector('.autosave-badge');
+        if (!badge) return;
+        badge.textContent = text;
+        badge.title = title;
     }
 }
 
 // Istanza globale (disponibile anche in app.js)
 window.autoSaveMgr = new AutoSaveManager();
+
+// Badge auto-save cliccabile: in stato di errore, un tocco riprova subito il
+// salvataggio invece di aspettare il prossimo ritentativo automatico.
+document.addEventListener('DOMContentLoaded', () => {
+    const badge = document.querySelector('#bottom-right-bar .autosave-badge');
+    badge?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!document.getElementById('bottom-right-bar')?.classList.contains('autosave-error')) return;
+        toast('Nuovo tentativo di salvataggio...', 'info');
+        window.autoSaveMgr.retryNow();
+    });
+});
+
+// Flush immediato quando la scheda viene nascosta (cambio tab, minimizzazione,
+// reload, chiusura) — copre il caso in cui un F5 arrivi prima che i 3s di
+// debounce siano scaduti (es. dopo Unregister SW per aggiornare l'app).
+// Non interferisce con la fluidità della scrittura: scatta una sola volta,
+// non durante il disegno.
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') window.autoSaveMgr.flush();
+});
+window.addEventListener('pagehide', () => window.autoSaveMgr.flush());
 
 
 // =============================================================================
@@ -1107,7 +1317,7 @@ class LibraryManager {
                 }
                 p = p.parentElement;
             }
-            setTimeout(() => item.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 150);
+            setTimeout(() => item.scrollIntoView({ block: 'center', behavior: 'smooth' }), 150);
             found = true;
         });
         return found;
@@ -1327,19 +1537,19 @@ class LibraryManager {
     // ──────────────────────────────────────────────────────────────────────────
 
     /** Apre dialog per creare nuova cartella nella posizione selezionata. */
-    async createFolder(parentId) {
+    createFolder(parentId) {
         if (!this.drive.isConnected()) {
             toast('Connetti Drive prima.', 'error'); return;
         }
-        const name = prompt('Nome nuova cartella:');
-        if (!name || !name.trim()) return;
-        try {
-            await this.drive.createFolder(name.trim(), parentId || this.drive.lessonsFolderId);
-            toast('Cartella creata!', 'success');
-            this._forceRefresh();
-        } catch (err) {
-            toast('Errore creazione cartella: ' + err.message, 'error');
-        }
+        showPromptModal('Nome nuova cartella', '', async (name) => {
+            try {
+                await this.drive.createFolder(name, parentId || this.drive.lessonsFolderId);
+                toast('Cartella creata!', 'success');
+                this._forceRefresh();
+            } catch (err) {
+                toast('Errore creazione cartella: ' + err.message, 'error');
+            }
+        });
     }
 
     /**
@@ -1347,7 +1557,7 @@ class LibraryManager {
      * @param {string} fileId
      * @param {string} fileName - usato solo per il nome progetto
      */
-    async openLesson(fileId, fileName) {
+    async openLesson(fileId, fileName, startPage = 0) {
         if (!this.drive.isConnected()) {
             toast('Connetti Drive prima.', 'error'); return;
         }
@@ -1444,7 +1654,7 @@ class LibraryManager {
 
             // 4. Ripristina pagine multiple (se presenti)
             if (hasPages && typeof window.pageManager !== 'undefined' && window.pageManager) {
-                window.pageManager.deserialize(lesson.pages);
+                window.pageManager.deserialize(lesson.pages, startPage);
             }
 
             toast('Lezione "' + name + '" caricata!', 'success');
@@ -1460,7 +1670,10 @@ class LibraryManager {
                 window.autoSaveMgr?.reset();
             }, 500);
             // Memorizza come ultima lezione aperta per auto-open al prossimo avvio
-            localStorage.setItem('eduboard_last_lesson', JSON.stringify({ fileId, fileName, userEmail: this.drive?.userEmail || null }));
+            const _lastLessonData = { fileId, fileName, userEmail: this.drive?.userEmail || null, lastPage: startPage };
+            localStorage.setItem('eduboard_last_lesson', JSON.stringify(_lastLessonData));
+            // Salva anche su Drive: ripristino indipendente dalla cache del browser (es. Chromebook)
+            this.drive._savePrefs({ lastLesson: _lastLessonData }).catch(() => {});
             // NON chiude il pannello: rimane aperto stile OneNote per passare velocemente tra lezioni.
             // centerView si adatta alle dimensioni correnti (pannello aperto o chiuso).
             setTimeout(() => panMgr?.centerView(), 100);
@@ -1541,7 +1754,7 @@ class LibraryManager {
      * Usato dal dialog "modifiche non salvate" e dall'auto-save.
      * @param {boolean} [silent=false] - se true, non mostra toast (usato dall'auto-save)
      */
-    async overwriteCurrentLesson(silent = false) {
+    async overwriteCurrentLesson(silent = false, onProgress) {
         if (!this.drive.isConnected()) { if (!silent) toast('Connetti Drive prima di salvare.', 'error'); return; }
         if (!this.currentFileId) { return this.saveCurrentLesson(this.currentFolderId); }
 
@@ -1575,7 +1788,9 @@ class LibraryManager {
                     pagePx: (typeof bgMgr !== 'undefined' && canvasMgr?.canvas) ? bgMgr._getPageRect(canvasMgr.canvas.width, canvasMgr.canvas.height).px : null,
                     pagePy: (typeof bgMgr !== 'undefined' && canvasMgr?.canvas) ? bgMgr._getPageRect(canvasMgr.canvas.width, canvasMgr.canvas.height).py : null
                 },
-                this.currentFileId  // PATCH sul file esistente
+                this.currentFileId,  // PATCH sul file esistente
+                undefined,           // parentId non serve in PATCH
+                onProgress
             );
 
             CONFIG.isDirty = false;
@@ -1590,29 +1805,195 @@ class LibraryManager {
     }
 
     /** Rinomina un elemento (file o cartella). */
-    async rename(fileId, currentName) {
+    rename(fileId, currentName) {
         if (!this.drive.isConnected()) { toast('Connetti Drive prima.', 'error'); return; }
-        const newName = prompt('Nuovo nome:', currentName);
-        if (!newName || !newName.trim() || newName.trim() === currentName) return;
+        showPromptModal('Nuovo nome', currentName, async (newName) => {
+            if (newName === currentName) return;
+            try {
+                await this.drive.renameItem(fileId, newName);
+                toast('Rinominato!', 'success');
+                this._forceRefresh();
+            } catch (err) {
+                toast('Errore rinomina: ' + err.message, 'error');
+            }
+        });
+    }
+
+    /** Duplica una lezione nella stessa cartella, con nome univoco "(copia)"/"(copia N)". */
+    async duplicate(fileId, name, folderId) {
+        if (!this.drive.isConnected()) { toast('Connetti Drive prima.', 'error'); return; }
         try {
-            await this.drive.renameItem(fileId, newName.trim());
-            toast('Rinominato!', 'success');
+            toast('Duplicazione in corso...', 'info');
+            const lesson = JSON.parse(JSON.stringify(await this.drive.loadLesson(fileId)));
+            const siblings = await this.drive.listLessons(folderId);
+            const existingNames = new Set(siblings.map(f => f.name.replace(/\.json$/, '')));
+            let copyName = `${name} (copia)`;
+            for (let n = 2; existingNames.has(copyName); n++) copyName = `${name} (copia ${n})`;
+            const now = new Date().toISOString();
+            lesson.name = copyName;
+            lesson.createdAt = now;
+            lesson.modifiedAt = now;
+            await this.drive._uploadMultipart(copyName + '.json', lesson, null, folderId);
+            toast(`"${copyName}" creata!`, 'success');
             this._forceRefresh();
         } catch (err) {
-            toast('Errore rinomina: ' + err.message, 'error');
+            toast('Errore duplicazione: ' + err.message, 'error');
         }
     }
 
     /** Elimina un elemento con conferma. */
-    async delete(fileId, name) {
+    delete(fileId, name) {
         if (!this.drive.isConnected()) { toast('Connetti Drive prima.', 'error'); return; }
-        if (!confirm(`Eliminare "${name}"? L'operazione non è reversibile.`)) return;
+        showConfirmModal(`Eliminare "${name}"? L'operazione non è reversibile.`, async () => {
+            try {
+                await this.drive.deleteItem(fileId);
+                toast('"' + name + '" eliminato.', 'success');
+                this._forceRefresh();
+            } catch (err) {
+                toast('Errore eliminazione: ' + err.message, 'error');
+            }
+        });
+    }
+
+    /** Apre il picker per scegliere la lezione destinazione di Sposta/copia pagina. */
+    async openMovePageModal(pageIndex) {
+        if (!this.drive.isConnected()) { toast('Connetti Drive prima.', 'error'); return; }
+        if (!this.currentFileId) { toast('Apri prima una lezione salvata su Drive.', 'error'); return; }
+
+        const modal  = document.getElementById('move-page-modal');
+        const listEl = document.getElementById('move-page-list');
+        document.getElementById('move-page-modal-title').textContent = `Sposta o copia pagina ${pageIndex + 1}`;
+        modal.style.display = 'flex';
+        document.getElementById('move-page-cancel-btn').onclick = () => { modal.style.display = 'none'; };
+
         try {
-            await this.drive.deleteItem(fileId);
-            toast('"' + name + '" eliminato.', 'success');
-            this._forceRefresh();
+            await this._renderMovePageFolder(this.drive.lessonsFolderId, listEl, pageIndex, 0);
         } catch (err) {
-            toast('Errore eliminazione: ' + err.message, 'error');
+            listEl.innerHTML = `<div class="tree-empty" style="color:#ef4444">Errore: ${err.message}</div>`;
+        }
+    }
+
+    /**
+     * Renderizza UNA cartella dell'albero del picker "Sposta/copia pagina" — stesso
+     * caricamento lazy (una cartella alla volta, solo quando si apre) della libreria
+     * principale: niente da scaricare tutto in anticipo, importante su connessioni lente.
+     */
+    async _renderMovePageFolder(folderId, container, pageIndex, depth) {
+        container.innerHTML = `<div class="tree-loading">⏳ Caricamento...</div>`;
+        const [folders, rawFiles] = await Promise.all([
+            this.drive.listFolders(folderId),
+            this.drive.listLessons(folderId)
+        ]);
+        const files = rawFiles.filter(f => f.name !== '_order.json' && f.id !== this.currentFileId);
+        container.innerHTML = '';
+        if (!folders.length && !files.length) {
+            container.innerHTML = `<div class="tree-empty">Cartella vuota</div>`;
+            return;
+        }
+
+        const indent = 8 + depth * 16;
+
+        for (const folder of folders) {
+            const item = document.createElement('div');
+            item.className = 'tree-item folder';
+            item.style.paddingLeft = indent + 'px';
+            item.innerHTML = `<span class="tree-icon">📁</span><span class="tree-label">${this._esc(folder.name)}</span>`;
+            container.appendChild(item);
+
+            const sub = document.createElement('div');
+            sub.className = 'tree-subtree';
+            sub.style.display = 'none';
+            sub.dataset.loaded = 'false';
+            container.appendChild(sub);
+
+            item.addEventListener('click', async () => {
+                const isOpen = sub.style.display !== 'none';
+                const iconEl = item.querySelector('.tree-icon');
+                if (isOpen) {
+                    sub.style.display = 'none';
+                    if (iconEl) iconEl.textContent = '📁';
+                    return;
+                }
+                sub.style.display = 'block';
+                if (iconEl) iconEl.textContent = '📂';
+                if (sub.dataset.loaded === 'false') {
+                    sub.dataset.loaded = 'true';
+                    try {
+                        await this._renderMovePageFolder(folder.id, sub, pageIndex, depth + 1);
+                    } catch (err) {
+                        sub.innerHTML = `<div class="tree-empty" style="color:#ef4444">Errore: ${err.message}</div>`;
+                    }
+                }
+            });
+        }
+
+        for (const file of files) {
+            const name = file.name.replace(/\.json$/, '');
+            const row = document.createElement('div');
+            row.className = 'move-page-row';
+            row.style.paddingLeft = indent + 'px';
+            row.innerHTML = `
+                <span class="tree-icon">📄</span>
+                <span class="move-page-row-name">${this._esc(name)}</span>
+                <button data-action="move">Sposta</button>
+                <button data-action="copy">Copia</button>`;
+            row.querySelector('[data-action="move"]').addEventListener('click', (e) => {
+                e.stopPropagation();
+                document.getElementById('move-page-modal').style.display = 'none';
+                this.movePageToLesson(pageIndex, file.id, file.name, 'move');
+            });
+            row.querySelector('[data-action="copy"]').addEventListener('click', (e) => {
+                e.stopPropagation();
+                document.getElementById('move-page-modal').style.display = 'none';
+                this.movePageToLesson(pageIndex, file.id, file.name, 'copy');
+            });
+            container.appendChild(row);
+        }
+    }
+
+    /** Sposta o copia una pagina della lezione aperta in un'altra lezione già salvata su Drive. */
+    async movePageToLesson(pageIndex, targetFileId, targetFileName, mode) {
+        if (!window.pageManager) return;
+        try {
+            toast(mode === 'move' ? 'Spostamento pagina in corso...' : 'Copia pagina in corso...', 'info');
+
+            // Se è la pagina attualmente aperta, cattura lo stato più recente prima di leggerla
+            if (pageIndex === window.pageManager.currentIndex && !window.pageManager._restoring) {
+                window.pageManager.pages[pageIndex] = window.pageManager._captureCurrentPage();
+            }
+            const pageSnapshot = JSON.parse(JSON.stringify(window.pageManager.pages[pageIndex]));
+
+            const targetLesson = await this.drive.loadLesson(targetFileId);
+            if (!Array.isArray(targetLesson.pages)) targetLesson.pages = [];
+            targetLesson.pages.push(pageSnapshot);
+            targetLesson.modifiedAt = new Date().toISOString();
+            await this.drive._uploadMultipart(targetFileName, targetLesson, targetFileId);
+
+            const targetLabel = targetFileName.replace(/\.json$/, '');
+            if (mode === 'move') {
+                const removed = window.pageManager.removePageSilently(pageIndex);
+                if (!removed) { toast(`Pagina copiata in "${targetLabel}" (non rimossa: era l'unica pagina).`, 'info'); return; }
+                // Salva SUBITO la lezione di origine, senza aspettare i 3s di debounce
+                // dell'autosave: altrimenti, se l'utente naviga via prima che scada, la
+                // rimozione non è ancora su Drive e la pagina risulta ancora presente
+                // nella lezione di origine — "Sposta" sembra un "Copia" (bug segnalato
+                // da Fabio 11/07/2026).
+                if (window.autoSaveMgr?._timer) {
+                    clearTimeout(window.autoSaveMgr._timer);
+                    window.autoSaveMgr._timer = null;
+                }
+                try {
+                    await this.overwriteCurrentLesson(true);
+                } catch (err) {
+                    toast(`Pagina copiata in "${targetLabel}", ma il salvataggio della lezione di origine è fallito — riprova a salvare manualmente.`, 'error');
+                    return;
+                }
+                toast(`Pagina spostata in "${targetLabel}"!`, 'success');
+            } else {
+                toast(`Pagina copiata in "${targetLabel}"!`, 'success');
+            }
+        } catch (err) {
+            toast('Errore: ' + err.message, 'error');
         }
     }
 
@@ -1642,10 +2023,11 @@ class LibraryManager {
         return item;
     }
 
-    /** Aggiunge pulsanti Rinomina/Elimina a un tree-item. */
+    /** Aggiunge pulsanti Rinomina/Elimina (+ Duplica per le lezioni) a un tree-item. */
     _addContextButtons(item, entry, type) {
         const actionsEl = item.querySelector('.tree-actions');
         actionsEl.innerHTML = `
+            ${type === 'lesson' ? '<button class="tree-btn" title="Duplica" data-action="duplicate">📋</button>' : ''}
             <button class="tree-btn" title="Rinomina" data-action="rename">✏️</button>
             <button class="tree-btn" title="Elimina"  data-action="delete">🗑️</button>`;
 
@@ -1657,6 +2039,12 @@ class LibraryManager {
             e.stopPropagation();
             this.delete(entry.id, entry.name);
         });
+        if (type === 'lesson') {
+            actionsEl.querySelector('[data-action="duplicate"]').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.duplicate(entry.id, entry.name, item.dataset.folderId);
+            });
+        }
     }
 
     /** Seleziona una cartella come destinazione corrente. */
@@ -2020,12 +2408,39 @@ async function _autoOpenLastLesson() {
         if (!driveMgr?.isConnected() || !libraryMgr) return;
         if (typeof CONFIG !== 'undefined' && CONFIG.isDirty) return; // non sovrascrivere lavoro in corso
         const raw = localStorage.getItem('eduboard_last_lesson');
-        if (!raw) return;
-        const last = JSON.parse(raw);
-        if (!last?.fileId) return;
-        // FIX QR 404: salta se il fileId appartiene a un account diverso
-        if (last.userEmail && driveMgr.userEmail && last.userEmail !== driveMgr.userEmail) return;
-        await libraryMgr.openLesson(last.fileId, last.fileName || 'ultima lezione');
+        if (raw) {
+            const last = JSON.parse(raw);
+            // FIX QR 404: usa il fileId in localStorage solo se è dello stesso account connesso
+            if (last?.fileId && (!last.userEmail || !driveMgr.userEmail || last.userEmail === driveMgr.userEmail)) {
+                await libraryMgr.openLesson(last.fileId, last.fileName || 'ultima lezione', last.lastPage || 0);
+                return;
+            }
+        }
+        // localStorage assente o di un account diverso da quello connesso (cambio account,
+        // Chromebook fresco, seconda LIM, ecc.) → 1° tentativo: _prefs.json da Drive (device-independent)
+        await driveMgr._ensureRootFolder();
+        const prefs = await driveMgr._loadPrefs();
+        if (prefs?.lastLesson?.fileId) {
+            const p = prefs.lastLesson;
+            if (!p.userEmail || !driveMgr.userEmail || p.userEmail === driveMgr.userEmail) {
+                await libraryMgr.openLesson(p.fileId, p.fileName || 'ultima lezione', p.lastPage || 0);
+                return;
+            }
+        }
+        // → 2° fallback: file più recente nella cartella Lezioni
+        await driveMgr._ensureLessonsFolder();
+        if (!driveMgr.lessonsFolderId) return;
+        const files = await driveMgr.listFiles(driveMgr.lessonsFolderId);
+        if (!files.length) {
+            // Account senza nessuna lezione salvata (es. un alunno mai loggato prima):
+            // senza questo reset restava a video il contenuto dell'account precedente,
+            // dando l'impressione che i due account condividessero la stessa lavagna
+            // (bug segnalato da Fabio 11/07/2026, test cambio account multi-LIM).
+            if (typeof projectMgr !== 'undefined' && projectMgr) projectMgr.resetToBlank();
+            return;
+        }
+        files.sort((a, b) => (b.modifiedTime || '').localeCompare(a.modifiedTime || ''));
+        await libraryMgr.openLesson(files[0].id, files[0].name || 'ultima lezione');
     } catch (_) {}
 }
 
@@ -2260,10 +2675,24 @@ class DriveConnectButton {
             });
             document.getElementById('fab-panel-disconnect')?.addEventListener('click', async () => {
                 panel.remove();
+                if (window.libraryMgr?.currentFileId) {
+                    try { await window.libraryMgr.overwriteCurrentLesson(true); } catch(_) {}
+                }
+                // Il contenuto di questa sessione non è più recuperabile per il PROSSIMO
+                // account che si collegherà (se non aveva un file Drive proprio — es. un
+                // alunno che disegna senza mai salvare — non c'è nulla da salvare). Azzerare
+                // isDirty evita che _autoOpenLastLesson() del nuovo account si blocchi
+                // credendo che ci sia ancora "lavoro in corso" da non sovrascrivere (bug
+                // segnalato da Fabio 11/07/2026: dopo un cambio account restava a video la
+                // lezione mai salvata dell'account precedente invece di aprire l'ultima
+                // lezione del nuovo).
+                if (typeof CONFIG !== 'undefined') CONFIG.isDirty = false;
                 await this.drive.disconnect();
                 this.update();
                 libraryMgr?.refresh();
                 toast('Drive disconnesso', 'info');
+                // Riapri il modal QR così la LIM è pronta a ricevere una nuova connessione
+                if (window.eduBoardConnect) setTimeout(() => window.eduBoardConnect.show(), 400);
             });
             // Chiudi cliccando fuori
             setTimeout(() => {
@@ -2383,18 +2812,39 @@ function _injectDriveStyles() {
 
 // =============================================================================
 // SEZIONE 3b — EduBoardConnect
-// Gestisce il pannello QR per connettere Drive via telefono (backend: Cloudflare Workers)
+// Gestisce il pannello QR per connettere Drive via telefono (backend: Firebase RTDB)
 // =============================================================================
 
-const CONNECT_SERVER = 'https://eduboard-connect.edutechlab-ita.workers.dev';
+const FIREBASE_DB      = 'https://eduboard-connect-default-rtdb.europe-west1.firebasedatabase.app';
+const FIREBASE_API_KEY = 'AIzaSyAQqLPBBFXUKACLrChHrJljQfnlWA_tGg8';
+
+// Login anonimo Firebase — richiesto dalle regole sicure del DB (auth != null).
+// Invisibile per l'utente: nessuna schermata, nessun click. Token cache 1h con buffer 5min.
+async function _fbAuthToken() {
+    const cached = localStorage.getItem('ec_fb_idtoken');
+    const expiry = parseInt(localStorage.getItem('ec_fb_expiry') || '0', 10);
+    if (cached && Date.now() < expiry - 300000) return cached;
+    const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ returnSecureToken: true })
+    });
+    if (!res.ok) throw new Error('Firebase auth fallita: ' + res.status);
+    const data = await res.json();
+    const newExpiry = Date.now() + (parseInt(data.expiresIn, 10) || 3600) * 1000;
+    localStorage.setItem('ec_fb_idtoken', data.idToken);
+    localStorage.setItem('ec_fb_expiry', String(newExpiry));
+    return data.idToken;
+}
 
 class EduBoardConnect {
     constructor() {
         this._limId          = this._getLimId();
-        this._pollInt        = null;
-        this._photoInt       = null;
-        this._laserInt       = null;
-        this._timerInt       = null;
+        this._eventSource       = null;
+        this._photoEventSource  = null;
+        this._timerEventSource  = null;
+        this._seenPhotoIds      = new Set();
+        this._timerTickInt      = null;
         this._alarmInt       = null;
         this._panel          = null;
         this._phoneConnected = false;
@@ -2408,27 +2858,42 @@ class EduBoardConnect {
             if (this._audioCtx?.state === 'suspended') this._audioCtx.resume().catch(() => {});
         };
         ['click','touchstart','keydown'].forEach(ev => document.addEventListener(ev, unlockAudio, { once: false, passive: true }));
+        // Avvia subito l'ascolto Firebase: l'EventSource sopravvive ai reload del SW
+        // e permette al telefono di riconnettersi senza dover riaprire il pannello QR.
+        this._startListening();
+        this._startPhotoListening();
+        this._startTimerListening();
     }
 
     // ID univoco per questa finestra LIM — sessionStorage (per-tab) evita che
     // due finestre dello stesso profilo Chrome condividano lo stesso ID e si
     // "rubino" la sessione EduConnect a vicenda.
     _getLimId() {
-        let id = sessionStorage.getItem('ec_lim_id');
-        if (!id) {
-            id = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 18));
-            sessionStorage.setItem('ec_lim_id', id);
+        // localStorage (non sessionStorage): l'ID sopravvive ai reload automatici del SW,
+        // così EduConnect non perde il riferimento alla LIM e l'auto-disconnect funziona.
+        // Ogni profilo Chrome ha localStorage separato → nessun conflitto tra LIM diverse.
+        let id = localStorage.getItem('ec_lim_id');
+        if (!id || id.includes('-')) {
+            // Assente o vecchio UUID → genera codice breve (es. "ALF3", "GMA7")
+            // Esclude I/O (confusi con 1/0) e le cifre 0/1.
+            const L = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+            const D = '23456789';
+            id = L[Math.floor(Math.random()*L.length)]
+               + L[Math.floor(Math.random()*L.length)]
+               + L[Math.floor(Math.random()*L.length)]
+               + D[Math.floor(Math.random()*D.length)];
+            localStorage.setItem('ec_lim_id', id);
         }
         return id;
     }
 
     // Mostra il pannello QR (modal centrato a due colonne)
     show() {
-        if (this._panel) { this._panel.style.display = 'flex'; this._startPolling(); return; }
+        if (this._panel) { this._panel.style.display = 'flex'; this._startListening(); return; }
 
         const panel = document.createElement('div');
         panel.id = 'ec-panel';
-        const limCode = this._limId.substring(0, 8).toUpperCase();
+        const limCode = this._limId; // già un codice breve (es. "ALF3")
         panel.innerHTML = `
             <div class="ec-modal-box">
                 <!-- Colonna sinistra: logo + QR + codice LIM -->
@@ -2439,9 +2904,9 @@ class EduBoardConnect {
                         <div id="ec-qr-canvas" class="ec-qr-canvas"></div>
                         <div class="ec-qr-loading" id="ec-qr-loading">Generazione QR...</div>
                     </div>
-                    <div style="font-size:0.7rem;color:#64748b;text-align:center;line-height:1.5">
-                        Oppure inserisci il codice:<br>
-                        <span id="ec-lim-code" style="font-size:1rem;color:#0f172a;letter-spacing:0.18em;font-weight:700;font-family:monospace">${limCode}</span>
+                    <div style="text-align:center;margin-top:2px">
+                        <div style="font-size:0.65rem;color:#94a3b8;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px">Codice LIM</div>
+                        <span id="ec-lim-code" style="font-size:1.6rem;color:#0f172a;letter-spacing:0.22em;font-weight:800;font-family:monospace">${limCode}</span>
                     </div>
                     <div class="ec-status" id="ec-status">
                         <span class="ec-dot"></span> In attesa del telefono...
@@ -2488,8 +2953,12 @@ class EduBoardConnect {
             }
         });
 
-        // QR connessione (con limId direttamente nell'URL)
-        const connectUrl = `https://board.edutechlab.it/connect.html?lid=${this._limId}`;
+        // QR connessione (con limId direttamente nell'URL) — costruito relativo alla
+        // pagina corrente (non hardcoded su board.edutechlab.it) così su V2 punta a V2
+        // e in produzione punta a produzione. Bug trovato dopo test dal vivo di Fabio
+        // (11/07/2026): il telefono si agganciava sempre al connect.html di produzione
+        // anche testando su V2, mostrando la UI vecchia pre-v2-048.
+        const connectUrl = new URL(`connect.html?lid=${this._limId}`, location.href).href;
         const qrEl      = document.getElementById('ec-qr-canvas');
         const loadingEl = document.getElementById('ec-qr-loading');
         if (qrEl) {
@@ -2502,7 +2971,7 @@ class EduBoardConnect {
             qrEl.appendChild(img);
         }
 
-        this._startPolling();
+        this._startListening();
     }
 
     _switchToInstall() {
@@ -2515,6 +2984,11 @@ class EduBoardConnect {
     showInstallQR() {
         let popup = document.getElementById('ec-install-popup');
         if (!popup) {
+            // Stesso fix del QR di connessione: URL relativo alla pagina corrente,
+            // non più hardcoded su board.edutechlab.it (vedi commento sopra).
+            const installUrl = new URL('connect.html?install=1', location.href).href;
+            const installHost = installUrl.replace(/^https?:\/\//, '').replace(/\?.*$/, '')
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
             popup = document.createElement('div');
             popup.id = 'ec-install-popup';
             popup.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(15,23,42,0.5);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
@@ -2522,9 +2996,9 @@ class EduBoardConnect {
                 <div style="background:#ffffff;border-radius:20px;padding:28px 24px;text-align:center;color:#0f172a;max-width:280px;width:90%;box-shadow:0 16px 48px rgba(15,23,42,0.2);border:1px solid rgba(15,23,42,0.1)">
                     <div style="font-size:1rem;font-weight:700;margin-bottom:4px">📱 Installa EduBoard Connect</div>
                     <div style="font-size:0.75rem;color:#64748b;margin-bottom:16px">Scansiona con il telefono e aggiungi alla schermata Home</div>
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=M&data=https%3A%2F%2Fboard.edutechlab.it%2Fconnect.html%3Finstall%3D1"
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=M&data=${encodeURIComponent(installUrl)}"
                          style="width:180px;height:180px;display:block;margin:0 auto 12px" alt="QR install">
-                    <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:16px">board.edutechlab.it/connect.html</div>
+                    <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:16px">${installHost}</div>
                     <button id="ec-install-popup-close" style="background:#3b82f6;color:#fff;border:none;padding:8px 24px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:600">Chiudi</button>
                 </div>`;
             document.body.appendChild(popup);
@@ -2536,62 +3010,67 @@ class EduBoardConnect {
 
     _switchToConnect() {
         if (this._panel) this._panel.style.display = 'flex';
-        this._startPolling();
+        this._startListening();
     }
 
     hide() {
-        if (this._pollInt) { clearInterval(this._pollInt); this._pollInt = null; }
         if (this._panel) { this._panel.style.display = 'none'; }
+        // EventSource resta aperto in background per ricevere il segnale 'transferred'
     }
 
-    _startPolling() {
-        this._stopPolling();
-        this._pollInt = setInterval(() => this._poll(), 2000);
+    _startListening() {
+        this._stopListening();
+        // Reset stato ogni volta che si (ri)avvia l'ascolto
+        const statusEl = document.getElementById('ec-status');
+        if (statusEl) statusEl.innerHTML = '<span class="ec-dot"></span> In attesa del telefono...';
+        _fbAuthToken().then(fbToken => {
+            const es = new EventSource(`${FIREBASE_DB}/sessions/${this._limId}.json?auth=${fbToken}`);
+            es.onerror = () => { /* EventSource si riconnette automaticamente */ };
+            es.addEventListener('put', (e) => {
+                try {
+                    const { data } = JSON.parse(e.data);
+                    if (!data) return; // null = vuoto o appena cancellato
+                    if (data.status === 'pending') {
+                        // Aggiorna UI di conferma
+                        const statusEl = document.getElementById('ec-status');
+                        if (statusEl) statusEl.innerHTML = '<span style="color:#22c55e">Connesso come ' + data.email + '</span>';
+                        // Nascondi pannello PRIMA di aprire lezione (evita decentramento canvas)
+                        setTimeout(() => {
+                            this.hide();
+                            if (window.driveMgr) window.driveMgr._onExternalToken(data.token, data.email, data.expiry);
+                            this._onExternalConnect(data.email);
+                            // Pulisci sessione da Firebase (l'EventSource resta aperto per 'transferred')
+                            fetch(`${FIREBASE_DB}/sessions/${this._limId}.json?auth=${fbToken}`, { method: 'DELETE' }).catch(() => {});
+                        }, 800);
+                    } else if (data.status === 'transferred') {
+                        // Questa LIM è stata scalzata da un'altra sessione dello stesso account
+                        toast('Sessione Drive trasferita ad un\'altra classe.', 'info');
+                        (async () => {
+                            // Salva lo stato corrente prima di disconnettersi (es. immagine riposizionata non ancora auto-salvata)
+                            if (window.libraryMgr?.currentFileId) {
+                                try { await window.libraryMgr.overwriteCurrentLesson(true); } catch(_) {}
+                            }
+                            if (window.driveMgr) window.driveMgr.disconnect();
+                            if (window.driveConnectBtn) window.driveConnectBtn.update();
+                            fetch(`${FIREBASE_DB}/sessions/${this._limId}.json?auth=${fbToken}`, { method: 'DELETE' }).catch(() => {});
+                            // Riapri il modal QR: la LIM è libera e pronta a ricevere una nuova connessione
+                            setTimeout(() => this.show(), 600);
+                        })();
+                    }
+                } catch(_) { /* silenzioso */ }
+            });
+            this._eventSource = es;
+            // L'idToken dura 1h: riapre la connessione con un token fresco prima che scada
+            this._fbRefreshTimer = setTimeout(() => this._startListening(), 50 * 60 * 1000);
+        }).catch(err => {
+            console.error('[EduBoardConnect] Firebase auth error:', err);
+            if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444">Errore connessione database</span>';
+        });
     }
 
-    _stopPolling() {
-        if (this._pollInt) { clearInterval(this._pollInt); this._pollInt = null; }
-        if (this._transferPollInt) { clearInterval(this._transferPollInt); this._transferPollInt = null; }
-    }
-
-    async _poll() {
-        try {
-            const res = await fetch(`${CONNECT_SERVER}/session/${this._limId}`).then(r => r.json());
-            if (res.status === 'connected') {
-                this._stopPolling();
-                // Aggiorna UI di conferma
-                const statusEl = document.getElementById('ec-status');
-                if (statusEl) statusEl.innerHTML = '<span style="color:#22c55e">Connesso come ' + res.email + '</span>';
-                // Nascondi pannello PRIMA di aprire lezione (evita decentramento canvas)
-                setTimeout(() => {
-                    this.hide();
-                    if (window.driveMgr) window.driveMgr._onExternalToken(res.token, res.email, res.expiry);
-                    this._onExternalConnect(res.email);
-                    // Poll lento (10s) per rilevare se questa LIM viene scalzata da un'altra classe
-                    this._transferPollInt = setInterval(() => this._pollTransfer(), 10000);
-                }, 800);
-            } else if (res.status === 'transferred') {
-                // Questa LIM è stata scalzata da un'altra sessione dello stesso account
-                toast('Sessione Drive trasferita ad un\'altra classe.', 'info');
-                this._stopPolling();
-                if (window.driveMgr) window.driveMgr.disconnect();
-                if (window.driveConnectBtn) window.driveConnectBtn.update();
-            }
-        } catch(e) { /* silenzioso — polling continua */ }
-    }
-
-    // Poll lento post-connessione: controlla solo se la sessione è stata trasferita
-    async _pollTransfer() {
-        try {
-            const res = await fetch(`${CONNECT_SERVER}/session/${this._limId}`).then(r => r.json());
-            if (res.status === 'transferred') {
-                clearInterval(this._transferPollInt);
-                this._transferPollInt = null;
-                toast('Sessione Drive trasferita ad un\'altra classe.', 'info');
-                if (window.driveMgr) window.driveMgr.disconnect();
-                if (window.driveConnectBtn) window.driveConnectBtn.update();
-            }
-        } catch(e) { /* silenzioso */ }
+    _stopListening() {
+        if (this._eventSource) { this._eventSource.close(); this._eventSource = null; }
+        if (this._fbRefreshTimer) { clearTimeout(this._fbRefreshTimer); this._fbRefreshTimer = null; }
     }
 
     _onExternalConnect(email) {
@@ -2601,83 +3080,59 @@ class EduBoardConnect {
         if (window.driveConnectBtn) window.driveConnectBtn.update();
     }
 
-    // Polling foto dal telefono — avviato da initDrive dopo la connessione
-    startPhotoPolling() {
-        if (this._photoInt) return;
+    // Ascolto foto dal telefono via Firebase RTDB (push-based, non più polling).
+    // Ogni foto inviata dal telefono è un push-child sotto /photos/{limId};
+    // qui riceviamo sia lo snapshot iniziale (path "/") sia i push successivi
+    // (path "/-pushId"), e cancelliamo ogni nodo consumato per tenere pulito il DB.
+    _startPhotoListening() {
+        if (this._photoEventSource) { this._photoEventSource.close(); this._photoEventSource = null; }
         this._pendingPhotos = this._pendingPhotos || [];
 
-        this._photoInt = setInterval(async () => {
-            if (!this._phoneConnected) return;
-            try {
-                const res = await fetch(`${CONNECT_SERVER}/photos/${this._limId}`).then(r => r.json());
-                if (!res.photos?.length) return;
-                for (const photo of res.photos) {
-                    this._pendingPhotos.push(photo);
-                }
-                this._updateBell();
-            } catch (_) { /* silenzioso */ }
-        }, 3000);
+        _fbAuthToken().then(fbToken => {
+            const es = new EventSource(`${FIREBASE_DB}/photos/${this._limId}.json?auth=${fbToken}`);
+            es.onerror = () => { /* si riconnette automaticamente */ };
+            es.addEventListener('put', (e) => this._onPhotoEvent(e, fbToken));
+            es.addEventListener('patch', (e) => this._onPhotoEvent(e, fbToken));
+            this._photoEventSource = es;
+            this._photoRefreshTimer = setTimeout(() => this._startPhotoListening(), 50 * 60 * 1000);
+        }).catch(err => console.error('[EduBoardConnect] Firebase auth error (photos):', err));
     }
 
-    // Polling laser — avviato da initDrive dopo la connessione
-    startLaserPolling() {
-        if (this._laserInt) return;
-        this._laserInt = setInterval(async () => {
-            if (!this._phoneConnected) return;
-            try {
-                const res = await fetch(`${CONNECT_SERVER}/laser/${this._limId}`).then(r => r.json());
-                this._updateLaser(res);
-            } catch (_) { /* silenzioso */ }
-        }, 500);
-    }
+    _onPhotoEvent(e, fbToken) {
+        try {
+            const { path, data } = JSON.parse(e.data);
+            if (!data) return; // cancellazione (nostra stessa pulizia) — ignora
 
-    _updateLaser(data) {
-        let dot = document.getElementById('laser-pointer-dot');
-        if (!dot) {
-            dot = document.createElement('div');
-            dot.id = 'laser-pointer-dot';
-            dot.style.cssText = `
-                position:fixed; width:22px; height:22px; border-radius:50%;
-                background:radial-gradient(circle, #ff3333 0%, rgba(255,0,0,0.4) 60%, transparent 100%);
-                box-shadow: 0 0 16px #ff3333, 0 0 4px #fff;
-                pointer-events:none; z-index:9000; transform:translate(-50%,-50%);
-                display:none; transition:none;
-            `;
-            document.body.appendChild(dot);
-        }
-
-        if (!data.active) {
-            dot.style.display = 'none';
-            return;
-        }
-
-        // Mappa coordinate relative (0-1) sull'area canvas
-        const canvasArea = document.getElementById('canvas-area');
-        if (!canvasArea) return;
-        const rect = canvasArea.getBoundingClientRect();
-        const x = rect.left + data.x * rect.width;
-        const y = rect.top  + data.y * rect.height;
-        dot.style.left    = x + 'px';
-        dot.style.top     = y + 'px';
-        dot.style.display = 'block';
+            // path === "/" → snapshot iniziale con più foto già presenti (es. dopo un reload)
+            const entries = path === '/' ? Object.entries(data) : [[path.slice(1), data]];
+            for (const [photoId, photo] of entries) {
+                if (this._seenPhotoIds.has(photoId)) continue;
+                this._seenPhotoIds.add(photoId);
+                this._pendingPhotos.push(photo);
+                // Consumata: cancella dal DB (la LIM la tiene già in memoria locale)
+                fetch(`${FIREBASE_DB}/photos/${this._limId}/${photoId}.json?auth=${fbToken}`, { method: 'DELETE' }).catch(() => {});
+            }
+            this._updateBell();
+        } catch (_) { /* silenzioso */ }
     }
 
     _updateBell() {
         const bell  = document.getElementById('photo-bell-btn');
         const badge = document.getElementById('photo-bell-badge');
         if (!bell) return;
-        // Mostra la campanella solo se il telefono è connesso
-        bell.style.display = this._phoneConnected ? 'flex' : 'none';
+        // Mostra la campanella se il telefono è connesso o ci sono foto in attesa
+        const hasPending = (this._pendingPhotos || []).filter(p => !p.added).length > 0;
+        bell.style.display = (this._phoneConnected || hasPending) ? 'flex' : 'none';
         if (!badge) return;
         const count = (this._pendingPhotos || []).filter(p => !p.added).length;
         badge.textContent = count > 9 ? '9+' : String(count);
         badge.style.display = count > 0 ? 'flex' : 'none';
         if (count > 0) bell.classList.add('bell-has-photos');
         else           bell.classList.remove('bell-has-photos');
-        // Beep di notifica quando arrivano foto nuove
+        // Ding di notifica quando arrivano foto nuove
         if (this._lastPhotoCount === undefined) this._lastPhotoCount = 0;
         const isNew = count > this._lastPhotoCount;
-        if (isNew) this._beep(523, 0.3, 0.4);
+        if (isNew) this._chime(1046.5, 0.5, 0.35); // Do6, un ding pulito
         this._lastPhotoCount = count;
         // Campanella foto in fullscreen — compare SOLO quando si è in fullscreen e ci sono foto
         const fsBell  = document.getElementById('fs-photo-bell');
@@ -2816,36 +3271,74 @@ class EduBoardConnect {
         img.src = photo.dataUrl;
     }
 
-    // Polling timer — avviato da initDrive
-    startTimerPolling() {
-        if (this._timerInt) return;
-        this._timerInt = setInterval(async () => {
-            if (!this._phoneConnected) return;
-            try {
-                const res = await fetch(`${CONNECT_SERVER}/timer/${this._limId}`).then(r => r.json());
-                this._updateTimer(res);
-            } catch(_) {}
-        }, 500);
+    // Ascolto timer dal telefono via Firebase RTDB: il PUT/DELETE del telefono
+    // arriva qui in tempo reale, poi il countdown a schermo è un tick locale
+    // (nessuna chiamata di rete al secondo).
+    _startTimerListening() {
+        if (this._timerEventSource) { this._timerEventSource.close(); this._timerEventSource = null; }
+
+        _fbAuthToken().then(fbToken => {
+            const es = new EventSource(`${FIREBASE_DB}/timer/${this._limId}.json?auth=${fbToken}`);
+            es.onerror = () => { /* si riconnette automaticamente */ };
+            es.addEventListener('put', (e) => {
+                try {
+                    const { data } = JSON.parse(e.data);
+                    this._onTimerData(data);
+                } catch (_) { /* silenzioso */ }
+            });
+            this._timerEventSource = es;
+            this._timerRefreshTimer = setTimeout(() => this._startTimerListening(), 50 * 60 * 1000);
+        }).catch(err => console.error('[EduBoardConnect] Firebase auth error (timer):', err));
     }
 
+    // Riceve lo stato del timer (null = fermato, {active,seconds,startedAt} = avviato)
+    // e gestisce il tick locale di rendering (1/s) senza altre chiamate di rete.
+    _onTimerData(data) {
+        if (this._timerTickInt) { clearInterval(this._timerTickInt); this._timerTickInt = null; }
+
+        if (!data) { this._updateTimer({ active: false }); return; }
+
+        const tick = () => {
+            const elapsed = Math.floor((Date.now() - data.startedAt) / 1000);
+            if (elapsed >= data.seconds) {
+                clearInterval(this._timerTickInt);
+                this._timerTickInt = null;
+                this._updateTimer({ active: false, expired: true });
+            } else {
+                this._updateTimer({ active: true, seconds: data.seconds, startedAt: data.startedAt });
+            }
+        };
+        tick();
+        this._timerTickInt = setInterval(tick, 1000);
+    }
+
+    // Nota singola tipo "campanella": onda triangolare (più calda del sine puro) con
+    // attacco morbido + decadimento esponenziale, invece del beep a scatto secco.
     _beep(freq, duration, volume) {
         const ctx = this._audioCtx;
         if (!ctx) return;
         try {
+            const now  = ctx.currentTime;
             const osc  = ctx.createOscillator();
             const gain = ctx.createGain();
+            osc.type = 'triangle';
             osc.connect(gain);
             gain.connect(ctx.destination);
             osc.frequency.value = freq;
-            gain.gain.setValueAtTime(volume || 0.35, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + duration);
+            const peak = volume || 0.35;
+            gain.gain.setValueAtTime(0.0001, now);
+            gain.gain.exponentialRampToValueAtTime(peak, now + 0.015);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+            osc.start(now);
+            osc.stop(now + duration + 0.02);
         } catch(_) {}
     }
 
-    _playTimerAlarm() {
-        [0, 500, 1000].forEach(d => setTimeout(() => this._beep(880, 0.45), d));
+    // Come _beep ma con un'armonica (quinta giusta) sopra a volume ridotto: dà il
+    // timbro "campana"/carillon invece del tono secco a onda singola.
+    _chime(freq, duration, volume) {
+        this._beep(freq, duration, volume);
+        this._beep(freq * 1.5, duration * 0.8, (volume || 0.35) * 0.4);
     }
 
     _stopAlarm() {
@@ -2857,12 +3350,15 @@ class EduBoardConnect {
 
     _startAlarm() {
         if (this._alarmInt) return; // già attivo
-        // Suona subito il primo beep, poi ripete ogni 2s
-        this._beep(880, 0.6, 0.6);
-        this._alarmInt = setInterval(() => {
-            this._beep(880, 0.45, 0.5);
-            setTimeout(() => this._beep(1100, 0.35, 0.4), 300);
-        }, 2000);
+        // Accordo campana scolastica (Sol-Do-Mi ascendente), ripetuto ogni 2.5s —
+        // udibile in classe ma non un buzzer acuto.
+        const ring = () => {
+            this._chime(783.99, 0.5, 0.45);               // Sol5
+            setTimeout(() => this._chime(1046.5, 0.5, 0.45), 180); // Do6
+            setTimeout(() => this._chime(1318.5, 0.6, 0.45), 360); // Mi6
+        };
+        ring();
+        this._alarmInt = setInterval(ring, 2500);
     }
 
     _updateTimer(data) {
@@ -2962,9 +3458,7 @@ function initDrive() {
     libraryMgr      = new LibraryManager(driveMgr);
     driveConnectBtn = new DriveConnectButton(driveMgr);
     window.eduBoardConnect = new EduBoardConnect();
-    window.eduBoardConnect.startPhotoPolling();
-    window.eduBoardConnect.startLaserPolling();
-    window.eduBoardConnect.startTimerPolling();
+    // Ascolto foto/timer già avviato nel costruttore (stesso pattern delle sessioni Drive)
 
     document.getElementById('photo-bell-btn')?.addEventListener('click', () => {
         window.eduBoardConnect?.openPhotoPanel();

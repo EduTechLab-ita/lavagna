@@ -10,6 +10,7 @@
   <meta name="theme-color" content="#f1f5f9">
   <title>EduBoard Connect</title>
   <link rel="manifest" href="connect-manifest.json">
+  <link rel="apple-touch-icon" href="./icon-192x192.png">
   <script src="jsqr.min.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
@@ -234,8 +235,12 @@
       z-index: 9998; gap: 24px; padding: 24px;
     }
     .timer-header {
+      /* Stesso fix già applicato a .user-header per notch/Dynamic Island: senza
+         env(safe-area-inset-top) il pulsante "Chiudi" finiva sotto la fascia della
+         fotocamera su iPhone, non cliccabile (segnalato da Fabio 11/07/2026). */
       position: absolute; top: 0; left: 0; right: 0;
-      display: flex; align-items: center; gap: 12px; padding: 16px 20px;
+      display: flex; align-items: center; gap: 12px;
+      padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 16px;
       background: rgba(248,250,252,0.95); backdrop-filter: blur(8px);
       border-bottom: 1px solid var(--border);
     }
@@ -321,19 +326,30 @@
     }
 
 
-    /* ── User account header (fisso in alto, visibile quando autenticato) ── */
+    /* ── User account header (fisso in alto, visibile quando autenticato) ──
+       min-height + padding-top:env(safe-area-inset-top) invece di height fissa:
+       su iPhone con notch/Dynamic Island, il bottone finiva sotto la fascia della
+       fotocamera e il touch non lo intercettava (Android senza notch: inset = 0,
+       nessun cambiamento). Richiede viewport-fit=cover (già presente nel meta viewport). */
     .user-header {
       position: fixed; top: 0; left: 0; right: 0;
-      height: 52px; z-index: 200;
-      display: flex; align-items: center; gap: 10px;
-      padding: 0 16px;
+      min-height: 52px; z-index: 200;
+      padding-top: env(safe-area-inset-top, 0px);
+      display: flex; align-items: center; justify-content: flex-end;
+      padding-left: 16px; padding-right: 16px;
       background: #ffffff; border-bottom: 1px solid var(--border);
       box-shadow: 0 1px 6px rgba(15,23,42,0.06);
     }
+    .user-avatar-btn {
+      background: none; border: none; padding: 0; cursor: pointer;
+      border-radius: 50%; line-height: 0;
+      transition: box-shadow 0.15s;
+    }
+    .user-avatar-btn:active { transform: scale(0.94); }
     .user-avatar {
       width: 34px; height: 34px; border-radius: 50%;
       object-fit: cover; border: 2px solid var(--accent);
-      flex-shrink: 0;
+      flex-shrink: 0; display: block;
     }
     .user-avatar-init {
       width: 34px; height: 34px; border-radius: 50%;
@@ -341,20 +357,73 @@
       display: flex; align-items: center; justify-content: center;
       font-size: 0.85rem; font-weight: 700; flex-shrink: 0;
     }
-    .user-header-name {
-      flex: 1; font-size: 0.82rem; font-weight: 600; color: var(--text);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    /* Padding top body quando l'header è visibile (52px header + eventuale notch/status bar) */
+    body.has-user-header { padding-top: calc(52px + env(safe-area-inset-top, 0px)); }
+
+    /* ── Menu account a tendina (si apre dal tap sulla fotografia) ── */
+    .user-menu {
+      position: fixed; top: calc(58px + env(safe-area-inset-top, 0px)); right: 12px; z-index: 210;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 14px; width: 240px; overflow: hidden;
+      box-shadow: 0 8px 28px rgba(15,23,42,0.16);
+      animation: card-in 0.15s ease forwards;
     }
-    .user-signout-btn {
-      background: none; border: 1px solid var(--border);
-      color: var(--text-muted); border-radius: 8px;
-      padding: 5px 10px; font-size: 0.72rem;
-      font-family: inherit; cursor: pointer; white-space: nowrap;
-      transition: background 0.15s, color 0.15s;
+    .user-menu-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px; border-bottom: 1px solid var(--border);
     }
-    .user-signout-btn:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
-    /* Padding top body quando l'header è visibile */
-    body.has-user-header { padding-top: 52px; }
+    .user-menu-header .user-avatar,
+    .user-menu-header .user-avatar-init {
+      width: 40px; height: 40px; font-size: 1rem;
+    }
+    .user-menu-identity { min-width: 0; text-align: left; }
+    .user-menu-name  { font-size: 0.86rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .user-menu-email { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .user-menu-item {
+      display: flex; align-items: center; gap: 10px; width: 100%;
+      background: none; border: none; text-align: left;
+      padding: 12px 14px; font-size: 0.85rem; font-family: inherit;
+      color: var(--text); cursor: pointer; transition: background 0.12s;
+    }
+    .user-menu-item:hover { background: #f1f5f9; }
+    .user-menu-item.danger { color: #dc2626; }
+    .user-menu-item.danger:hover { background: #fee2e2; }
+    .user-menu-icon { font-size: 1rem; width: 20px; text-align: center; flex-shrink: 0; }
+    .user-menu-sep { height: 1px; background: var(--border); margin: 4px 0; }
+    /* Versione installata — utile per capire a colpo d'occhio se il telefono ha
+       ancora una versione vecchia (a differenza di EduBoard sulla LIM, EduConnect
+       non mostrava la versione da nessuna parte: bug scoperto 11/07/2026 quando un
+       telefono si è agganciato al connect.html vecchio senza che nessuno se ne accorgesse) */
+    .user-menu-version {
+      padding: 8px 14px 10px; font-size: 0.68rem; color: var(--text-muted);
+      text-align: center; opacity: 0.7;
+    }
+
+    /* ── Modale istruzioni ── */
+    .help-modal {
+      position: fixed; inset: 0; z-index: 300;
+      background: rgba(15,23,42,0.5); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .help-modal-card {
+      background: var(--card); border-radius: 18px; width: 100%; max-width: 360px;
+      max-height: 80vh; overflow-y: auto; box-shadow: 0 16px 48px rgba(15,23,42,0.2);
+      border: 1px solid var(--border); text-align: left;
+    }
+    .help-modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 18px; border-bottom: 1px solid var(--border);
+      font-weight: 700; font-size: 0.95rem; color: var(--text);
+      position: sticky; top: 0; background: var(--card);
+    }
+    .help-modal-close {
+      background: none; border: none; font-size: 1.1rem; color: var(--text-muted);
+      cursor: pointer; padding: 4px 8px;
+    }
+    .help-modal-body { padding: 6px 18px 18px; }
+    .help-modal-body p { font-size: 0.85rem; color: var(--text); line-height: 1.5; margin: 14px 0 0; }
+    .help-modal-body p strong { display: block; margin-bottom: 2px; }
+    .help-modal-body p:first-child { margin-top: 14px; }
 
     /* ── Connected header ── */
     .connected-header {
@@ -374,9 +443,43 @@
 
   <!-- Header account utente (visibile solo quando autenticato) -->
   <div id="user-header" class="user-header" style="display:none">
-    <div id="user-avatar-wrap"></div>
-    <span class="user-header-name" id="user-header-name"></span>
-    <button class="user-signout-btn" id="btn-signout">Esci account</button>
+    <button class="user-avatar-btn" id="user-avatar-btn" aria-label="Menu account">
+      <div id="user-avatar-wrap"></div>
+    </button>
+  </div>
+
+  <!-- Menu a tendina account (si apre dal tap sulla fotografia) -->
+  <div id="user-menu" class="user-menu hidden">
+    <div class="user-menu-header">
+      <div id="user-menu-avatar-wrap"></div>
+      <div class="user-menu-identity">
+        <div class="user-menu-name" id="user-menu-name"></div>
+        <div class="user-menu-email" id="user-menu-email"></div>
+      </div>
+    </div>
+    <button class="user-menu-item" id="btn-menu-change-account"><span class="user-menu-icon">🔄</span> Cambia account</button>
+    <button class="user-menu-item danger" id="btn-signout"><span class="user-menu-icon">🚪</span> Esci account</button>
+    <div class="user-menu-sep"></div>
+    <button class="user-menu-item" id="btn-menu-help"><span class="user-menu-icon">❓</span> Istruzioni</button>
+    <button class="user-menu-item" id="btn-menu-support"><span class="user-menu-icon">✉️</span> Richiedi assistenza</button>
+    <div class="user-menu-sep"></div>
+    <div class="user-menu-version" id="ec-version-text">v2-070</div>
+  </div>
+
+  <!-- Modale istruzioni (aperta dal menu account) -->
+  <div id="help-modal" class="help-modal hidden">
+    <div class="help-modal-card">
+      <div class="help-modal-header">
+        <span>❓ Come si usa EduConnect</span>
+        <button class="help-modal-close" id="btn-help-close">✕</button>
+      </div>
+      <div class="help-modal-body">
+        <p><strong>📷 Invia foto</strong>Scatta una foto con il telefono e mandala direttamente sulla lavagna.</p>
+        <p><strong>⏱️ Timer</strong>Avvia un conto alla rovescia visibile sulla LIM, utile per le attività a tempo.</p>
+        <p><strong>🔄 Cambia account</strong>Tocca la tua foto profilo in alto a destra per passare a un altro account Google, senza dover riscansionare il QR.</p>
+        <p><strong>📱 Cambia LIM</strong>Usa il pulsante con l'icona a quadretti per collegarti a una lavagna diversa.</p>
+      </div>
+    </div>
   </div>
 
   <!-- Logo (visibile nelle schermate normali) -->
@@ -580,7 +683,7 @@
   <div id="screen-success" class="screen hidden">
     <div class="connected-header">
       <div class="connected-label">
-        Connesso a LIM
+        Connesso a LIM <span id="connected-lim-code" style="font-family:monospace;letter-spacing:0.15em;font-weight:800;color:#0f172a"></span>
         <strong id="connected-email">—</strong>
       </div>
       <div class="connected-dot"></div>
@@ -609,7 +712,7 @@
             <rect x="13" y="14" width="2" height="2"/><rect x="16" y="14" width="2" height="2"/><rect x="14" y="17" width="2" height="2"/><rect x="17" y="16" width="2" height="2"/>
           </svg>
         </span>
-        <span class="feature-label">Cambia LIM</span>
+        <span class="feature-label">Connetti</span>
       </button>
     </div>
 
@@ -663,7 +766,8 @@
   // ══════════════════════════════════════════════════════════════
   const CLIENT_ID   = '374342529488-c123a5j5v8hnfs241udbl55fos5thfq6.apps.googleusercontent.com';
   const SCOPE       = 'https://www.googleapis.com/auth/drive.file email profile';
-  const CF_WORKER   = 'https://eduboard-connect.edutechlab-ita.workers.dev';
+  const FIREBASE_DB = 'https://eduboard-connect-default-rtdb.europe-west1.firebasedatabase.app';
+  const FIREBASE_API_KEY = 'AIzaSyAQqLPBBFXUKACLrChHrJljQfnlWA_tGg8';
   const STORAGE_EMAIL   = 'ec_saved_email';
   const STORAGE_TOKEN   = 'ec_access_token';
   const STORAGE_EXPIRY  = 'ec_token_expiry';
@@ -689,7 +793,7 @@
   let scannerStream    = null;
   let scannerAnimFrame = null;
   let deferredInstall  = null; // BeforeInstallPromptEvent
-  let _timerPollInt    = null; // polling GET /timer/:limId
+  let _timerExpireTimeout = null; // setTimeout locale per far scattare l'allarme allo scadere
   let _timerAlarmInt   = null; // loop audio allarme sul telefono
   let _timerAudioCtx   = null; // AudioContext per beep telefono
   let _needsExplicitLogin = false; // true se il silent refresh è già fallito una volta
@@ -725,6 +829,7 @@
       uh.style.display = show ? 'flex' : 'none';
       document.body.classList.toggle('has-user-header', show);
       if (show) updateUserHeader();
+      else toggleUserMenu(true);
     }
   }
 
@@ -802,28 +907,79 @@
     savedEmail = null;
   }
 
-  // Aggiorna l'header con avatar + nome dell'utente
+  // Aggiorna l'header (avatar) e il menu a tendina (avatar + nome + email)
   function updateUserHeader() {
-    const wrap    = document.getElementById('user-avatar-wrap');
-    const nameEl  = document.getElementById('user-header-name');
+    const wrap     = document.getElementById('user-avatar-wrap');
+    const menuWrap = document.getElementById('user-menu-avatar-wrap');
+    const nameEl   = document.getElementById('user-menu-name');
+    const emailEl  = document.getElementById('user-menu-email');
     if (!wrap || !nameEl) return;
     const picture = localStorage.getItem(STORAGE_PICTURE) || '';
-    const name    = localStorage.getItem(STORAGE_NAME) || localStorage.getItem(STORAGE_EMAIL) || '';
+    const email   = localStorage.getItem(STORAGE_EMAIL) || '';
+    const name    = localStorage.getItem(STORAGE_NAME) || email;
     const initials = (name.charAt(0) || '?').toUpperCase();
-    wrap.innerHTML = picture
+    const avatarHtml = picture
       ? `<img class="user-avatar" src="${picture}" alt="${initials}" onerror="this.parentNode.innerHTML='<div class=user-avatar-init>${initials}</div>'">`
       : `<div class="user-avatar-init">${initials}</div>`;
+    wrap.innerHTML = avatarHtml;
+    if (menuWrap) menuWrap.innerHTML = avatarHtml;
     nameEl.textContent = name;
+    if (emailEl) emailEl.textContent = email;
+  }
+
+  // Apertura/chiusura menu account a tendina
+  function toggleUserMenu(forceClose) {
+    const menu = document.getElementById('user-menu');
+    if (!menu) return;
+    const willOpen = forceClose === true ? false : menu.classList.contains('hidden');
+    menu.classList.toggle('hidden', !willOpen);
+  }
+  document.getElementById('user-avatar-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleUserMenu();
+  });
+  document.addEventListener('click', (e) => {
+    const menu = document.getElementById('user-menu');
+    if (!menu || menu.classList.contains('hidden')) return;
+    if (!menu.contains(e.target)) toggleUserMenu(true);
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  // FIREBASE AUTH (anonimo) — richiesto dalle regole sicure del DB.
+  // Invisibile per l'utente: nessuna schermata, nessun click.
+  // ══════════════════════════════════════════════════════════════
+  async function getFirebaseAuthToken() {
+    const cached = localStorage.getItem('ec_fb_idtoken');
+    const expiry = parseInt(localStorage.getItem('ec_fb_expiry') || '0', 10);
+    if (cached && Date.now() < expiry - 300000) return cached;
+    const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ returnSecureToken: true })
+    });
+    if (!res.ok) throw new Error('Autenticazione database non riuscita');
+    const data = await res.json();
+    const newExpiry = Date.now() + (parseInt(data.expiresIn, 10) || 3600) * 1000;
+    localStorage.setItem('ec_fb_idtoken', data.idToken);
+    localStorage.setItem('ec_fb_expiry', String(newExpiry));
+    return data.idToken;
   }
 
   // ══════════════════════════════════════════════════════════════
   // CONNESSIONE LIM (usata sia da token fresco che da cache)
   // ══════════════════════════════════════════════════════════════
   async function connectToLim(token, expiry, email) {
-    // Se c'è una vecchia LIM diversa, segnalale di disconnettersi dal Drive
+    let fbToken;
+    try {
+      fbToken = await getFirebaseAuthToken();
+    } catch (err) {
+      showError('Errore di connessione al database. Riprova.');
+      return;
+    }
+    // Se c'è una vecchia LIM diversa, segnalale di disconnettersi (via Firebase)
     if (prevLimId) {
-      fetch(`${CF_WORKER}/session/${prevLimId}`, {
-        method: 'POST',
+      fetch(`${FIREBASE_DB}/sessions/${prevLimId}.json?auth=${fbToken}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'transferred' })
       }).catch(() => {}); // silenzioso — non bloccante
@@ -831,12 +987,12 @@
     }
     showScreen('screen-connecting');
     try {
-      const res = await fetch(`${CF_WORKER}/session/${limId}`, {
-        method: 'POST',
+      const res = await fetch(`${FIREBASE_DB}/sessions/${limId}.json?auth=${fbToken}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, email, expiry })
-      }).then(r => r.json());
-      if (!res.ok) throw new Error(res.error || 'Errore server');
+        body: JSON.stringify({ status: 'pending', token, email, expiry })
+      });
+      if (!res.ok) throw new Error('Errore database: ' + res.status);
       showConnected(email);
     } catch (err) {
       showError(err.message || 'Errore di rete. Riprova.');
@@ -920,6 +1076,8 @@
   // ══════════════════════════════════════════════════════════════
   function showConnected(email) {
     document.getElementById('connected-email').textContent = email || savedEmail || '—';
+    const codeEl = document.getElementById('connected-lim-code');
+    if (codeEl) codeEl.textContent = limId || '';
     // Reset stato login dopo connessione riuscita
     _needsExplicitLogin = false;
     const btn = document.getElementById('btn-continue');
@@ -1002,11 +1160,15 @@
     }
 
     if (savedEmail) {
-      // Account noto ma token scaduto → mostra "Connetti" (un tap, popup veloce)
+      // Account noto ma token scaduto → tenta silent refresh automatico.
+      // Se GIS riesce (sessione Google ancora attiva) → onTokenReceived → connessione istantanea.
+      // Se fallisce (access_denied) → onTokenReceived imposta _needsExplicitLogin → mostra screen-saved.
       document.getElementById('saved-email-label').textContent = savedEmail;
       updateUserHeader();
       showScreen('screen-saved');
-      waitForGIS(savedEmail, () => {});
+      waitForGIS(savedEmail, () => {
+        if (!_needsExplicitLogin) gisClient.requestAccessToken();
+      });
     } else {
       // Primo utilizzo → login completo
       showScreen('screen-login');
@@ -1032,21 +1194,34 @@
     if (cls === 'ok') setTimeout(() => { el.textContent = ''; el.className = 'timer-status'; }, 3000);
   }
 
-  function _timerBeep(freq, duration) {
+  // Onda triangolare (più calda del sine) con attacco morbido + decadimento,
+  // invece del beep a scatto secco.
+  function _timerBeep(freq, duration, volume) {
     try {
       if (!_timerAudioCtx) {
         _timerAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
+      const now  = _timerAudioCtx.currentTime;
       const osc  = _timerAudioCtx.createOscillator();
       const gain = _timerAudioCtx.createGain();
+      osc.type = 'triangle';
       osc.connect(gain);
       gain.connect(_timerAudioCtx.destination);
       osc.frequency.value = freq || 880;
-      gain.gain.setValueAtTime(0.5, _timerAudioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, _timerAudioCtx.currentTime + (duration || 0.5));
-      osc.start(_timerAudioCtx.currentTime);
-      osc.stop(_timerAudioCtx.currentTime + (duration || 0.5));
+      const peak = volume || 0.5;
+      const d = duration || 0.5;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(peak, now + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + d);
+      osc.start(now);
+      osc.stop(now + d + 0.02);
     } catch(_) {}
+  }
+
+  // Come _timerBeep ma con un'armonica (quinta giusta) sopra: timbro "campana".
+  function _timerChime(freq, duration, volume) {
+    _timerBeep(freq, duration, volume);
+    _timerBeep(freq * 1.5, duration * 0.8, (volume || 0.5) * 0.4);
   }
 
   function _stopTimerAlarm() {
@@ -1054,34 +1229,29 @@
   }
 
   function _stopTimerPoll() {
-    if (_timerPollInt) { clearInterval(_timerPollInt); _timerPollInt = null; }
+    if (_timerExpireTimeout) { clearTimeout(_timerExpireTimeout); _timerExpireTimeout = null; }
   }
 
-  function _startTimerPoll() {
+  // Non c'è più polling: il telefono calcola in locale quando far scattare
+  // l'allarme (stesso istante che la LIM calcola in autonomia dal proprio _updateTimer).
+  function _scheduleLocalExpiry(seconds) {
     _stopTimerPoll();
-    _timerPollInt = setInterval(async () => {
-      try {
-        const res = await fetch(`${CF_WORKER}/timer/${limId}`).then(r => r.json());
-        if (res.expired) {
-          _stopTimerPoll();
-          _showTimerExpired();
-        }
-      } catch(_) {}
-    }, 1000);
+    _timerExpireTimeout = setTimeout(() => _showTimerExpired(), seconds * 1000);
   }
 
   function _showTimerExpired() {
     // Vibrazione sul telefono
     if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500]);
 
-    // Avvia beep audio in loop sul telefono
+    // Avvia l'allarme in loop sul telefono — stesso accordo campana della LIM
     _stopTimerAlarm();
-    _timerBeep(880, 0.5);
-    setTimeout(() => _timerBeep(1100, 0.4), 350);
-    _timerAlarmInt = setInterval(() => {
-      _timerBeep(880, 0.5);
-      setTimeout(() => _timerBeep(1100, 0.4), 350);
-    }, 2000);
+    const ring = () => {
+      _timerChime(783.99, 0.5, 0.5);               // Sol5
+      setTimeout(() => _timerChime(1046.5, 0.5, 0.5), 180); // Do6
+      setTimeout(() => _timerChime(1318.5, 0.6, 0.5), 360); // Mi6
+    };
+    ring();
+    _timerAlarmInt = setInterval(ring, 2500);
 
     // Cambia UI: nascondi inputs, mostra pannello scaduto
     document.querySelector('.timer-inputs').style.display = 'none';
@@ -1140,14 +1310,18 @@
     if (seconds <= 0) { timerSetStatus('Imposta un tempo valido', 'err'); return; }
     timerSetStatus('Avvio timer...');
     try {
-      const res = await fetch(`${CF_WORKER}/timer/${limId}`, {
-        method: 'POST',
+      const fbToken = await getFirebaseAuthToken();
+      // startedAt: timestamp lato server Firebase (".sv") invece dell'orologio del telefono —
+      // così la LIM calcola il tempo trascorso contro un orologio comune, non contro quello
+      // (potenzialmente sfasato di qualche secondo) del telefono di chi avvia il timer.
+      const res = await fetch(`${FIREBASE_DB}/timer/${limId}.json?auth=${fbToken}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ seconds, action: 'start' })
-      }).then(r => r.json());
-      if (!res.ok) throw new Error(res.error || 'Errore');
+        body: JSON.stringify({ active: true, seconds, startedAt: { '.sv': 'timestamp' } })
+      });
+      if (!res.ok) throw new Error('Errore database: ' + res.status);
       timerSetStatus('Timer avviato sulla LIM!', 'ok');
-      _startTimerPoll();
+      _scheduleLocalExpiry(seconds);
     } catch (e) {
       timerSetStatus('Errore: ' + e.message, 'err');
     }
@@ -1159,12 +1333,9 @@
     _hideTimerExpired();
     timerSetStatus('Stop timer...');
     try {
-      const res = await fetch(`${CF_WORKER}/timer/${limId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'stop' })
-      }).then(r => r.json());
-      if (!res.ok) throw new Error(res.error || 'Errore');
+      const fbToken = await getFirebaseAuthToken();
+      const res = await fetch(`${FIREBASE_DB}/timer/${limId}.json?auth=${fbToken}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Errore database: ' + res.status);
       timerSetStatus('Timer fermato.', 'ok');
     } catch (e) {
       timerSetStatus('Errore: ' + e.message, 'err');
@@ -1191,11 +1362,12 @@
       btn.disabled = true;
       try {
         const dataUrl = await compressImage(file, 1200, 0.82);
-        const res = await fetch(`${CF_WORKER}/photo/${limId}`, {
+        const fbToken = await getFirebaseAuthToken();
+        const res = await fetch(`${FIREBASE_DB}/photos/${limId}.json?auth=${fbToken}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dataUrl, name: file.name || 'foto.jpg' })
-        }).then(r => r.json());
+          body: JSON.stringify({ dataUrl, name: file.name || 'foto.jpg', ts: Date.now() })
+        });
         status.textContent = res.ok ? 'Foto inviata alla lavagna!' : 'Errore invio. Riprova.';
         status.className = 'status-line ' + (res.ok ? 'ok' : 'err');
       } catch (_) {
@@ -1238,7 +1410,9 @@
   // ══════════════════════════════════════════════════════════════
   function disconnect() {
     limId = null;
-    localStorage.removeItem(LIM_ID_KEY);
+    // Non rimuoviamo LIM_ID_KEY: afterLidDetected lo legge per sapere quale
+    // LIM disconnettere via 'transferred' alla prossima scansione.
+    // Viene aggiornato automaticamente in afterLidDetected con il nuovo lid.
     startScanner();
   }
 
@@ -1328,11 +1502,43 @@
     waitForGIS(null, () => {});
   });
 
+  // "Cambia account" dal menu a tendina (header, quando già connessi): stessa logica,
+  // mantiene limId così non serve riscansionare il QR per la nuova connessione.
+  document.getElementById('btn-menu-change-account').addEventListener('click', () => {
+    toggleUserMenu(true);
+    clearAuthData();
+    showScreen('screen-login');
+    waitForGIS(null, () => {});
+  });
+
   // Esci account (dall'header) — azzera tutto e torna allo scanner
   document.getElementById('btn-signout').addEventListener('click', () => {
     clearAuthData();
     updateUserHeader();
     disconnect();
+  });
+
+  // Istruzioni (dal menu account)
+  document.getElementById('btn-menu-help').addEventListener('click', () => {
+    toggleUserMenu(true);
+    document.getElementById('help-modal').classList.remove('hidden');
+  });
+  document.getElementById('btn-help-close').addEventListener('click', () => {
+    document.getElementById('help-modal').classList.add('hidden');
+  });
+  document.getElementById('help-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'help-modal') e.currentTarget.classList.add('hidden');
+  });
+
+  // Richiedi assistenza (dal menu account) — mailto: standard: su mobile apre l'app di posta
+  // predefinita con oggetto/corpo precompilati. Il link web di Gmail (view=cm) su mobile
+  // ignora il parametro e mostra solo la posta in arrivo, non la compose.
+  document.getElementById('btn-menu-support').addEventListener('click', () => {
+    toggleUserMenu(true);
+    const email = localStorage.getItem(STORAGE_EMAIL) || '';
+    const subject = encodeURIComponent('EduBoard Connect - Assistenza');
+    const body = encodeURIComponent(`Account: ${email}\nDescrivi qui il problema riscontrato:\n\n`);
+    location.href = `mailto:info@edutechlab.it?subject=${subject}&body=${body}`;
   });
 
   // Timer
@@ -1403,8 +1609,10 @@
   (function() {
     if (!('serviceWorker' in navigator) || location.protocol !== 'https:') return;
 
-    // Registra il SW (lo condivide con EduBoard, stesso dominio)
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    // Registra il SW e forza controllo aggiornamenti ad ogni apertura
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => reg.update())
+      .catch(() => {});
 
     let _changelog = '';
 

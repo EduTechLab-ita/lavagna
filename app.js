@@ -39,7 +39,6 @@ const CONFIG = {
     lastY: 0,
     shapeStartX: 0,
     shapeStartY: 0,
-    shapeSnapshot: null,  // ImageData per preview live forme
     undoStack: [],
     redoStack: [],
     maxUndo: 50,
@@ -538,20 +537,45 @@ class BrushEngine {
         ctx.restore();
     }
 
-    // Evidenziatore — tratto largo e semitrasparente
+    // Evidenziatore — punta a scalpello (larga se il movimento è orizzontale, sottile se
+    // verticale) disegnata OPACA: la vera trasparenza (0.42) viene applicata una sola volta
+    // a fine tratto compositando l'intera maschera (vedi CanvasManager._compositeMarkerMask),
+    // così il colore copre la scrittura sotto in modo uniforme invece di scurirsi dove il
+    // tratto si sovrappone a se stesso (ogni segmento veniva prima disegnato col proprio alpha).
     marker(ctx, x0, y0, cpX, cpY, x1, y1, size, color) {
         ctx.save();
         ctx.strokeStyle = color;
-        ctx.lineWidth = size * 2.5;
-        ctx.lineCap = 'square';
+        ctx.lineCap = 'butt';
         ctx.lineJoin = 'round';
-        ctx.globalAlpha = 0.35;
+        ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
+        const angle = Math.atan2(y1 - y0, x1 - x0);
+        const wide = size * 2.5, thin = size * 0.7;
+        ctx.lineWidth = thin + (wide - thin) * Math.abs(Math.cos(angle));
         ctx.beginPath();
         ctx.moveTo(x0, y0);
         ctx.quadraticCurveTo(cpX, cpY, x1, y1);
         ctx.stroke();
         ctx.restore();
+    }
+
+    // Compositing dell'evidenziatore: applica la maschera opaca (costruita da marker()) sul
+    // contesto di destinazione con l'alpha reale, in un colpo solo per tutto il tratto.
+    // 'region' (se passata) limita clear/composite al solo rettangolo del tratto invece che
+    // all'intero canvas (che su una lavagna grande può essere enorme) — indispensabile per
+    // le prestazioni quando ci sono molti tratti evidenziatore (es. durante _redrawAllStrokes,
+    // chiamato ad ogni frame mentre si trascina una selezione).
+    static MARKER_ALPHA = 0.42;
+    compositeMarkerMask(destCtx, maskCanvas, alpha = BrushEngine.MARKER_ALPHA, region = null) {
+        destCtx.save();
+        destCtx.globalAlpha = alpha;
+        destCtx.globalCompositeOperation = 'source-over';
+        if (region) {
+            destCtx.drawImage(maskCanvas, region.x, region.y, region.w, region.h, region.x, region.y, region.w, region.h);
+        } else {
+            destCtx.drawImage(maskCanvas, 0, 0);
+        }
+        destCtx.restore();
     }
 
     // Gomma — cancella usando destination-out (mostra il bg-canvas sotto)
@@ -575,11 +599,11 @@ class BrushEngine {
         ctx.closePath();
     }
 
-    // Forme geometriche — disegna su ctx passato, con colore e spessore dati
-    shape(ctx, type, x0, y0, x1, y1, size, color, fill) {
+    // Forme geometriche — disegna su ctx passato, con colore bordo/riempimento indipendenti
+    shape(ctx, type, x0, y0, x1, y1, size, color, fill, fillColor, fillAlpha = 0.15) {
         ctx.save();
         ctx.strokeStyle = color;
-        ctx.fillStyle = color;
+        ctx.fillStyle = fillColor || color;
         ctx.lineWidth = size;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -595,7 +619,7 @@ class BrushEngine {
 
             case 'rect':
                 if (fill) {
-                    ctx.globalAlpha = 0.15;
+                    ctx.globalAlpha = fillAlpha;
                     ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
                     ctx.globalAlpha = 1;
                 }
@@ -609,7 +633,7 @@ class BrushEngine {
                 const cy = (y0 + y1) / 2;
                 ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
                 if (fill) {
-                    ctx.globalAlpha = 0.15;
+                    ctx.globalAlpha = fillAlpha;
                     ctx.fill();
                     ctx.globalAlpha = 1;
                 }
@@ -626,7 +650,7 @@ class BrushEngine {
                 const cy = (y0 + y1) / 2;
                 ctx.arc(cx, cy, r, 0, Math.PI * 2);
                 if (fill) {
-                    ctx.globalAlpha = 0.15;
+                    ctx.globalAlpha = fillAlpha;
                     ctx.fill();
                     ctx.globalAlpha = 1;
                 }
@@ -641,7 +665,7 @@ class BrushEngine {
                 ctx.lineTo(x0, y1);
                 ctx.closePath();
                 if (fill) {
-                    ctx.globalAlpha = 0.15;
+                    ctx.globalAlpha = fillAlpha;
                     ctx.fill();
                     ctx.globalAlpha = 1;
                 }
@@ -685,7 +709,7 @@ class BrushEngine {
                 }
                 ctx.closePath();
                 if (fill) {
-                    ctx.globalAlpha = 0.15;
+                    ctx.globalAlpha = fillAlpha;
                     ctx.fill();
                     ctx.globalAlpha = 1;
                 }
@@ -705,7 +729,7 @@ class BrushEngine {
                 ctx.lineTo(dcx, dcy + dh);
                 ctx.lineTo(dcx - dw, dcy);
                 ctx.closePath();
-                if (fill) { ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+                if (fill) { ctx.globalAlpha = fillAlpha; ctx.fill(); ctx.globalAlpha = 1; }
                 ctx.stroke();
                 break;
             }
@@ -715,7 +739,7 @@ class BrushEngine {
                 const pcy = (y0 + y1) / 2;
                 const pr = Math.min(Math.abs(x1 - x0), Math.abs(y1 - y0)) / 2;
                 this._polygon(ctx, pcx, pcy, pr, 5);
-                if (fill) { ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+                if (fill) { ctx.globalAlpha = fillAlpha; ctx.fill(); ctx.globalAlpha = 1; }
                 ctx.stroke();
                 break;
             }
@@ -725,7 +749,7 @@ class BrushEngine {
                 const hcy = (y0 + y1) / 2;
                 const hr = Math.min(Math.abs(x1 - x0), Math.abs(y1 - y0)) / 2;
                 this._polygon(ctx, hcx, hcy, hr, 6, Math.PI / 6);
-                if (fill) { ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+                if (fill) { ctx.globalAlpha = fillAlpha; ctx.fill(); ctx.globalAlpha = 1; }
                 ctx.stroke();
                 break;
             }
@@ -747,7 +771,7 @@ class BrushEngine {
                 ctx.lineTo(arBody, aryB);
                 ctx.lineTo(x0, aryB);
                 ctx.closePath();
-                if (fill) { ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+                if (fill) { ctx.globalAlpha = fillAlpha; ctx.fill(); ctx.globalAlpha = 1; }
                 ctx.stroke();
                 break;
             }
@@ -773,7 +797,7 @@ class BrushEngine {
                 ctx.lineTo(daBodyL, dayB);
                 ctx.lineTo(daBodyL, y1);
                 ctx.closePath();
-                if (fill) { ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+                if (fill) { ctx.globalAlpha = fillAlpha; ctx.fill(); ctx.globalAlpha = 1; }
                 ctx.stroke();
                 break;
             }
@@ -805,7 +829,7 @@ class BrushEngine {
                 ctx.lineTo(sx0, sy0 + sRadius);
                 ctx.arcTo(sx0, sy0, sx0 + sRadius, sy0, sRadius);
                 ctx.closePath();
-                if (fill) { ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+                if (fill) { ctx.globalAlpha = fillAlpha; ctx.fill(); ctx.globalAlpha = 1; }
                 ctx.stroke();
                 break;
             }
@@ -820,7 +844,7 @@ class BrushEngine {
                 ctx.bezierCurveTo(hx, hy + hr2, hx + hr2, hy + hr2 * 0.6, hx + hr2, hy);
                 ctx.bezierCurveTo(hx + hr2, hy - hr2 * 0.6, hx, hy - hr2 * 0.6, hx, hy + hr2 * 0.3);
                 ctx.closePath();
-                if (fill) { ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+                if (fill) { ctx.globalAlpha = fillAlpha; ctx.fill(); ctx.globalAlpha = 1; }
                 ctx.stroke();
                 break;
             }
@@ -947,11 +971,21 @@ class CanvasManager {
         this.overlayCanvas = document.getElementById('overlay-canvas');
         this.overlayCtx = this.overlayCanvas.getContext('2d');
 
+        // Maschera opaca per l'evidenziatore: accumula il tratto corrente a piena opacità
+        // (nessun canvas nel DOM, solo di supporto) — vedi _onStart/_onMove/_onEnd marker.
+        this._markerMaskCanvas = document.createElement('canvas');
+        this._markerMaskCtx = this._markerMaskCanvas.getContext('2d');
+
         this.undoStack = [];
         this.redoStack = [];
 
-        // Tracking vettoriale per gomma-tratto: parallelo a undoStack
+        // Tracking vettoriale per gomma-tratto: parallelo a undoStack (solo undo/redo classico)
         this._vectorStrokes = []; // null | {tool, color, size, points[]}
+
+        // Tratti/forme della PAGINA CORRENTE (persistiti nel salvataggio, non solo in sessione).
+        // Usati da gomma-a-tratto e dallo strumento Seleziona per riconoscere un singolo
+        // tratto/forma anche su una pagina appena riaperta da Drive.
+        this._pageStrokes = []; // {tool, color, size, points[]} oppure {tool:'shape', shapeType, x0,y0,x1,y1, size, color, fill}
         this._currentPoints  = []; // punti del tratto in corso
 
         this._setupEvents();
@@ -982,6 +1016,7 @@ class CanvasManager {
         this.canvas.style.width  = W + 'px'; this.canvas.style.height = H + 'px';
         this.overlayCanvas.width = W; this.overlayCanvas.height = H;
         this.overlayCanvas.style.width = W + 'px'; this.overlayCanvas.style.height = H + 'px';
+        this._markerMaskCanvas.width = W; this._markerMaskCanvas.height = H;
         const bgCvs = document.getElementById('bg-canvas');
         if (bgCvs) { bgCvs.width = W; bgCvs.height = H;
                      bgCvs.style.width = W + 'px'; bgCvs.style.height = H + 'px'; }
@@ -1073,10 +1108,11 @@ class CanvasManager {
         const { x, y } = this.getCoords(e);
 
         // Modalità gomma-tratto: premi e scorri per cancellare (stile OneNote)
+        // Cancella in un tocco solo QUALSIASI oggetto: tratti, forme, immagini, PDF
         if (CONFIG.currentTool === 'eraser' && CONFIG.eraserMode === 'stroke') {
             this._erasingStrokes = true;
-            const idx = this.findNearestStroke(x, y);
-            if (idx >= 0) this.eraseStroke(idx);
+            const target = this._findEraseTarget(x, y);
+            if (target) this._eraseTarget(target);
             return;
         }
 
@@ -1106,7 +1142,6 @@ class CanvasManager {
         if (CONFIG.currentTool === 'shape') {
             CONFIG.shapeStartX = x;
             CONFIG.shapeStartY = y;
-            CONFIG.shapeSnapshot = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
             return;
         }
 
@@ -1121,7 +1156,14 @@ class CanvasManager {
         // Disegna il punto iniziale (dot)
         if (CONFIG.currentTool === 'eraser') {
             this.brush.eraser(this.ctx, x, y, CONFIG.currentSize * 2);
+            this._eraseObjectsNear(x, y);
         } else {
+            if (CONFIG.currentTool === 'marker') {
+                // Nuovo tratto: ripulisce la maschera opaca dal tratto precedente e resetta
+                // il bbox live (si allarga man mano che il tratto viene disegnato, vedi _drawSegment)
+                this._markerMaskCtx.clearRect(0, 0, this._markerMaskCanvas.width, this._markerMaskCanvas.height);
+                this._markerLiveBBox = null;
+            }
             this._drawSegment(x, y, x, y, x, y);
         }
     }
@@ -1130,11 +1172,11 @@ class CanvasManager {
         // Gomma-tratto: se sto premendo → cancella subito; altrimenti → evidenzia hover
         if (CONFIG.currentTool === 'eraser' && CONFIG.eraserMode === 'stroke') {
             const { x, y } = this.getCoords(e);
-            const idx = this.findNearestStroke(x, y);
+            const target = this._findEraseTarget(x, y);
             if (this._erasingStrokes) {
-                if (idx >= 0 && !this._eraseInProgress) this.eraseStroke(idx);
+                if (target) this._eraseTarget(target);
             } else {
-                this._highlightStroke(idx);
+                this._highlightEraseTarget(target);
             }
             return;
         }
@@ -1160,10 +1202,10 @@ class CanvasManager {
             return;
         }
         if (CONFIG.currentTool === 'shape') {
-            // Preview live: ripristina snapshot + disegna forma aggiornata
-            this.ctx.putImageData(CONFIG.shapeSnapshot, 0, 0);
+            // Preview live sul livello overlay (leggero): nessuna copia pixel del canvas reale
+            this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
             this.brush.shape(
-                this.ctx,
+                this.overlayCtx,
                 CONFIG.currentShape,
                 CONFIG.shapeStartX, CONFIG.shapeStartY,
                 x, y,
@@ -1176,6 +1218,7 @@ class CanvasManager {
 
         if (CONFIG.currentTool === 'eraser') {
             this.brush.eraser(this.ctx, x, y, CONFIG.currentSize * 2);
+            this._eraseObjectsNear(x, y);
         } else {
             // Bézier smoothing: usa il midpoint come endpoint e il punto corrente come controllo
             // Questo elimina gli spigoli vivi tra segmenti su PC lenti (pochi eventi pointer)
@@ -1216,10 +1259,43 @@ class CanvasManager {
             return;
         }
         if (CONFIG.currentTool === 'shape') {
-            // La forma è già sul canvas (dall'ultimo _onMove)
-            this._saveUndo(true); // salva DOPO aver disegnato la forma, notifica dirty
-            CONFIG.shapeSnapshot = null;
+            // Preview era solo sull'overlay: ora disegna la forma definitiva una sola volta sul canvas reale
+            const { x, y } = this.getCoords(e);
+            this._saveUndo(true); // salva PRIMA di disegnare (stato corretto per l'undo), notifica dirty
+            this.brush.shape(
+                this.ctx,
+                CONFIG.currentShape,
+                CONFIG.shapeStartX, CONFIG.shapeStartY,
+                x, y,
+                CONFIG.currentSize,
+                CONFIG.currentColor,
+                CONFIG.shapeFill
+            );
+            this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+            // Traccia la forma per la gomma-tratto/selezione (cancellazione/selezione in un tocco solo)
+            const lastIdx = this._vectorStrokes.length - 1;
+            const shapeEntry = {
+                tool: 'shape',
+                shapeType: CONFIG.currentShape,
+                color: CONFIG.currentColor,
+                fillColor: CONFIG.currentColor, // bordo e riempimento indipendenti da qui in poi (menu contestuale)
+                fillAlpha: 0.15, // intensità del riempimento, regolabile dal menu contestuale
+                size: CONFIG.currentSize,
+                fill: CONFIG.shapeFill,
+                x0: CONFIG.shapeStartX, y0: CONFIG.shapeStartY,
+                x1: x, y1: y
+            };
+            if (lastIdx >= 0) this._vectorStrokes[lastIdx] = shapeEntry;
+            this._pageStrokes.push({ ...shapeEntry });
             return;
+        }
+
+        // Evidenziatore: applica la maschera opaca del tratto sul canvas reale UNA SOLA
+        // VOLTA a fine tratto (con l'alpha vera), poi ripulisce l'anteprima sull'overlay.
+        // Limitato al bbox del tratto appena disegnato (vedi _drawSegment), non l'intero canvas.
+        if (CONFIG.currentTool === 'marker') {
+            this.brush.compositeMarkerMask(this.ctx, this._markerMaskCanvas, undefined, this._markerLiveBBox);
+            this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
         }
 
         // Fine tratto per strumenti di disegno (pen, pencil, pastel, marker, eraser):
@@ -1228,12 +1304,14 @@ class CanvasManager {
             // Finalizza il vector stroke nell'ultimo slot di _vectorStrokes
             const lastIdx = this._vectorStrokes.length - 1;
             if (lastIdx >= 0 && this._currentPoints.length > 0) {
-                this._vectorStrokes[lastIdx] = {
+                const strokeEntry = {
                     tool:   CONFIG.currentTool,
                     color:  CONFIG.currentColor,
                     size:   CONFIG.currentSize,
                     points: [...this._currentPoints],
                 };
+                this._vectorStrokes[lastIdx] = strokeEntry;
+                if (CONFIG.currentTool !== 'eraser') this._pageStrokes.push({ ...strokeEntry });
             }
             this._currentPoints = [];
             CONFIG.isDirty = true;
@@ -1246,11 +1324,25 @@ class CanvasManager {
         const color = CONFIG.currentColor;
         const size  = CONFIG.currentSize;
 
+        // Evidenziatore: il segmento va sulla maschera opaca (mai sul canvas reale durante
+        // il tratto), l'anteprima live sull'overlay è la maschera ricompositata con l'alpha
+        // vera — evita che i segmenti che si sovrappongono nello stesso tratto si scuriscano.
+        // Il clear+composite è limitato al bbox del tratto fin qui (si allarga ad ogni
+        // segmento): con un canvas grande, farlo sull'intero canvas ad ogni pointermove
+        // è molto più lento e rende il tratto a scatti.
+        if (tool === 'marker') {
+            this.brush.marker(this._markerMaskCtx, x0, y0, cpX, cpY, x1, y1, size, color);
+            const segBBox = this._strokeBBox([{x:x0,y:y0},{x:cpX,y:cpY},{x:x1,y:y1}], size);
+            this._markerLiveBBox = this._markerLiveBBox ? this._unionBBox(this._markerLiveBBox, segBBox) : segBBox;
+            this.overlayCtx.clearRect(this._markerLiveBBox.x, this._markerLiveBBox.y, this._markerLiveBBox.w, this._markerLiveBBox.h);
+            this.brush.compositeMarkerMask(this.overlayCtx, this._markerMaskCanvas, undefined, this._markerLiveBBox);
+            return;
+        }
+
         switch (tool) {
             case 'pen':    this.brush.pen(this.ctx, x0, y0, cpX, cpY, x1, y1, size, color);    break;
             case 'pencil': this.brush.pencil(this.ctx, x0, y0, cpX, cpY, x1, y1, size, color); break;
             case 'pastel': this.brush.pastel(this.ctx, x0, y0, cpX, cpY, x1, y1, size, color); break;
-            case 'marker': this.brush.marker(this.ctx, x0, y0, cpX, cpY, x1, y1, size, color); break;
         }
     }
 
@@ -1260,8 +1352,16 @@ class CanvasManager {
         return objectLayer.objects.map(o => ({ ...o })); // shallow copy
     }
 
+    // Copia indipendente di _pageStrokes per gli snapshot undo/redo — i tratti vengono
+    // spostati/colorati mutando l'oggetto in place (vedi SelectManager), quindi lo snapshot
+    // DEVE essere un clone profondo, non solo una copia dell'array (altrimenti mutare il
+    // tratto "vivo" corromperebbe silenziosamente anche la cronologia undo già salvata).
+    _snapshotPageStrokes() {
+        return this._pageStrokes.map(s => s ? JSON.parse(JSON.stringify(s)) : s);
+    }
+
     _saveUndo(notifyDirty = false) {
-        this.undoStack.push({ canvas: this.canvas.toDataURL(), objects: this._snapshotObjects() });
+        this.undoStack.push({ canvas: this.canvas.toDataURL(), objects: this._snapshotObjects(), pageStrokes: this._snapshotPageStrokes() });
         this._vectorStrokes.push(null); // placeholder, aggiornato in _onEnd
         if (this.undoStack.length > CONFIG.maxUndo) {
             this.undoStack.shift();
@@ -1276,26 +1376,30 @@ class CanvasManager {
     }
 
     _applyUndoEntry(entry) {
-        // Retrocompatibilità: entry può essere stringa (vecchio formato) o {canvas, objects}
+        // Retrocompatibilità: entry può essere stringa (vecchio formato) o {canvas, objects, pageStrokes}
         const canvasUrl = (typeof entry === 'string') ? entry : entry.canvas;
         const objs      = (typeof entry === 'string') ? null  : entry.objects;
+        const strokes   = (typeof entry === 'string') ? null  : entry.pageStrokes;
         this._loadURL(canvasUrl);
         if (objs !== null && objs !== undefined && typeof objectLayer !== 'undefined' && objectLayer) {
             objectLayer.objects = objs;
             objectLayer.render();
         }
+        if (strokes !== null && strokes !== undefined) this._pageStrokes = strokes;
+        // La selezione precisa (tap/lazo) può puntare a oggetti ormai sostituiti dal ripristino
+        if (typeof selectMgr !== 'undefined' && selectMgr) selectMgr._clearSelection();
     }
 
     undo() {
         if (this.undoStack.length === 0) return;
-        this.redoStack.push({ canvas: this.canvas.toDataURL(), objects: this._snapshotObjects() });
+        this.redoStack.push({ canvas: this.canvas.toDataURL(), objects: this._snapshotObjects(), pageStrokes: this._snapshotPageStrokes() });
         this._vectorStrokes.pop();
         this._applyUndoEntry(this.undoStack.pop());
     }
 
     redo() {
         if (this.redoStack.length === 0) return;
-        this.undoStack.push({ canvas: this.canvas.toDataURL(), objects: this._snapshotObjects() });
+        this.undoStack.push({ canvas: this.canvas.toDataURL(), objects: this._snapshotObjects(), pageStrokes: this._snapshotPageStrokes() });
         this._vectorStrokes.push(null);
         this._applyUndoEntry(this.redoStack.pop());
     }
@@ -1321,50 +1425,168 @@ class CanvasManager {
         });
     }
 
-    // Cancella un tratto specifico per indice (modalità gomma-tratto)
-    async eraseStroke(strokeIndex) {
-        if (strokeIndex < 0 || strokeIndex >= this._vectorStrokes.length) return;
-        if (this._eraseInProgress) return; // evita cancellazioni concorrenti
-        this._eraseInProgress = true;
+    // Cancella un tratto/forma della pagina corrente per indice (modalità gomma-tratto).
+    // Funziona identicamente su contenuto disegnato ora o ripristinato da un salvataggio,
+    // perché non dipende dallo storico undo (assente per le pagine appena riaperte).
+    // Ridisegna l'intera pagina da zero rifacendo ogni tratto/forma rimasto nell'ordine
+    // originale (invece di "bucare" i pixel): evita sia cancellazioni a tratti/non uniformi
+    // sia la cancellazione accidentale di tratti sovrapposti a quello rimosso.
+    eraseStrokeDirect(strokeIndex) {
+        if (strokeIndex < 0 || strokeIndex >= this._pageStrokes.length) return;
+        const stroke = this._pageStrokes[strokeIndex];
+        if (!stroke) return;
 
-        try {
-            // Nascondi hover highlight
-            this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+        this._saveUndo();
+        this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+        this._pageStrokes.splice(strokeIndex, 1);
+        this._redrawAllStrokes();
 
-            // Ripristina lo snapshot prima del tratto — undoStack può avere formato stringa o {canvas,objects}
-            const entry = this.undoStack[strokeIndex];
-            const canvasUrl = (typeof entry === 'string') ? entry : entry?.canvas;
-            const objs      = (typeof entry === 'string') ? null  : entry?.objects;
-            if (!canvasUrl) { this._eraseInProgress = false; return; }
-            await this._loadURLAsync(canvasUrl);
-            if (objs !== null && objs !== undefined && typeof objectLayer !== 'undefined' && objectLayer) {
-                objectLayer.objects = objs;
-                objectLayer.render();
-            }
+        CONFIG.isDirty = true;
+        window.autoSaveMgr?.onDirty();
+    }
 
-            // Ridisegna tutti i tratti successivi tramite dati vettoriali
-            for (let i = strokeIndex + 1; i < this._vectorStrokes.length; i++) {
-                const stroke = this._vectorStrokes[i];
-                if (stroke) this._replayStroke(stroke);
-            }
-
-            // Rimuovi il tratto cancellato dagli stack
-            this.undoStack.splice(strokeIndex, 1);
-            this._vectorStrokes.splice(strokeIndex, 1);
-
-            CONFIG.isDirty = true;
-            window.autoSaveMgr?.onDirty();
-        } finally {
-            this._eraseInProgress = false;
+    // Ripulisce il draw-canvas e riplotta ogni tratto/forma rimasto in _pageStrokes,
+    // nell'ordine originale — i tratti sovrapposti restano intatti perché vengono
+    // ridisegnati esattamente come la prima volta, solo senza quello cancellato.
+    _redrawAllStrokes() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        for (const stroke of this._pageStrokes) {
+            if (stroke) this._replayStroke(stroke);
         }
     }
 
-    // Trova il tratto più vicino al punto (x,y) — ritorna l'indice in _vectorStrokes
+    // Ridisegna un singolo tratto/forma da dati vettoriali (usato da _redrawAllStrokes e dal
+    // bitmap statico del drag). destCtx di default è il canvas reale, ma può essere un
+    // canvas offscreen (vedi _buildDragStaticBitmap).
+    _replayStroke(stroke, destCtx = this.ctx) {
+        if (stroke.tool === 'shape') {
+            this.brush.shape(destCtx, stroke.shapeType, stroke.x0, stroke.y0, stroke.x1, stroke.y1, stroke.size, stroke.color, stroke.fill, stroke.fillColor || stroke.color, stroke.fillAlpha ?? 0.15);
+            return;
+        }
+        const { tool, color, size, points } = stroke;
+        if (!points || points.length === 0) return;
+
+        // Riempimento tratto a mano libera: poligono chiuso (ultimo punto -> primo), disegnato
+        // sotto il tratto — opacità regolabile dal menu contestuale (default 0.15, come le forme).
+        if (stroke.fill && points.length > 2) {
+            destCtx.save();
+            destCtx.fillStyle = stroke.fillColor || color;
+            destCtx.globalAlpha = stroke.fillAlpha ?? 0.15;
+            destCtx.beginPath();
+            destCtx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) destCtx.lineTo(points[i].x, points[i].y);
+            destCtx.closePath();
+            destCtx.fill();
+            destCtx.restore();
+        }
+
+        // Evidenziatore: ricostruisce sulla maschera opaca e la compone una sola volta,
+        // così il replay ha lo stesso aspetto uniforme del tratto disegnato dal vivo. Tutto
+        // limitato al bbox del tratto (non l'intero canvas, enorme): con molti tratti
+        // evidenziatore su una pagina, _redrawAllStrokes gira ad ogni frame durante un
+        // trascinamento — senza questo limite diventa lentissimo o a scatti.
+        const isMarker = tool === 'marker';
+        const markerBBox = isMarker ? this._strokeBBox(points, size) : null;
+        if (isMarker) this._markerMaskCtx.clearRect(markerBBox.x, markerBBox.y, markerBBox.w, markerBBox.h);
+        const targetCtx = isMarker ? this._markerMaskCtx : destCtx;
+
+        // Dot iniziale + segmenti successivi (stessa logica di _drawSegment, con midpoint
+        // Bézier per la stessa morbidezza del tratto originale)
+        let smoothX = points[0].x, smoothY = points[0].y;
+        this._drawSegmentWith(tool, color, size, smoothX, smoothY, smoothX, smoothY, points[0].x, points[0].y, targetCtx);
+        for (let i = 1; i < points.length; i++) {
+            const midX = (points[i-1].x + points[i].x) / 2;
+            const midY = (points[i-1].y + points[i].y) / 2;
+            this._drawSegmentWith(tool, color, size, smoothX, smoothY, points[i-1].x, points[i-1].y, midX, midY, targetCtx);
+            smoothX = midX; smoothY = midY;
+        }
+
+        if (isMarker) this.brush.compositeMarkerMask(destCtx, this._markerMaskCanvas, undefined, markerBBox);
+    }
+
+    // Costruisce (o riusa) un canvas offscreen con tutti i tratti/forme della pagina TRANNE
+    // quelli in movimento (excludeRefs): usato durante il trascinamento di una selezione per
+    // evitare di ridisegnare l'intera pagina ad ogni frame — vedi SelectManager._previewDragItems.
+    _buildDragStaticBitmap(excludeRefs) {
+        if (!this._dragStaticCanvas) {
+            this._dragStaticCanvas = document.createElement('canvas');
+            this._dragStaticCtx = this._dragStaticCanvas.getContext('2d');
+        }
+        this._dragStaticCanvas.width  = this.canvas.width;
+        this._dragStaticCanvas.height = this.canvas.height;
+        for (const stroke of this._pageStrokes) {
+            if (stroke && !excludeRefs.has(stroke)) this._replayStroke(stroke, this._dragStaticCtx);
+        }
+    }
+
+    // Ridisegna il canvas reale durante il drag: incolla il bitmap statico (economico) e
+    // ridisegna sopra SOLO i tratti/forme in movimento (movingRefs).
+    _redrawWithStaticBitmap(movingRefs) {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        if (this._dragStaticCanvas) this.ctx.drawImage(this._dragStaticCanvas, 0, 0);
+        for (const stroke of this._pageStrokes) {
+            if (stroke && movingRefs.has(stroke)) this._replayStroke(stroke);
+        }
+    }
+
+    // Bounding box (con margine per lo spessore) di un array di punti — usato per limitare
+    // le operazioni sulla maschera evidenziatore a una piccola area invece che al canvas intero.
+    _strokeBBox(points, size) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const p of points) {
+            if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+            if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+        }
+        const margin = size * 2.5 + 4;
+        const x = Math.max(0, Math.floor(minX - margin));
+        const y = Math.max(0, Math.floor(minY - margin));
+        const w = Math.min(this.canvas.width  - x, Math.ceil(maxX - minX + margin * 2));
+        const h = Math.min(this.canvas.height - y, Math.ceil(maxY - minY + margin * 2));
+        return { x, y, w, h };
+    }
+
+    // Unione di due bbox — usato per far crescere il bbox live dell'evidenziatore man mano
+    // che il tratto viene disegnato (vedi _drawSegment).
+    _unionBBox(a, b) {
+        const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+        const right  = Math.max(a.x + a.w, b.x + b.w);
+        const bottom = Math.max(a.y + a.h, b.y + b.h);
+        return { x, y, w: right - x, h: bottom - y };
+    }
+
+    // Come _drawSegment ma con parametri tool/color/size espliciti (per il replay)
+    _drawSegmentWith(tool, color, size, x0, y0, cpX, cpY, x1, y1, targetCtx = this.ctx) {
+        switch (tool) {
+            case 'pen':    this.brush.pen(targetCtx, x0, y0, cpX, cpY, x1, y1, size, color);    break;
+            case 'pencil': this.brush.pencil(targetCtx, x0, y0, cpX, cpY, x1, y1, size, color); break;
+            case 'pastel': this.brush.pastel(targetCtx, x0, y0, cpX, cpY, x1, y1, size, color); break;
+            case 'marker': this.brush.marker(targetCtx, x0, y0, cpX, cpY, x1, y1, size, color); break;
+        }
+    }
+
+    // Trova il tratto/forma più vicino al punto (x,y) tra quelli della PAGINA CORRENTE
+    // (_pageStrokes, persistiti nel salvataggio — funziona anche su pagine appena riaperte).
+    // Itera dall'ultimo al primo (topmost first): se più elementi si sovrappongono,
+    // vince quello disegnato più di recente (visivamente sopra).
     findNearestStroke(x, y, maxDist = 40) {
         let bestIdx = -1, bestDist = maxDist;
-        for (let i = 0; i < this._vectorStrokes.length; i++) {
-            const stroke = this._vectorStrokes[i];
-            if (!stroke || !stroke.points || stroke.tool === 'eraser') continue;
+        for (let i = this._pageStrokes.length - 1; i >= 0; i--) {
+            const stroke = this._pageStrokes[i];
+            if (!stroke) continue;
+            if (stroke.tool === 'shape') {
+                const margin = (stroke.size || 0) / 2 + 15;
+                const minX = Math.min(stroke.x0, stroke.x1) - margin;
+                const maxX = Math.max(stroke.x0, stroke.x1) + margin;
+                const minY = Math.min(stroke.y0, stroke.y1) - margin;
+                const maxY = Math.max(stroke.y0, stroke.y1) + margin;
+                // Distanza dal rettangolo (0 se il punto è dentro)
+                const clampedX = Math.max(minX, Math.min(x, maxX));
+                const clampedY = Math.max(minY, Math.min(y, maxY));
+                const d = Math.hypot(x - clampedX, y - clampedY);
+                if (d < bestDist) { bestDist = d; bestIdx = i; }
+                continue;
+            }
+            if (!stroke.points) continue;
             for (const pt of stroke.points) {
                 const d = Math.hypot(pt.x - x, pt.y - y);
                 if (d < bestDist) {
@@ -1376,41 +1598,83 @@ class CanvasManager {
         return bestIdx;
     }
 
-    // Ridisegna un tratto da dati vettoriali (usato dopo eraseStroke)
-    _replayStroke(stroke) {
-        const { tool, color, size, points } = stroke;
-        if (!points || points.length === 0) return;
+    // Trova il "bersaglio" da cancellare in un tocco solo: oggetti (immagini/PDF) hanno
+    // priorità perché visivamente sopra il disegno; altrimenti cerca tratti/forme.
+    _findEraseTarget(x, y) {
+        if (typeof objectLayer !== 'undefined' && objectLayer) {
+            const obj = objectLayer.hitTest(x, y);
+            if (obj) return { type: 'object', obj };
+        }
+        const idx = this.findNearestStroke(x, y);
+        if (idx >= 0) return { type: 'stroke', index: idx };
+        return null;
+    }
 
-        if (tool === 'eraser') {
-            for (const { x, y } of points) {
-                this.brush.eraser(this.ctx, x, y, size * 2);
-            }
+    // Cancella il bersaglio individuato da _findEraseTarget (oggetto intero o tratto/forma intera)
+    _eraseTarget(target) {
+        if (target.type === 'object') {
+            this._saveUndo();
+            objectLayer.removeObject(target.obj.id);
+            this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+        } else if (target.type === 'stroke') {
+            this.eraseStrokeDirect(target.index);
+        }
+    }
+
+    // Evidenzia il bersaglio sotto il cursore prima di cancellarlo (hover, modalità gomma-tratto)
+    _highlightEraseTarget(target) {
+        if (!target) {
+            this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
             return;
         }
-        // Dot iniziale
-        this._drawSegmentWith(tool, color, size, points[0].x, points[0].y, points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            this._drawSegmentWith(tool, color, size, points[i-1].x, points[i-1].y, points[i].x, points[i].y);
+        if (target.type === 'object') {
+            this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+            const o = target.obj;
+            this.overlayCtx.save();
+            this.overlayCtx.strokeStyle = 'rgba(239,68,68,0.75)';
+            this.overlayCtx.lineWidth = 3;
+            this.overlayCtx.setLineDash([6, 4]);
+            this.overlayCtx.strokeRect(o.x - 4, o.y - 4, o.w + 8, o.h + 8);
+            this.overlayCtx.restore();
+        } else {
+            this._highlightStroke(target.index);
         }
     }
 
-    // Come _drawSegment ma con parametri tool/color/size espliciti (per replay)
-    _drawSegmentWith(tool, color, size, x0, y0, x1, y1) {
-        switch (tool) {
-            case 'pen':    this.brush.pen(this.ctx, x0, y0, x1, y1, size, color);    break;
-            case 'pencil': this.brush.pencil(this.ctx, x0, y0, x1, y1, size, color); break;
-            case 'pastel': this.brush.pastel(this.ctx, x0, y0, x1, y1, size, color); break;
-            case 'marker': this.brush.marker(this.ctx, x0, y0, x1, y1, size, color); break;
+    // Modalità Area: se la gomma tocca un'immagine/PDF, cancella l'intero oggetto —
+    // non ha senso "bucare" parzialmente un'immagine come un tratto a mano libera.
+    _eraseObjectsNear(x, y) {
+        if (typeof objectLayer === 'undefined' || !objectLayer) return;
+        const obj = objectLayer.hitTest(x, y);
+        if (obj) {
+            this._saveUndo();
+            objectLayer.removeObject(obj.id);
         }
     }
 
-    // Evidenzia il tratto sotto il cursore (overlay canvas rosso semitrasparente)
+    // Evidenzia il tratto/forma sotto il cursore (overlay canvas rosso semitrasparente)
     _highlightStroke(strokeIdx) {
         this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
         if (strokeIdx < 0) return;
-        const stroke = this._vectorStrokes[strokeIdx];
-        if (!stroke || !stroke.points || stroke.points.length === 0) return;
+        const stroke = this._pageStrokes[strokeIdx];
+        if (!stroke) return;
 
+        if (stroke.tool === 'shape') {
+            const margin = (stroke.size || 0) / 2 + 10;
+            const minX = Math.min(stroke.x0, stroke.x1) - margin;
+            const maxX = Math.max(stroke.x0, stroke.x1) + margin;
+            const minY = Math.min(stroke.y0, stroke.y1) - margin;
+            const maxY = Math.max(stroke.y0, stroke.y1) + margin;
+            this.overlayCtx.save();
+            this.overlayCtx.strokeStyle = 'rgba(239,68,68,0.75)';
+            this.overlayCtx.lineWidth = 3;
+            this.overlayCtx.setLineDash([6, 4]);
+            this.overlayCtx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+            this.overlayCtx.restore();
+            return;
+        }
+
+        if (!stroke.points || stroke.points.length === 0) return;
         this.overlayCtx.save();
         this.overlayCtx.strokeStyle = 'rgba(239,68,68,0.65)';
         this.overlayCtx.lineWidth = stroke.size + 10;
@@ -1476,10 +1740,63 @@ class ToolbarManager {
         this._setupBgPanel();
         this._setupColorPalettePopup(); // Feature 2
         this._setupEraserMode();        // Gomma tratti
+        this._setupWheelScroll();       // Rotellina mouse -> scroll orizzontale (senza Shift)
 
         // Mostra la riga opzioni subito (penna selezionata di default)
         this._updateOptionsRow();
         this._updateColorSwatches(CONFIG.currentTool);
+
+        // Centra il menu nello spazio libero reale tra barra pagine (sx) e barra zoom/account (dx)
+        window.addEventListener('resize', () => this._updateBounds());
+        requestAnimationFrame(() => this._updateBounds());
+    }
+
+    // Con mouse/trackpad normale (senza tasto Shift) non si riesce a far scorrere
+    // una riga con overflow-x orizzontale: la rotellina scrolla solo in verticale.
+    // Qui convertiamo la rotellina verticale in scroll orizzontale quando la riga
+    // effettivamente trabocca, così i pulsanti nascosti restano raggiungibili
+    // anche da desktop (su LIM touch lo swipe funziona già di suo).
+    _setupWheelScroll() {
+        const rows = [document.querySelector('.main-row'), document.getElementById('page-bar')];
+        rows.forEach(row => {
+            if (!row) return;
+            row.addEventListener('wheel', (e) => {
+                if (row.scrollWidth <= row.clientWidth) return; // niente da scorrere
+                e.preventDefault();
+                row.scrollLeft += e.deltaY;
+            }, { passive: false });
+        });
+    }
+
+    // Misura lo spazio disponibile tra #page-bar e #bottom-right-bar e centra
+    // #toolbar-wrapper esattamente in quello spazio — adattivo a qualsiasi
+    // risoluzione e a qualsiasi numero di pagine (la page-bar cambia larghezza).
+    // Se lo spazio non basta nemmeno per la toolbar "con etichette", passa in
+    // modalità compatta (solo icone) invece di farla sbordare fuori dallo schermo.
+    _updateBounds() {
+        const pageBar  = document.getElementById('page-bar');
+        const rightBar = document.getElementById('bottom-right-bar');
+        const inner    = document.getElementById('floating-toolbar');
+        if (!pageBar || !rightBar || !inner || !this.wrapper) return;
+        const GAP = 16; // margine di sicurezza da ogni lato
+        const leftEdge  = pageBar.getBoundingClientRect().right + GAP;
+        const rightEdge = rightBar.getBoundingClientRect().left - GAP;
+        const available = Math.max(rightEdge - leftEdge, 0);
+
+        // Misura la larghezza naturale "con etichette" (rimuovendo temporaneamente
+        // il limite corrente) per decidere se serve la modalità compatta
+        const prevMaxWidth = this.wrapper.style.maxWidth;
+        const wasCompact = this.wrapper.classList.contains('compact');
+        this.wrapper.classList.remove('compact');
+        this.wrapper.style.maxWidth = 'none';
+        const naturalWidth = inner.scrollWidth;
+        this.wrapper.style.maxWidth = prevMaxWidth;
+        if (wasCompact) this.wrapper.classList.add('compact');
+        this.wrapper.classList.toggle('compact', naturalWidth > available);
+
+        if (available <= 150) return; // schermo troppo piccolo anche in compatta: resta sul fallback CSS centrato
+        this.wrapper.style.left = (leftEdge + available / 2) + 'px';
+        this.wrapper.style.maxWidth = Math.min(1200, available) + 'px';
     }
 
     show() {
@@ -1527,7 +1844,7 @@ class ToolbarManager {
         document.getElementById('btn-undo').addEventListener('click',  () => canvasMgr.undo());
         document.getElementById('btn-redo').addEventListener('click',  () => canvasMgr.redo());
         document.getElementById('btn-clear').addEventListener('click', () => {
-            if (confirm('Cancellare tutto il disegno?')) canvasMgr.clear();
+            showConfirmModal('Cancellare tutto il disegno?', () => canvasMgr.clear());
         });
     }
 
@@ -2133,8 +2450,18 @@ class TextManager {
 
     _syncInputStyle() {
         if (!this.inputEl) return;
-        const style = `${this.fontStyle} ${this.fontSize}px ${this.fontFamily}`.trim();
+        // Contro-scala per lo zoom: #canvas-area ha transform:scale(s) (PanManager),
+        // quindi una dimensione CSS letterale fontSize apparirebbe a schermo grande
+        // fontSize*s px, diversa dal testo poi disegnato sul canvas — che invece
+        // resta sempre a fontSize px "reali" indipendentemente dallo zoom, per design
+        // (vedi _renderTextToCanvas). Dividendo per s, l'anteprima combacia col
+        // risultato finale a qualunque livello di zoom (bug segnalato da Fabio, Punto 6:
+        // "l'anteprima non mostra la dimensione reale durante la digitazione").
+        const s = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.scale : 1;
+        const displaySize = this.fontSize / s;
+        const style = `${this.fontStyle} ${displaySize}px ${this.fontFamily}`.trim();
         this.inputEl.style.font           = style;
+        this.inputEl.style.minHeight      = (displaySize + 8) + 'px';
         this.inputEl.style.textDecoration = this.underline ? 'underline' : '';
         this.inputEl.style.color          = this.color;
     }
@@ -2174,10 +2501,9 @@ class TextManager {
         this.inputEl.style.left     = x + 'px';
         this.inputEl.style.top      = y + 'px';
         this.inputEl.style.minWidth = '4px';
-        this.inputEl.style.minHeight = (this.fontSize + 8) + 'px';
         this.inputEl.textContent    = '';
         this.inputEl.contentEditable = 'true';
-        this._syncInputStyle();
+        this._syncInputStyle(); // imposta anche minHeight, scalata per lo zoom
 
         // Mostra toolbar testo
         document.getElementById('text-toolbar').style.display = 'flex';
@@ -2264,7 +2590,24 @@ class TextManager {
 
 class ProjectManager {
     save() {
-        const name = prompt('Nome progetto:', CONFIG.projectName) || CONFIG.projectName;
+        const modal = document.getElementById('rename-modal');
+        const input = document.getElementById('rename-modal-input');
+        input.value = CONFIG.projectName;
+        modal.style.display = 'flex';
+        input.focus();
+        input.select();
+
+        const doSave = () => {
+            modal.style.display = 'none';
+            const name = input.value.trim() || CONFIG.projectName;
+            this._saveWithName(name);
+        };
+        document.getElementById('rename-modal-ok-btn').onclick = doSave;
+        document.getElementById('rename-modal-cancel-btn').onclick = () => { modal.style.display = 'none'; };
+        input.onkeydown = (e) => { if (e.key === 'Enter') doSave(); };
+    }
+
+    _saveWithName(name) {
         CONFIG.projectName = name;
         document.getElementById('project-name').textContent = name;
 
@@ -2313,6 +2656,18 @@ class ProjectManager {
             const ok = await confirmIfDirty();
             if (!ok) return;
         }
+        this.resetToBlank();
+    }
+
+    /**
+     * Azzera la lavagna a una pagina bianca, SENZA controlli di conferma (quelli li fa
+     * newBoard() prima di chiamare questo metodo). Usato anche da _autoOpenLastLesson()
+     * in drive.js quando un account appena connesso non ha nessuna lezione salvata —
+     * altrimenti restava a video il contenuto dell'account precedente invece di mostrare
+     * una lavagna vuota (bug segnalato da Fabio 11/07/2026 testando il cambio account
+     * multi-LIM: suo figlio si connetteva e vedeva ancora la lezione del padre).
+     */
+    resetToBlank() {
         // Leggi preferenze utente salvate nelle Impostazioni
         const _prefs = (() => { try { return JSON.parse(localStorage.getItem('eduboard-prefs-v1') || '{}'); } catch(e) { return {}; } })();
         const defBg    = _prefs.defaultBg    || 'white';
@@ -2321,11 +2676,13 @@ class ProjectManager {
 
         canvasMgr.clear();
         if (typeof objectLayer !== 'undefined' && objectLayer) objectLayer.clear();
-        // FIX newBoard: reset PageManager → pagine vecchie non restano in memoria
-        if (window.pageMgr) {
-            window.pageMgr.pages = [{ drawImageData: null, objects: [], background: { type: defBg, color: '#ffffff', orientation: 'landscape' } }];
-            window.pageMgr.currentIndex = 0;
-            window.pageMgr._renderPageBar();
+        // Reset PageManager → pagine vecchie non restano in memoria. Il nome globale
+        // corretto è window.pageManager (non window.pageMgr, che non esiste mai — bug
+        // per cui questo reset non scattava mai prima di questa correzione).
+        if (window.pageManager) {
+            window.pageManager.pages = [{ drawImageData: null, objects: [], background: { type: defBg, color: '#ffffff', orientation: 'landscape' } }];
+            window.pageManager.currentIndex = 0;
+            window.pageManager._renderPageBar();
         }
         bgMgr.setBackground(defBg);
         CONFIG.projectName = 'Nuova Lavagna';
@@ -2428,6 +2785,46 @@ function toast(msg, type = 'info') {
     setTimeout(() => el.remove(), 3200);
 }
 
+// Conferma interna all'app — sostituisce window.confirm(), che su alcune LIM/tablet/webview
+// può bloccare l'intera pagina senza un modo visibile di chiuderlo. Nessun dialogo nativo
+// del sistema: solo DOM, quindi non può mai "impiccare" l'app.
+function showConfirmModal(message, onConfirm, title = 'Conferma') {
+    const modal = document.getElementById('confirm-modal');
+    document.getElementById('confirm-modal-title').textContent = title;
+    document.getElementById('confirm-modal-message').textContent = message;
+    modal.style.display = 'flex';
+    document.getElementById('confirm-modal-ok-btn').onclick = () => {
+        modal.style.display = 'none';
+        onConfirm();
+    };
+    document.getElementById('confirm-modal-cancel-btn').onclick = () => {
+        modal.style.display = 'none';
+    };
+}
+
+// Prompt interno all'app — sostituisce window.prompt(), stesso rischio di blocco di confirm()
+// su alcune LIM/tablet/webview. Riusa lo stesso modal DOM di ProjectManager.save() (#rename-modal),
+// impostando titolo/placeholder/valore di volta in volta.
+function showPromptModal(title, defaultValue, onConfirm, placeholder = '') {
+    const modal = document.getElementById('rename-modal');
+    const input = document.getElementById('rename-modal-input');
+    document.getElementById('rename-modal-title').textContent = title;
+    input.value = defaultValue || '';
+    input.placeholder = placeholder;
+    modal.style.display = 'flex';
+    input.focus();
+    input.select();
+    const doConfirm = () => {
+        const val = input.value.trim();
+        if (!val) return;
+        modal.style.display = 'none';
+        onConfirm(val);
+    };
+    document.getElementById('rename-modal-ok-btn').onclick = doConfirm;
+    document.getElementById('rename-modal-cancel-btn').onclick = () => { modal.style.display = 'none'; };
+    input.onkeydown = (e) => { if (e.key === 'Enter') doConfirm(); };
+}
+
 // =============================================================================
 // SEZIONE 10 — PWAManager
 // Gestisce registrazione Service Worker e banner aggiornamento.
@@ -2440,6 +2837,8 @@ class PWAManager {
             const hadController = !!navigator.serviceWorker.controller;
 
             navigator.serviceWorker.register('./sw.js').then(reg => {
+                // Forza controllo aggiornamenti ad ogni apertura (bypassa cache HTTP di GitHub Pages)
+                reg.update();
                 navigator.serviceWorker.addEventListener('controllerchange', () => {
                     window.location.reload();
                 });
@@ -2573,6 +2972,16 @@ function setupFullscreen() {
     const btnExit  = document.getElementById('btn-exit-fullscreen');
     const icon     = document.getElementById('fullscreen-icon');
     const label    = document.getElementById('fullscreen-label');
+
+    // Nome lezione discreto in fullscreen: rispecchia sempre #project-name (badge
+    // nell'header, nascosto in fullscreen), incluso il rename inline con contentEditable.
+    const fsName   = document.getElementById('fullscreen-lesson-name');
+    const nameBadge = document.getElementById('project-name');
+    if (fsName && nameBadge) {
+        fsName.textContent = nameBadge.textContent;
+        new MutationObserver(() => { fsName.textContent = nameBadge.textContent; })
+            .observe(nameBadge, { characterData: true, childList: true, subtree: true });
+    }
 
     function enterFs() {
         const el = document.documentElement;
@@ -3157,9 +3566,20 @@ class SelectManager {
         this._objDragStart  = null; // {x, y, origObjX, origObjY}
         this._pixelClipboard  = null; // { data: ImageData, w, h, srcX, srcY }
         this._objectClipboard = null; // copia di un oggetto ObjectLayer
+        this._itemsClipboard  = null; // copia di tratti/forme/oggetti da selezione precisa (tap/lazo) — [{type, data}]
         this._pixelResizeData = null; // dati resize in corso per selezione pixel
         this._pastedData      = null; // { snap: ImageData, data: ImageData, w, h } — snapshot pre-paste
         this._pressing        = false; // true solo quando pointer/mouse è premuto
+
+        // Selezione precisa (tap o lazo) di tratti/forme/oggetti — sostituisce il vecchio
+        // rettangolo di selezione. selectedItems: [{ type:'stroke'|'object', ref }]
+        // 'ref' è il riferimento diretto all'oggetto in _pageStrokes/objectLayer.objects,
+        // così spostarlo/colorarlo si riflette automaticamente senza dover risincronizzare indici.
+        this.selectedItems  = [];
+        this._lassoPath     = null;  // punti del lazo mentre viene tracciato
+        this._itemDragStart = null;  // { x, y, originals: [...] }
+        this._itemResizeHandle = null; // { corner, startX, startY, bbox, originals: [...] }
+
         this._setupContextPanel();
     }
 
@@ -3168,6 +3588,7 @@ class SelectManager {
         this.phase = 'idle';
         this.selection = null;
         this.selectedObject = null;
+        this.selectedItems = [];
         // Cursore sull'overlay
         const oc = document.getElementById('overlay-canvas');
         if (oc) oc.style.cursor = 'crosshair';
@@ -3299,6 +3720,8 @@ class SelectManager {
                     this.ctx.drawImage(tmp, 0, 0);
                     this.ctx.restore();
                     CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                } else if (this.selectedItems.length) {
+                    this._transformSelectedItems('flip-h');
                 }
                 return;
             case 'flip-v':
@@ -3320,6 +3743,8 @@ class SelectManager {
                     this.ctx.drawImage(tmp, 0, 0);
                     this.ctx.restore();
                     CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                } else if (this.selectedItems.length) {
+                    this._transformSelectedItems('flip-v');
                 }
                 return;
             case 'rot-cw':
@@ -3339,6 +3764,8 @@ class SelectManager {
                     this.ctx.clearRect(sx, sy, sw, sh);
                     this.ctx.drawImage(tmp, sx + (sw - sh) / 2, sy + (sh - sw) / 2);
                     CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                } else if (this.selectedItems.length) {
+                    this._transformSelectedItems('rot-cw');
                 }
                 return;
             case 'rot-ccw':
@@ -3358,6 +3785,8 @@ class SelectManager {
                     this.ctx.clearRect(sx, sy, sw, sh);
                     this.ctx.drawImage(tmp, sx + (sw - sh) / 2, sy + (sh - sw) / 2);
                     CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                } else if (this.selectedItems.length) {
+                    this._transformSelectedItems('rot-ccw');
                 }
                 return;
             case 'rot-180':
@@ -3377,6 +3806,8 @@ class SelectManager {
                     this.ctx.clearRect(sx, sy, sw, sh);
                     this.ctx.drawImage(tmp, sx, sy);
                     CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                } else if (this.selectedItems.length) {
+                    this._transformSelectedItems('rot-180');
                 }
                 return;
             case 'restore':
@@ -3434,7 +3865,9 @@ class SelectManager {
                 }
                 return;
             case 'delete':
-                if (obj) {
+                if (this.phase === 'items-selected' && this.selectedItems.length) {
+                    this._deleteSelectedItems();
+                } else if (obj) {
                     objectLayer.removeObject(obj.id);
                     this.selectedObject = null;
                     this._clearSelection();
@@ -3452,7 +3885,31 @@ class SelectManager {
                 }
                 return;
             case 'copy':
-                if (obj) {
+                if (this.phase === 'items-selected' && this.selectedItems.length) {
+                    // Copia tratti/forme/oggetti dalla selezione precisa (tap o lazo, singola o
+                    // multipla). Il clipboard vive in memoria (non è legato alla pagina), quindi
+                    // cambiare pagina e poi incollare funziona automaticamente.
+                    this._itemsClipboard = this.selectedItems.map(it => {
+                        if (it.type === 'stroke') {
+                            const clone = { ...it.ref };
+                            delete clone.groupId;
+                            if (clone.points) clone.points = clone.points.map(p => ({ ...p }));
+                            return { type: 'stroke', data: clone };
+                        }
+                        const o = it.ref;
+                        return { type: 'object', data: {
+                            type: o.type, img: o.img, x: o.x, y: o.y, w: o.w, h: o.h,
+                            originalW: o.originalW, originalH: o.originalH,
+                            opacity: o.opacity, rotation: o.rotation || 0,
+                            filter: { ...(o.filter || {}) },
+                            flipH: o.flipH || false, flipV: o.flipV || false,
+                        } };
+                    });
+                    this._objectClipboard = null;
+                    this._pixelClipboard = null;
+                    const n = this._itemsClipboard.length;
+                    toast(n > 1 ? `${n} elementi copiati!` : 'Copiato!', 'success');
+                } else if (obj) {
                     // Copia oggetto ObjectLayer
                     this._objectClipboard = {
                         type: obj.type, img: obj.img,
@@ -3463,16 +3920,25 @@ class SelectManager {
                         flipH: obj.flipH || false, flipV: obj.flipV || false,
                     };
                     this._pixelClipboard = null;
+                    this._itemsClipboard = null;
                     toast('Oggetto copiato!', 'success');
                 } else if (this.phase === 'selected' && this.selection) {
                     // Copia area pixel
                     const { x, y, w, h } = this.selection;
                     this._pixelClipboard = { data: this.ctx.getImageData(x, y, w, h), w, h, srcX: x, srcY: y };
                     this._objectClipboard = null;
+                    this._itemsClipboard = null;
                     toast('Area copiata!', 'success');
                 }
                 return;
             case 'cut':
+                if (this.phase === 'items-selected' && this.selectedItems.length) {
+                    // Taglia = copia + elimina (riusa la logica di copy sopra)
+                    this._handleCtxAction('copy', btn);
+                    this._deleteSelectedItems();
+                    toast('Tagliato!', 'success');
+                    return;
+                }
                 // Taglia = copia + elimina
                 this._handleCtxAction('copy', btn);
                 if (obj) {
@@ -3494,7 +3960,52 @@ class SelectManager {
                 }
                 return;
             case 'paste':
-                if (this._objectClipboard) {
+                if (this._itemsClipboard && this._itemsClipboard.length) {
+                    // Incolla tratti/forme/oggetti (offset +20px, cascata sui paste successivi).
+                    // Funziona anche su una pagina diversa da quella di origine, dato che il
+                    // clipboard è in memoria e non appartiene a nessuna pagina in particolare.
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+                    const newItems = [];
+                    this._itemsClipboard.forEach(entry => {
+                        if (entry.type === 'stroke' && typeof canvasMgr !== 'undefined') {
+                            const clone = { ...entry.data };
+                            if (clone.points) {
+                                clone.points = clone.points.map(p => ({ x: p.x + 20, y: p.y + 20 }));
+                            } else {
+                                clone.x0 += 20; clone.y0 += 20; clone.x1 += 20; clone.y1 += 20;
+                            }
+                            canvasMgr._pageStrokes.push(clone);
+                            newItems.push({ type: 'stroke', ref: clone });
+                        } else if (entry.type === 'object' && typeof objectLayer !== 'undefined') {
+                            const d = entry.data;
+                            const nx = d.x + 20, ny = d.y + 20;
+                            objectLayer.addObject(d.type, d.img, nx, ny, d.w, d.h);
+                            const newObj = objectLayer.objects[objectLayer.objects.length - 1];
+                            if (newObj) {
+                                newObj.opacity = d.opacity; newObj.rotation = d.rotation;
+                                newObj.filter = { ...d.filter };
+                                newObj.flipH = d.flipH; newObj.flipV = d.flipV;
+                                newItems.push({ type: 'object', ref: newObj });
+                            }
+                        }
+                    });
+                    // Aggiorna il clipboard con le nuove posizioni, per una prossima cascata
+                    this._itemsClipboard = this._itemsClipboard.map((entry, i) => {
+                        const placed = newItems[i];
+                        if (!placed) return entry;
+                        return placed.type === 'stroke'
+                            ? { type: 'stroke', data: { ...placed.ref, points: placed.ref.points ? placed.ref.points.map(p => ({ ...p })) : undefined } }
+                            : { type: 'object', data: { ...entry.data, x: placed.ref.x, y: placed.ref.y } };
+                    });
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._redrawAllStrokes();
+                    if (typeof objectLayer !== 'undefined') objectLayer.render();
+                    this.selectedItems = newItems; // copie fresche, mai in un gruppo esistente
+                    this.phase = 'items-selected';
+                    this._highlightSelectedItems();
+                    this._showItemsContextPanel();
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                    toast(newItems.length > 1 ? `${newItems.length} elementi incollati!` : 'Incollato!', 'success');
+                } else if (this._objectClipboard) {
                     // Incolla oggetto (offset +20px per distinguerlo dall'originale)
                     const src = this._objectClipboard;
                     const nx = src.x + 20, ny = src.y + 20;
@@ -3684,7 +4195,183 @@ class SelectManager {
                 });
                 break;
             }
+            // Colore del tratto/bordo — su TUTTI i tratti/forme selezionati insieme (tap singolo o lazo multiplo)
+            case 'stroke-color': {
+                const items = this.selectedItems.filter(it => it.type === 'stroke');
+                if (!items.length) break;
+                popup.innerHTML = '';
+                popup.style.display = 'block';
+                this._appendColorSwatchRow(popup, items[0].ref.color, (color) => {
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+                    items.forEach(it => { it.ref.color = color; });
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._redrawAllStrokes();
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                });
+                break;
+            }
+            // Riempimento — colore indipendente dal bordo, per forme geometriche E tratti a mano
+            // libera (poligono chiuso automaticamente dall'ultimo punto al primo)
+            case 'stroke-fill': {
+                const items = this.selectedItems.filter(it => it.type === 'stroke');
+                if (!items.length) break;
+                const first = items[0].ref;
+                popup.innerHTML = '';
+                popup.style.display = 'block';
+                const toggle = document.createElement('label');
+                toggle.className = 'ctx-fill-toggle';
+                toggle.innerHTML = `<input type="checkbox" ${first.fill ? 'checked' : ''}> Riempi`;
+                const checkbox = toggle.querySelector('input');
+                checkbox.addEventListener('change', () => {
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+                    items.forEach(it => { it.ref.fill = checkbox.checked; });
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._redrawAllStrokes();
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                });
+                popup.appendChild(toggle);
+                // Intensità: da leggera trasparenza fino a colore pieno e coprente
+                const alphaLabel = document.createElement('label');
+                alphaLabel.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:6px;font-size:0.8rem;color:var(--text-muted);';
+                const startAlpha = Math.round((first.fillAlpha ?? 0.15) * 100);
+                alphaLabel.innerHTML = `Intensità <input type="range" min="15" max="100" value="${startAlpha}" style="flex:1"> <span>${startAlpha}%</span>`;
+                const alphaInput = alphaLabel.querySelector('input');
+                const alphaSpan  = alphaLabel.querySelector('span');
+                alphaInput.addEventListener('input', () => {
+                    alphaSpan.textContent = alphaInput.value + '%';
+                    items.forEach(it => { it.ref.fillAlpha = parseInt(alphaInput.value) / 100; it.ref.fill = true; });
+                    checkbox.checked = true;
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._redrawAllStrokes();
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                });
+                popup.appendChild(alphaLabel);
+                this._appendColorSwatchRow(popup, first.fillColor || first.color, (color) => {
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+                    items.forEach(it => { it.ref.fillColor = color; it.ref.fill = true; });
+                    checkbox.checked = true;
+                    if (typeof canvasMgr !== 'undefined') canvasMgr._redrawAllStrokes();
+                    CONFIG.isDirty = true; window.autoSaveMgr?.onDirty();
+                });
+                break;
+            }
+            // Unisci — lega 2+ elementi selezionati in un unico gruppo spostabile insieme
+            case 'group': {
+                this._groupSelectedItems();
+                break;
+            }
+            // Dividi — scioglie il gruppo corrente, gli elementi tornano indipendenti
+            case 'ungroup': {
+                this._ungroupSelectedItems();
+                break;
+            }
         }
+    }
+
+    // Riga di ~10 colori pronti + un pulsante "altro colore" che apre il selettore libero
+    // esistente (input color nativo) — due passi come richiesto: prima i quadretti, poi
+    // eventualmente la scelta libera.
+    _appendColorSwatchRow(container, currentColor, onPick) {
+        const wrap = document.createElement('div');
+        wrap.className = 'ctx-color-swatches';
+        DEFAULT_COLORS.forEach(c => {
+            const b = document.createElement('button');
+            b.className = 'ctx-swatch-btn';
+            b.style.background = c.color;
+            b.title = c.title;
+            if (currentColor && c.color.toLowerCase() === currentColor.toLowerCase()) b.classList.add('active');
+            b.addEventListener('click', () => onPick(c.color));
+            wrap.appendChild(b);
+        });
+        const customBtn = document.createElement('button');
+        customBtn.className = 'ctx-swatch-btn ctx-swatch-custom';
+        customBtn.title = 'Altro colore…';
+        customBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>';
+        const nativeInput = document.createElement('input');
+        nativeInput.type = 'color';
+        nativeInput.value = currentColor || '#000000';
+        nativeInput.style.cssText = 'position:absolute;width:0;height:0;opacity:0;pointer-events:none;';
+        nativeInput.addEventListener('input', () => onPick(nativeInput.value));
+        customBtn.addEventListener('click', () => nativeInput.click());
+        wrap.appendChild(customBtn);
+        wrap.appendChild(nativeInput);
+        container.appendChild(wrap);
+        return wrap;
+    }
+
+    // Lega tutti gli elementi correntemente selezionati (2+) in un unico gruppo: da qui in poi
+    // toccarne uno solo seleziona tutto il gruppo (vedi _expandGroups), utile per spostarli insieme.
+    _groupSelectedItems() {
+        if (this.selectedItems.length < 2) return;
+        if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+        const gid = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        this.selectedItems.forEach(it => { it.ref.groupId = gid; });
+        CONFIG.isDirty = true;
+        window.autoSaveMgr?.onDirty();
+        this._highlightSelectedItems();
+        this._showItemsContextPanel();
+    }
+
+    // Scioglie il gruppo della selezione corrente: gli elementi restano selezionati ma tornano
+    // indipendenti (si possono di nuovo spostare/colorare separatamente).
+    _ungroupSelectedItems() {
+        if (!this.selectedItems.length) return;
+        if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+        this.selectedItems.forEach(it => { delete it.ref.groupId; });
+        CONFIG.isDirty = true;
+        window.autoSaveMgr?.onDirty();
+        this._highlightSelectedItems();
+        this._showItemsContextPanel();
+    }
+
+    // true se la selezione corrente è (tutta) un unico gruppo esistente
+    _isCurrentSelectionAGroup() {
+        if (this.selectedItems.length < 2) return false;
+        const gid = this.selectedItems[0].ref.groupId;
+        if (!gid) return false;
+        return this.selectedItems.every(it => it.ref.groupId === gid);
+    }
+
+    // Se un elemento toccato/racchiuso fa parte di un gruppo, espande la selezione a tutto
+    // il gruppo (tratti/forme in _pageStrokes + oggetti in objectLayer.objects).
+    _expandGroups(items) {
+        const result = [];
+        const seen = new Set();
+        const addAllWithGroup = (gid) => {
+            if (typeof canvasMgr !== 'undefined') {
+                canvasMgr._pageStrokes.forEach(s => {
+                    if (s && s.groupId === gid && !seen.has(s)) { seen.add(s); result.push({ type: 'stroke', ref: s }); }
+                });
+            }
+            if (typeof objectLayer !== 'undefined' && objectLayer) {
+                objectLayer.objects.forEach(o => {
+                    if (o.groupId === gid && !seen.has(o)) { seen.add(o); result.push({ type: 'object', ref: o }); }
+                });
+            }
+        };
+        items.forEach(it => {
+            if (seen.has(it.ref)) return;
+            if (it.ref.groupId) addAllWithGroup(it.ref.groupId);
+            else { seen.add(it.ref); result.push(it); }
+        });
+        return result;
+    }
+
+    // Elimina tutti gli elementi correntemente selezionati (tap singolo o lazo multiplo)
+    _deleteSelectedItems() {
+        if (!this.selectedItems.length) return;
+        if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+        this.selectedItems.forEach(it => {
+            if (it.type === 'object') {
+                objectLayer.removeObject(it.ref.id);
+            } else if (typeof canvasMgr !== 'undefined') {
+                const idx = canvasMgr._pageStrokes.indexOf(it.ref);
+                if (idx >= 0) canvasMgr._pageStrokes.splice(idx, 1);
+            }
+        });
+        if (typeof canvasMgr !== 'undefined') canvasMgr._redrawAllStrokes();
+        this.selectedItems = [];
+        this._clearSelection();
+        this._hideContextPanel();
+        CONFIG.isDirty = true;
+        window.autoSaveMgr?.onDirty();
     }
 
     _showContextPanel(obj, isPixelSelection = false) {
@@ -3784,6 +4471,29 @@ class SelectManager {
         }
     }
 
+    // Mini-pannello con solo "Incolla", mostrato quando si tocca un'area vuota (nulla da
+    // selezionare) ma c'è qualcosa in memoria — es. dopo aver copiato su un'altra pagina.
+    _showPasteOnlyPanel(x, y) {
+        const panel = document.getElementById('object-context-panel');
+        if (!panel) return;
+        panel.querySelectorAll('.ctx-icon-btn[data-action]').forEach(el => { el.style.display = 'none'; });
+        panel.querySelectorAll('.ctx-sep').forEach(el => { el.style.display = 'none'; });
+        const pasteBtn = panel.querySelector('[data-action="paste"]');
+        if (pasteBtn) pasteBtn.style.display = '';
+
+        const area = document.getElementById('canvas-area');
+        const rect = area.getBoundingClientRect();
+        const scale = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.scale : 1;
+        panel.style.left = Math.min(rect.left + x * scale + 8, window.innerWidth - 260) + 'px';
+        panel.style.top  = Math.max(Math.min(rect.top + y * scale, window.innerHeight - 60), 60) + 'px';
+        panel.style.display = 'flex';
+        panel.classList.remove('ctx-panel--open');
+        const gearBtn = document.getElementById('ctx-gear-btn');
+        if (gearBtn) gearBtn.classList.remove('is-open');
+        const popup = document.getElementById('ctx-popup');
+        if (popup) { popup.style.display = 'none'; popup.dataset.action = ''; }
+    }
+
     _hideContextPanel() {
         const panel = document.getElementById('object-context-panel');
         if (panel) panel.style.display = 'none';
@@ -3829,6 +4539,7 @@ class SelectManager {
         if (oc) oc.getContext('2d').clearRect(0, 0, oc.width, oc.height);
         this.selection = null;
         this.selectedObject = null;
+        this.selectedItems = [];
         this.phase     = 'idle';
         this._pastedData = null;
         this._hideContextPanel();
@@ -3839,6 +4550,314 @@ class SelectManager {
         const oc = document.getElementById('overlay-canvas');
         if (oc) oc.getContext('2d').clearRect(0, 0, oc.width, oc.height);
         this.selection = null;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Selezione precisa (tap/lazo) — tratti/forme (_pageStrokes) + oggetti
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Trova l'elemento esatto sotto (x,y): priorità agli oggetti (sempre sopra
+    // visivamente), poi al tratto/forma più vicino tra quelli della pagina corrente.
+    _hitTestItem(x, y) {
+        if (typeof objectLayer !== 'undefined' && objectLayer) {
+            const obj = objectLayer.hitTest(x, y);
+            if (obj) return { type: 'object', ref: obj };
+        }
+        if (typeof canvasMgr !== 'undefined') {
+            const idx = canvasMgr.findNearestStroke(x, y, 30);
+            if (idx >= 0) return { type: 'stroke', ref: canvasMgr._pageStrokes[idx] };
+        }
+        return null;
+    }
+
+    // Bounding box di un elemento selezionato (tratto/forma/oggetto)
+    _itemBBox(item) {
+        if (item.type === 'object') {
+            const o = item.ref;
+            return { x: o.x, y: o.y, w: o.w, h: o.h };
+        }
+        const s = item.ref;
+        if (s.tool === 'shape') {
+            const margin = (s.size || 0) / 2;
+            const minX = Math.min(s.x0, s.x1) - margin, maxX = Math.max(s.x0, s.x1) + margin;
+            const minY = Math.min(s.y0, s.y1) - margin, maxY = Math.max(s.y0, s.y1) + margin;
+            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+        }
+        if (!s.points || !s.points.length) return null;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const p of s.points) {
+            minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+            minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+        }
+        const margin = (s.size || 0) / 2 + 4;
+        return { x: minX - margin, y: minY - margin, w: (maxX - minX) + margin * 2, h: (maxY - minY) + margin * 2 };
+    }
+
+    // Bounding box complessivo di tutti gli elementi selezionati (per pannello, resize, flip/ruota)
+    _selectedItemsBBox() {
+        return this.selectedItems.reduce((acc, it) => {
+            const b = this._itemBBox(it);
+            if (!b) return acc;
+            if (!acc) return { ...b };
+            const minX = Math.min(acc.x, b.x), minY = Math.min(acc.y, b.y);
+            const maxX = Math.max(acc.x + acc.w, b.x + b.w), maxY = Math.max(acc.y + acc.h, b.y + b.h);
+            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+        }, null);
+    }
+
+    // Trasforma un punto (x,y) per flip/rotazione attorno al centro (cx,cy) del gruppo selezionato
+    _rotFlipPoint(x, y, cx, cy, mode) {
+        const dx = x - cx, dy = y - cy;
+        switch (mode) {
+            case 'flip-h': return { x: cx - dx, y };
+            case 'flip-v': return { x, y: cy - dy };
+            case 'rot-cw':  return { x: cx - dy, y: cy + dx };
+            case 'rot-ccw': return { x: cx + dy, y: cy - dx };
+            case 'rot-180': return { x: cx - dx, y: cy - dy };
+            default: return { x, y };
+        }
+    }
+
+    // Applica flip/rotazione a tutti gli elementi selezionati (tratti/forme/oggetti), attorno al centro del gruppo
+    _transformSelectedItems(mode) {
+        if (!this.selectedItems.length) return;
+        const bbox = this._selectedItemsBBox();
+        if (!bbox) return;
+        if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+        const cx = bbox.x + bbox.w / 2, cy = bbox.y + bbox.h / 2;
+        const swapWH = (mode === 'rot-cw' || mode === 'rot-ccw');
+
+        this.selectedItems.forEach(it => {
+            if (it.type === 'stroke') {
+                const s = it.ref;
+                if (s.tool === 'shape') {
+                    const p0 = this._rotFlipPoint(s.x0, s.y0, cx, cy, mode);
+                    const p1 = this._rotFlipPoint(s.x1, s.y1, cx, cy, mode);
+                    s.x0 = p0.x; s.y0 = p0.y; s.x1 = p1.x; s.y1 = p1.y;
+                } else {
+                    s.points = s.points.map(p => this._rotFlipPoint(p.x, p.y, cx, cy, mode));
+                }
+            } else if (it.type === 'object') {
+                const o = it.ref;
+                const ocx = o.x + o.w / 2, ocy = o.y + o.h / 2;
+                const nc = this._rotFlipPoint(ocx, ocy, cx, cy, mode);
+                if (mode === 'flip-h') o.flipH = !o.flipH;
+                else if (mode === 'flip-v') o.flipV = !o.flipV;
+                else if (mode === 'rot-cw') o.rotation = ((o.rotation || 0) + 90) % 360;
+                else if (mode === 'rot-ccw') o.rotation = ((o.rotation || 0) - 90 + 360) % 360;
+                else if (mode === 'rot-180') o.rotation = ((o.rotation || 0) + 180) % 360;
+                if (swapWH) { const t = o.w; o.w = o.h; o.h = t; }
+                o.x = nc.x - o.w / 2;
+                o.y = nc.y - o.h / 2;
+            }
+        });
+
+        if (typeof canvasMgr !== 'undefined') canvasMgr._redrawAllStrokes();
+        if (typeof objectLayer !== 'undefined') objectLayer.render();
+        this._highlightSelectedItems();
+        this._showItemsContextPanel();
+        CONFIG.isDirty = true;
+        window.autoSaveMgr?.onDirty();
+    }
+
+    _pointInSelectedItems(x, y) {
+        return this.selectedItems.some(it => {
+            const b = this._itemBBox(it);
+            if (!b) return false;
+            return x >= b.x - 10 && x <= b.x + b.w + 10 && y >= b.y - 10 && y <= b.y + b.h + 10;
+        });
+    }
+
+    // Ray casting point-in-polygon (per il lazo a mano libera)
+    _pointInPolygon(x, y, path) {
+        let inside = false;
+        for (let i = 0, j = path.length - 1; i < path.length; j = i++) {
+            const xi = path[i].x, yi = path[i].y;
+            const xj = path[j].x, yj = path[j].y;
+            const intersect = ((yi > y) !== (yj > y)) &&
+                (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    // Trova tutti i tratti/forme/oggetti il cui centro cade dentro il lazo tracciato
+    _findItemsInLasso(path) {
+        if (!path || path.length < 3) return [];
+        const found = [];
+        if (typeof canvasMgr !== 'undefined') {
+            canvasMgr._pageStrokes.forEach(s => {
+                if (!s) return;
+                const item = { type: 'stroke', ref: s };
+                const b = this._itemBBox(item);
+                if (!b) return;
+                const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+                if (this._pointInPolygon(cx, cy, path)) found.push(item);
+            });
+        }
+        if (typeof objectLayer !== 'undefined' && objectLayer) {
+            objectLayer.objects.forEach(o => {
+                const cx = o.x + o.w / 2, cy = o.y + o.h / 2;
+                if (this._pointInPolygon(cx, cy, path)) found.push({ type: 'object', ref: o });
+            });
+        }
+        return found;
+    }
+
+    // Disegna il tracciato del lazo mentre viene trascinato (overlay-canvas)
+    _drawLassoPath() {
+        const oc = document.getElementById('overlay-canvas');
+        if (!oc || !this._lassoPath || this._lassoPath.length < 2) return;
+        const ctx = oc.getContext('2d');
+        ctx.clearRect(0, 0, oc.width, oc.height);
+        ctx.save();
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(this._lassoPath[0].x, this._lassoPath[0].y);
+        for (let i = 1; i < this._lassoPath.length; i++) ctx.lineTo(this._lassoPath[i].x, this._lassoPath[i].y);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // Evidenzia gli elementi selezionati (riquadro tratteggiato per ciascuno)
+    _highlightSelectedItems() {
+        const oc = document.getElementById('overlay-canvas');
+        if (!oc) return;
+        const ctx = oc.getContext('2d');
+        ctx.clearRect(0, 0, oc.width, oc.height);
+        ctx.save();
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        this.selectedItems.forEach(it => {
+            const b = this._itemBBox(it);
+            if (b) ctx.strokeRect(b.x, b.y, b.w, b.h);
+        });
+        ctx.restore();
+
+        // Maniglie di resize sul bbox complessivo del gruppo selezionato
+        const bbox = this._selectedItemsBBox();
+        if (bbox) {
+            ctx.save();
+            ctx.setLineDash([]);
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 2.5;
+            [[bbox.x, bbox.y], [bbox.x + bbox.w, bbox.y], [bbox.x, bbox.y + bbox.h], [bbox.x + bbox.w, bbox.y + bbox.h]].forEach(([hx, hy]) => {
+                ctx.beginPath();
+                ctx.arc(hx, hy, 11, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            });
+            ctx.restore();
+        }
+    }
+
+    // Set dei tratti/forme (ref in _pageStrokes) tra gli elementi selezionati — usato per
+    // sapere cosa escludere/ridisegnare nel bitmap statico durante drag/resize.
+    _movingStrokeRefs() {
+        return new Set(this.selectedItems.filter(it => it.type === 'stroke').map(it => it.ref));
+    }
+
+    // Sposta live gli elementi selezionati durante il drag. Usa il bitmap statico costruito
+    // all'inizio del drag (vedi onPointerDown) invece di ridisegnare TUTTI i tratti della
+    // pagina ad ogni frame — con molti tratti/forme sulla pagina, ridisegnarli tutti ad ogni
+    // pointermove era il motivo principale della lentezza segnalata su pagine "cariche".
+    _previewDragItems(dx, dy) {
+        if (!this._itemDragStart) return;
+        this.selectedItems.forEach((it, i) => {
+            const orig = this._itemDragStart.originals[i];
+            if (it.type === 'stroke') {
+                const s = it.ref;
+                if (s.tool === 'shape') {
+                    s.x0 = orig.x0 + dx; s.y0 = orig.y0 + dy;
+                    s.x1 = orig.x1 + dx; s.y1 = orig.y1 + dy;
+                } else {
+                    s.points = orig.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
+                }
+            } else if (it.type === 'object') {
+                it.ref.x = orig.x + dx;
+                it.ref.y = orig.y + dy;
+            }
+        });
+        if (typeof canvasMgr !== 'undefined') canvasMgr._redrawWithStaticBitmap(this._itemDragStart.strokeRefs);
+        if (typeof objectLayer !== 'undefined') objectLayer.render();
+        this._highlightSelectedItems();
+    }
+
+    // Pannello contestuale per la selezione precisa (tap o lazo, singola o multipla):
+    // trasformazioni sempre disponibili; colore/riempimento su tutti i tratti/forme selezionati
+    // in un colpo solo; unisci/dividi per legare più elementi in un unico gruppo spostabile.
+    _showItemsContextPanel() {
+        const panel = document.getElementById('object-context-panel');
+        if (!panel) return;
+
+        panel.querySelectorAll('.ctx-icon-btn[data-action]').forEach(el => { el.style.display = 'none'; });
+        panel.querySelectorAll('.ctx-sep').forEach(el => { el.style.display = 'none'; });
+
+        // Trasformazioni (flip/ruota): disponibili per qualunque selezione precisa (tratti/forme/oggetti, singola o multipla)
+        ['flip-h', 'flip-v', 'rot-ccw', 'rot-cw', 'rot-180'].forEach(act => {
+            const btn = panel.querySelector(`[data-action="${act}"]`);
+            if (btn) btn.style.display = '';
+        });
+        const transSep = panel.querySelectorAll('.ctx-sep.ctx-obj-only')[1];
+        if (transSep) transSep.style.display = '';
+
+        // Colore/riempimento: applicabili a TUTTI i tratti/forme della selezione insieme
+        // (multi-selezione inclusa) — gli oggetti (immagini/PDF) non hanno un colore di tratto.
+        const strokeItems = this.selectedItems.filter(it => it.type === 'stroke');
+        if (strokeItems.length) {
+            const colorBtn = panel.querySelector('[data-action="stroke-color"]');
+            if (colorBtn) colorBtn.style.display = '';
+            const fillBtn = panel.querySelector('[data-action="stroke-fill"]');
+            if (fillBtn) fillBtn.style.display = '';
+        }
+
+        // Unisci/dividi: disponibili solo con 2+ elementi selezionati
+        if (this.selectedItems.length >= 2) {
+            const groupBtn = panel.querySelector('[data-action="group"]');
+            if (groupBtn) groupBtn.style.display = '';
+            if (this._isCurrentSelectionAGroup()) {
+                const ungroupBtn = panel.querySelector('[data-action="ungroup"]');
+                if (ungroupBtn) ungroupBtn.style.display = '';
+            }
+            const groupSep = panel.querySelectorAll('.ctx-sep.ctx-stroke-only')[1];
+            if (groupSep) groupSep.style.display = '';
+        }
+
+        // Taglia/copia (sempre disponibili con una selezione) e incolla (solo se c'è qualcosa
+        // in memoria da incollare) — indispensabili su LIM/tablet senza tastiera (Ctrl+C/X/V
+        // funzionano già, ma un utente touch deve poterli fare anche dal menu).
+        ['cut', 'copy'].forEach(act => {
+            const btn = panel.querySelector(`[data-action="${act}"]`);
+            if (btn) btn.style.display = '';
+        });
+        if (this._itemsClipboard && this._itemsClipboard.length) {
+            const pasteBtn = panel.querySelector('[data-action="paste"]');
+            if (pasteBtn) pasteBtn.style.display = '';
+        }
+        const ccpSep = panel.querySelector('.ctx-cut-copy-sep');
+        if (ccpSep) ccpSep.style.display = '';
+
+        const delBtn = panel.querySelector('[data-action="delete"]');
+        if (delBtn) delBtn.style.display = '';
+
+        const bbox = this._selectedItemsBBox();
+        if (!bbox) { this._hideContextPanel(); return; }
+
+        const area = document.getElementById('canvas-area');
+        const rect = area.getBoundingClientRect();
+        const scale = (typeof panMgr !== 'undefined' && panMgr) ? panMgr.scale : 1;
+        panel.style.left = Math.min(rect.left + (bbox.x + bbox.w) * scale + 8, window.innerWidth - 260) + 'px';
+        panel.style.top  = Math.max(Math.min(rect.top + bbox.y * scale, window.innerHeight - 60), 60) + 'px';
+        panel.style.display = 'flex';
+        panel.classList.remove('ctx-panel--open');
+        const gearBtn = document.getElementById('ctx-gear-btn');
+        if (gearBtn) gearBtn.classList.remove('is-open');
+        const popup = document.getElementById('ctx-popup');
+        if (popup) { popup.style.display = 'none'; popup.dataset.action = ''; }
     }
 
     onPointerDown(x, y) {
@@ -3939,6 +4958,66 @@ class SelectManager {
             this.phase = 'idle';
         }
 
+        // 1.5 Selezione precisa (tap/lazo) già attiva: controlla handle di resize sul bbox del gruppo
+        if (this.phase === 'items-selected' && this.selectedItems.length) {
+            const bbox = this._selectedItemsBBox();
+            if (bbox) {
+                const handles = [
+                    { corner: 'tl', hx: bbox.x,          hy: bbox.y },
+                    { corner: 'tr', hx: bbox.x + bbox.w, hy: bbox.y },
+                    { corner: 'bl', hx: bbox.x,          hy: bbox.y + bbox.h },
+                    { corner: 'br', hx: bbox.x + bbox.w, hy: bbox.y + bbox.h },
+                ];
+                const HIT_RADIUS = 22; // grande abbastanza per il tocco con dito su LIM
+                for (const h of handles) {
+                    if (Math.abs(x - h.hx) < HIT_RADIUS && Math.abs(y - h.hy) < HIT_RADIUS) {
+                        if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+                        this.phase = 'items-resizing';
+                        const resizeStrokeRefs = this._movingStrokeRefs();
+                        if (typeof canvasMgr !== 'undefined') canvasMgr._buildDragStaticBitmap(resizeStrokeRefs);
+                        this._itemResizeHandle = {
+                            corner: h.corner,
+                            startX: x, startY: y,
+                            bbox: { ...bbox },
+                            strokeRefs: resizeStrokeRefs,
+                            originals: this.selectedItems.map(it => {
+                                if (it.type === 'stroke') {
+                                    const s = it.ref;
+                                    return s.tool === 'shape'
+                                        ? { x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1, size: s.size }
+                                        : { points: s.points.map(p => ({ ...p })), size: s.size };
+                                }
+                                return { x: it.ref.x, y: it.ref.y, w: it.ref.w, h: it.ref.h };
+                            }),
+                        };
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // 1.6 Selezione precisa (tap/lazo) già attiva: click su un elemento selezionato → drag gruppo
+        if (this.phase === 'items-selected' && this.selectedItems.length && this._pointInSelectedItems(x, y)) {
+            if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+            this.phase = 'items-dragging';
+            const dragStrokeRefs = this._movingStrokeRefs();
+            if (typeof canvasMgr !== 'undefined') canvasMgr._buildDragStaticBitmap(dragStrokeRefs);
+            this._itemDragStart = {
+                x, y,
+                strokeRefs: dragStrokeRefs,
+                originals: this.selectedItems.map(it => {
+                    if (it.type === 'stroke') {
+                        const s = it.ref;
+                        return s.tool === 'shape'
+                            ? { x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1 }
+                            : { points: s.points.map(p => ({ ...p })) };
+                    }
+                    return { x: it.ref.x, y: it.ref.y };
+                })
+            };
+            return true;
+        }
+
         // 2. Hit test su ObjectLayer
         if (typeof objectLayer !== 'undefined' && objectLayer) {
             const hit = objectLayer.hitTest(x, y);
@@ -3966,12 +5045,20 @@ class SelectManager {
             this._clearSelection();
             this._hideContextPanel();
         }
+        if (this.phase === 'items-selected' || this.phase === 'items-dragging') {
+            this.selectedItems = [];
+            this._clearSelection();
+            this._hideContextPanel();
+        }
 
-        // Nuova selezione rettangolare
+        // Tap o lazo: non decidiamo subito, aspettiamo il movimento (vedi onPointerMove/onPointerUp).
+        // Un tap secco selezionerà con precisione un solo tratto/forma/oggetto; un trascinamento
+        // a mano libera selezionerà tutto ciò che viene racchiuso (sostituisce il vecchio rettangolo).
         this._clearPixelSelection(); // solo pulizia visuale, NON resetta phase
-        this.phase  = 'selecting';
-        this.startX = x;
-        this.startY = y;
+        this.phase    = 'items-selecting';
+        this.startX   = x;
+        this.startY   = y;
+        this._lassoPath = [{ x, y }];
         return true;
     }
 
@@ -4029,6 +5116,57 @@ class SelectManager {
             obj.h = newW * ratio;
             objectLayer.render();
             this._drawSelectionRect(obj.x, obj.y, obj.w, obj.h, true);
+            return true;
+        }
+
+        // Resize gruppo selezione precisa (tap/lazo) — scala proporzionale attorno all'angolo opposto
+        if (this.phase === 'items-resizing' && this._itemResizeHandle) {
+            const rh = this._itemResizeHandle;
+            let newW = rh.bbox.w, anchorX, anchorY;
+
+            if (rh.corner === 'br') {
+                newW = Math.max(20, rh.bbox.w + (x - rh.startX));
+                anchorX = rh.bbox.x; anchorY = rh.bbox.y;
+            } else if (rh.corner === 'bl') {
+                newW = Math.max(20, rh.bbox.w - (x - rh.startX));
+                anchorX = rh.bbox.x + rh.bbox.w; anchorY = rh.bbox.y;
+            } else if (rh.corner === 'tr') {
+                newW = Math.max(20, rh.bbox.w + (x - rh.startX));
+                anchorX = rh.bbox.x; anchorY = rh.bbox.y + rh.bbox.h;
+            } else { // tl
+                newW = Math.max(20, rh.bbox.w - (x - rh.startX));
+                anchorX = rh.bbox.x + rh.bbox.w; anchorY = rh.bbox.y + rh.bbox.h;
+            }
+            const scale = newW / rh.bbox.w;
+
+            this.selectedItems.forEach((it, i) => {
+                const orig = rh.originals[i];
+                if (it.type === 'stroke') {
+                    const s = it.ref;
+                    if (s.tool === 'shape') {
+                        s.x0 = anchorX + (orig.x0 - anchorX) * scale;
+                        s.y0 = anchorY + (orig.y0 - anchorY) * scale;
+                        s.x1 = anchorX + (orig.x1 - anchorX) * scale;
+                        s.y1 = anchorY + (orig.y1 - anchorY) * scale;
+                    } else {
+                        s.points = orig.points.map(p => ({
+                            x: anchorX + (p.x - anchorX) * scale,
+                            y: anchorY + (p.y - anchorY) * scale,
+                        }));
+                    }
+                    s.size = Math.max(1, orig.size * scale);
+                } else if (it.type === 'object') {
+                    const o = it.ref;
+                    o.x = anchorX + (orig.x - anchorX) * scale;
+                    o.y = anchorY + (orig.y - anchorY) * scale;
+                    o.w = orig.w * scale;
+                    o.h = orig.h * scale;
+                }
+            });
+
+            if (typeof canvasMgr !== 'undefined') canvasMgr._redrawWithStaticBitmap(rh.strokeRefs);
+            if (typeof objectLayer !== 'undefined') objectLayer.render();
+            this._highlightSelectedItems();
             return true;
         }
 
@@ -4090,6 +5228,28 @@ class SelectManager {
             objectLayer.render();
             this._drawSelectionRect(newX, newY, this.selectedObject.w, this.selectedObject.h, true);
             this._showContextPanel(this.selectedObject);
+            return true;
+        }
+
+        // Tap-o-lazo in corso: aspetta di superare la soglia di movimento per capire
+        // se è un tap secco (selezione precisa) o un trascinamento (lazo multi-selezione)
+        if (this.phase === 'items-selecting') {
+            if (!this._pressing) return false;
+            this._lassoPath.push({ x, y });
+            const dx = x - this.startX, dy = y - this.startY;
+            if (Math.hypot(dx, dy) > 8) this.phase = 'items-lasso';
+            return true;
+        }
+        if (this.phase === 'items-lasso') {
+            if (!this._pressing) return false;
+            this._lassoPath.push({ x, y });
+            this._drawLassoPath();
+            return true;
+        }
+        if (this.phase === 'items-dragging' && this._itemDragStart) {
+            const dx = x - this._itemDragStart.x;
+            const dy = y - this._itemDragStart.y;
+            this._previewDragItems(dx, dy);
             return true;
         }
 
@@ -4193,6 +5353,70 @@ class SelectManager {
             this._drawSelectionRect(this.selectedObject.x, this.selectedObject.y,
                 this.selectedObject.w, this.selectedObject.h, true);
             this._showContextPanel(this.selectedObject);
+            return true;
+        }
+
+        // Tap secco (nessun movimento oltre soglia): selezione precisa di un solo elemento
+        if (this.phase === 'items-selecting') {
+            this.phase = 'idle';
+            this._lassoPath = null;
+            const item = this._hitTestItem(this.startX, this.startY);
+            if (item) {
+                // Se l'elemento toccato fa parte di un gruppo (Unisci), seleziona tutto il gruppo
+                this.selectedItems = this._expandGroups([item]);
+                this.phase = 'items-selected';
+                this._highlightSelectedItems();
+                this._showItemsContextPanel();
+            } else {
+                this._clearSelection();
+                // Tap su area vuota con qualcosa da incollare in memoria: mostra un mini-pannello
+                // con solo "Incolla" — su LIM/tablet senza tastiera è l'unico modo di incollare
+                // su una pagina dove non c'è ancora nulla da selezionare (es. dopo cambio pagina).
+                if (this._itemsClipboard && this._itemsClipboard.length) {
+                    this._showPasteOnlyPanel(this.startX, this.startY);
+                }
+            }
+            return true;
+        }
+
+        // Lazo tracciato: seleziona tutto ciò che è racchiuso (tratti/forme/oggetti)
+        if (this.phase === 'items-lasso') {
+            this.phase = 'idle';
+            const enclosed = this._findItemsInLasso(this._lassoPath);
+            this._lassoPath = null;
+            if (enclosed.length) {
+                // Se il lazo racchiude anche solo un elemento di un gruppo, espandi a tutto il gruppo
+                this.selectedItems = this._expandGroups(enclosed);
+                this.phase = 'items-selected';
+                this._highlightSelectedItems();
+                this._showItemsContextPanel();
+            } else {
+                this._clearSelection();
+            }
+            return true;
+        }
+
+        // Fine resize gruppo selezione precisa
+        if (this.phase === 'items-resizing') {
+            this.phase = 'items-selected';
+            this._itemResizeHandle = null;
+            CONFIG.isDirty = true;
+            window.autoSaveMgr?.onDirty();
+            this._highlightSelectedItems();
+            this._showItemsContextPanel();
+            const oc = document.getElementById('overlay-canvas');
+            if (oc) oc.style.cursor = 'crosshair';
+            return true;
+        }
+
+        // Fine drag selezione precisa (singola o multipla)
+        if (this.phase === 'items-dragging') {
+            this.phase = 'items-selected';
+            this._itemDragStart = null;
+            CONFIG.isDirty = true;
+            window.autoSaveMgr?.onDirty();
+            this._highlightSelectedItems();
+            this._showItemsContextPanel();
             return true;
         }
 
@@ -4336,6 +5560,11 @@ class SelectManager {
             this._clearSelection();
         }
         if (e.key === 'Delete' || e.key === 'Backspace') {
+            // Elimina selezione precisa (tap/lazo su tratti/forme/oggetti)
+            if (this.phase === 'items-selected' && this.selectedItems.length) {
+                this._deleteSelectedItems();
+                return;
+            }
             // Elimina oggetto ObjectLayer selezionato
             if ((this.phase === 'object-selected') && this.selectedObject) {
                 if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
@@ -4797,17 +6026,17 @@ class PageManager {
         const drawCanvas = document.getElementById('draw-canvas');
         const W = drawCanvas?.width || 0;
         const H = drawCanvas?.height || 0;
-        // Salva SOLO il ritaglio del foglio A4 (non l'intero canvas).
-        // Al ripristino viene disegnato alla posizione corrente del foglio →
-        // nessuno spostamento indipendentemente dalle dimensioni del canvas.
+        // Salva l'INTERO canvas (non solo il ritaglio del foglio A4) — altrimenti il
+        // contenuto disegnato fuori dall'area di stampa (sfondo infinito) andava perso.
+        // captureRect ancora la posizione del foglio al momento del salvataggio: serve
+        // al ripristino (riposiziona/scala tutto il contenuto) e alla stampa (ritaglia
+        // solo l'area del foglio, che deve continuare a esportare solo quella).
         let drawImageData = null;
+        let captureRect = null;
         if (drawCanvas && W > 0 && typeof bgMgr !== 'undefined') {
             const r = bgMgr._getPageRect(W, H);
-            const off = document.createElement('canvas');
-            off.width  = r.pw;
-            off.height = r.ph;
-            off.getContext('2d').drawImage(drawCanvas, -r.px, -r.py);
-            drawImageData = off.toDataURL('image/png');
+            drawImageData = drawCanvas.toDataURL('image/png');
+            captureRect = { px: r.px, py: r.py, pw: r.pw, ph: r.ph, canvasW: W, canvasH: H };
         }
         // Calcola offset foglio per salvare coordinate oggetti come frazione del foglio A4.
         // Questo rende le coordinate indipendenti dalla risoluzione canvas (schermo diverso = stessa posizione).
@@ -4816,9 +6045,14 @@ class PageManager {
             canvasWidth: W,
             pagePx: null,   // non più necessario (mantenuto per retrocompatibilità)
             pagePy: null,
-            drawFormat: 'page',      // drawImageData è il ritaglio del foglio A4
+            drawFormat: 'full-canvas-anchored',  // drawImageData è l'intero canvas; captureRect ancora la posizione del foglio
+            captureRect,
             objectFormat: 'page-fraction',  // coordinate oggetti come frazione del foglio A4 (risoluzione-indipendente)
             drawImageData,
+            // Tratti/forme della pagina come oggetti a sé stanti (non solo pixel piatti) —
+            // permettono a gomma-a-tratto e selezione precisa di riconoscerli anche dopo
+            // che la pagina è stata salvata su Drive e riaperta in un'altra sessione.
+            strokes: JSON.parse(JSON.stringify(this.canvasManager._pageStrokes || [])),
             objects: JSON.parse(JSON.stringify(this.objectLayerRef.objects.map(o => {
                 // Serializza l'immagine come dataUrl per il salvataggio in memoria.
                 // Coordinate e dimensioni salvate come frazione del foglio A4 (0.0–1.0)
@@ -4868,8 +6102,23 @@ class PageManager {
 
         if (pageData.drawImageData) {
             const img = new Image();
-            if (pageData.drawFormat === 'page' && typeof bgMgr !== 'undefined') {
-                // Formato corrente: drawImageData è il ritaglio del foglio A4.
+            if (pageData.drawFormat === 'full-canvas-anchored' && pageData.captureRect && typeof bgMgr !== 'undefined') {
+                // Formato corrente: drawImageData è l'INTERO canvas al momento del salvataggio.
+                // Riscala/riposiziona tutta l'immagine così che il foglio catturato (captureRect)
+                // combaci esattamente col foglio corrente → preserva anche il contenuto fuori dal foglio.
+                const cr = pageData.captureRect;
+                const r2 = bgMgr._getPageRect(drawCanvas.width, drawCanvas.height);
+                const scale = cr.pw > 0 ? (r2.pw / cr.pw) : 1;
+                const destX = r2.px - cr.px * scale;
+                const destY = r2.py - cr.py * scale;
+                const destW = cr.canvasW * scale;
+                const destH = cr.canvasH * scale;
+                allRestorePromises.push(new Promise(res => {
+                    img.onload = () => { ctx.drawImage(img, destX, destY, destW, destH); res(); };
+                    img.onerror = res;
+                }));
+            } else if (pageData.drawFormat === 'page' && typeof bgMgr !== 'undefined') {
+                // Formato legacy: drawImageData è già il ritaglio del foglio A4.
                 // Disegna SCALANDO alla dimensione corrente del foglio → funziona su qualsiasi schermo.
                 const r = bgMgr._getPageRect(drawCanvas.width, drawCanvas.height);
                 allRestorePromises.push(new Promise(res => {
@@ -4877,7 +6126,7 @@ class PageManager {
                     img.onerror = res;
                 }));
             } else {
-                // Vecchio formato: drawImageData è l'intero canvas.
+                // Formato legacy più vecchio: drawImageData è l'intero canvas, senza anchor.
                 let offsetX = 0, offsetY = 0;
                 if (pageData.pagePx != null && typeof bgMgr !== 'undefined') {
                     const curr = bgMgr._getPageRect(drawCanvas.width, drawCanvas.height);
@@ -4920,6 +6169,33 @@ class PageManager {
             img.onerror = resolve;
             img.src = o.dataUrl;
         }));
+
+        // Ripristina tratti/forme come oggetti a sé stanti (gomma-a-tratto/selezione precisa
+        // funzionano anche su pagine appena riaperte, non solo su quanto disegnato in sessione).
+        // Riscalati/riposizionati con lo stesso captureRect usato per l'immagine intera.
+        if (this.canvasManager) {
+            const cr = pageData.captureRect;
+            if (pageData.strokes && cr) {
+                const scale = cr.pw > 0 ? (r2.pw / cr.pw) : 1;
+                const offX  = r2.px - cr.px * scale;
+                const offY  = r2.py - cr.py * scale;
+                this.canvasManager._pageStrokes = pageData.strokes.map(s => {
+                    if (!s) return s;
+                    if (s.tool === 'shape') {
+                        return { ...s,
+                            x0: s.x0 * scale + offX, y0: s.y0 * scale + offY,
+                            x1: s.x1 * scale + offX, y1: s.y1 * scale + offY,
+                            size: s.size * scale };
+                    }
+                    return { ...s,
+                        size: s.size * scale,
+                        points: (s.points || []).map(p => ({ x: p.x * scale + offX, y: p.y * scale + offY })) };
+                });
+            } else {
+                this.canvasManager._pageStrokes = [];
+            }
+        }
+
         Promise.all([...allRestorePromises, ...loadPromises]).then(() => {
             this.objectLayerRef.render();
             this._restoring = false;
@@ -4946,6 +6222,21 @@ class PageManager {
         }
     }
 
+    // Aggiorna la pagina corrente in localStorage per il ripristino auto-open — va richiamato
+    // da OGNI punto che cambia currentIndex (goToPage, addPage, delete pagina, ecc.), altrimenti
+    // al riavvio l'app riapre una pagina non aggiornata (bug segnalato da Fabio 10/07/2026: dopo
+    // aggiungere una pagina e disegnarci sopra, il riavvio tornava sempre alla prima pagina).
+    _syncLastPage() {
+        try {
+            const raw = localStorage.getItem('eduboard_last_lesson');
+            if (raw) {
+                const d = JSON.parse(raw);
+                d.lastPage = this.currentIndex;
+                localStorage.setItem('eduboard_last_lesson', JSON.stringify(d));
+            }
+        } catch (_) {}
+    }
+
     goToPage(index) {
         if (index < 0 || index >= this.pages.length) return;
         // Non sovrascrivere la pagina corrente se è ancora in fase di ripristino
@@ -4956,6 +6247,7 @@ class PageManager {
         this.currentIndex = index;
         this._restorePage(this.pages[this.currentIndex]);
         this._updatePageBar();
+        this._syncLastPage();
     }
 
     addPage() {
@@ -4964,6 +6256,7 @@ class PageManager {
         const currentBg = this.pages[this.currentIndex].background;
         this.pages.push({
             drawImageData: null,
+            strokes: [],
             objects: [],
             background: {
                 type: currentBg.type || 'white',
@@ -4974,20 +6267,146 @@ class PageManager {
         this.currentIndex = this.pages.length - 1;
         this._restorePage(this.pages[this.currentIndex]);
         this._updatePageBar();
+        this._syncLastPage();
         CONFIG.isDirty = true;
         window.autoSaveMgr?.onDirty();
     }
 
     deletePage(index) {
         if (this.pages.length <= 1) return;
-        if (!confirm(`Eliminare la pagina ${index + 1}?`)) return;
+        showConfirmModal(`Eliminare la pagina ${index + 1}?`, () => this._deletePageConfirmed(index));
+    }
+
+    _deletePageConfirmed(index) {
         this.pages.splice(index, 1);
         const newIndex = Math.min(this.currentIndex, this.pages.length - 1);
         this.currentIndex = newIndex;
         this._restorePage(this.pages[this.currentIndex]);
         this._updatePageBar();
+        this._syncLastPage();
         CONFIG.isDirty = true;
         window.autoSaveMgr?.onDirty();
+    }
+
+    // Rimuove una pagina senza modal di conferma (già confermata a monte, es. dopo
+    // "Sposta pagina in un'altra lezione" — la pagina è già stata copiata altrove).
+    removePageSilently(index) {
+        if (this.pages.length <= 1) {
+            toast('Non puoi spostare l\'unica pagina della lezione: creane prima una nuova.', 'error');
+            return false;
+        }
+        this.pages.splice(index, 1);
+        this.currentIndex = Math.min(this.currentIndex, this.pages.length - 1);
+        this._restorePage(this.pages[this.currentIndex]);
+        this._updatePageBar();
+        this._syncLastPage();
+        CONFIG.isDirty = true;
+        window.autoSaveMgr?.onDirty();
+        return true;
+    }
+
+    // Riordina le pagine trascinando: fromIndex = pagina spostata, targetIndex = pagina
+    // di riferimento nell'array PRIMA della rimozione, insertBefore = se va inserita
+    // prima o dopo quella di riferimento. Usa il riferimento oggetto (non l'indice
+    // numerico) per ritrovare la nuova posizione della pagina corrente dopo lo spostamento
+    // — più robusto di un calcolo aritmetico su prima/dopo/currentIndex spostato o no.
+    reorderPages(fromIndex, targetIndex, insertBefore) {
+        if (fromIndex === targetIndex || fromIndex < 0 || targetIndex < 0 ||
+            fromIndex >= this.pages.length || targetIndex >= this.pages.length) return;
+        if (!this._restoring) this.pages[this.currentIndex] = this._captureCurrentPage();
+        const currentPageObj = this.pages[this.currentIndex];
+        const movedObj = this.pages[fromIndex];
+        const targetObj = this.pages[targetIndex];
+        const rest = this.pages.filter((_, i) => i !== fromIndex);
+        let insertAt = rest.indexOf(targetObj);
+        if (!insertBefore) insertAt += 1;
+        rest.splice(insertAt, 0, movedObj);
+        this.pages = rest;
+        this.currentIndex = this.pages.indexOf(currentPageObj);
+        this._updatePageBar();
+        this._syncLastPage();
+        CONFIG.isDirty = true;
+        window.autoSaveMgr?.onDirty();
+    }
+
+    // Handle di trascinamento per riordinare le pagine nella barra in basso.
+    // Pointer Events da zero (non draggable HTML5 nativo, inaffidabile su touch/LIM).
+    // Su touch richiede una breve pressione prolungata (350ms) prima di attivare il drag,
+    // per non rubare lo swipe di scorrimento orizzontale della barra pagine (fix già fatto
+    // in v2-031/033 — un drag "a scatto" romperebbe di nuovo quello scroll). Su mouse/pen
+    // il drag scatta subito al superamento di una piccola soglia, come per il riordino lezioni.
+    _attachPageDragHandle(pageContainer, index, bar) {
+        let dragging = false, moved = false, startX = 0, startY = 0, pointerId = null, longPressTimer = null, isTouch = false;
+
+        const clearHoverMarks = () => {
+            bar.querySelectorAll('.page-drag-over-before, .page-drag-over-after')
+                .forEach(el => el.classList.remove('page-drag-over-before', 'page-drag-over-after'));
+        };
+        const cancelLongPress = () => { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } };
+        const engageDrag = () => {
+            dragging = true;
+            pageContainer.classList.add('page-dragging');
+            pageContainer.style.touchAction = 'none';
+            try { pageContainer.setPointerCapture(pointerId); } catch (_) {}
+        };
+        const cleanup = () => {
+            dragging = false;
+            pageContainer.classList.remove('page-dragging');
+            pageContainer.style.touchAction = '';
+            clearHoverMarks();
+        };
+
+        pageContainer.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('.page-del-btn, .page-move-btn')) return;
+            startX = e.clientX; startY = e.clientY; pointerId = e.pointerId; moved = false;
+            isTouch = e.pointerType === 'touch';
+            cancelLongPress();
+            if (isTouch) longPressTimer = setTimeout(() => { if (pointerId !== null) engageDrag(); }, 350);
+        });
+
+        pageContainer.addEventListener('pointermove', (e) => {
+            if (pointerId === null || e.pointerId !== pointerId) return;
+            const dx = e.clientX - startX, dy = e.clientY - startY;
+            if (!dragging) {
+                if (isTouch) {
+                    // Movimento prima che scatti il long-press → è uno scroll: annulla il drag imminente
+                    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) cancelLongPress();
+                    return;
+                }
+                if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+                engageDrag();
+            }
+            moved = true;
+            e.preventDefault();
+            clearHoverMarks();
+            const below = document.elementFromPoint(e.clientX, e.clientY);
+            const target = below?.closest('.page-container');
+            if (!target || target === pageContainer) return;
+            const rect = target.getBoundingClientRect();
+            if (e.clientX < rect.left + rect.width / 2) target.classList.add('page-drag-over-before');
+            else target.classList.add('page-drag-over-after');
+        });
+
+        pageContainer.addEventListener('pointerup', (e) => {
+            cancelLongPress();
+            if (pointerId === null || e.pointerId !== pointerId) return;
+            try { pageContainer.releasePointerCapture(e.pointerId); } catch (_) {}
+            const beforeT = bar.querySelector('.page-drag-over-before');
+            const afterT  = bar.querySelector('.page-drag-over-after');
+            const wasDragging = dragging;
+            cleanup();
+            pointerId = null;
+            if (moved) {
+                // Impedisce che il rilascio generi anche il click di navigazione pagina
+                pageContainer.addEventListener('click', ev => ev.stopPropagation(), { once: true, capture: true });
+            }
+            if (!wasDragging) return;
+            const target = beforeT || afterT;
+            if (!target) return;
+            this.reorderPages(index, parseInt(target.dataset.pageIndex, 10), !!beforeT);
+        });
+
+        pageContainer.addEventListener('pointercancel', () => { cancelLongPress(); cleanup(); pointerId = null; });
     }
 
     serialize() {
@@ -4995,11 +6414,12 @@ class PageManager {
         return this.pages;
     }
 
-    deserialize(pagesData) {
+    deserialize(pagesData, startPage = 0) {
         if (!pagesData || !pagesData.length) return;
         this.pages = pagesData;
-        this.currentIndex = 0;
-        this._restorePage(this.pages[0]);
+        const idx = (startPage > 0 && startPage < pagesData.length) ? startPage : 0;
+        this.currentIndex = idx;
+        this._restorePage(this.pages[idx]);
         this._renderPageBar();
     }
 
@@ -5044,6 +6464,7 @@ class PageManager {
             // FIX PAGINE B: container con pulsante X visibile (touch-friendly, niente contextmenu)
             const pageContainer = document.createElement('div');
             pageContainer.className = 'page-container';
+            pageContainer.dataset.pageIndex = i;
 
             const btn = document.createElement('button');
             btn.className = 'page-btn' + (i === this.currentIndex ? ' page-btn--active' : '');
@@ -5060,7 +6481,18 @@ class PageManager {
                 pageContainer.appendChild(delBtn);
             }
 
+            const moveBtn = document.createElement('button');
+            moveBtn.className = 'page-move-btn';
+            moveBtn.innerHTML = '⇄';
+            moveBtn.title = `Sposta/copia pagina ${i + 1} in un'altra lezione`;
+            moveBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.libraryMgr?.openMovePageModal(i);
+            });
+            pageContainer.appendChild(moveBtn);
+
             pageContainer.appendChild(btn);
+            this._attachPageDragHandle(pageContainer, i, bar);
             bar.appendChild(pageContainer);
         });
         const addBtn = document.createElement('button');
@@ -5069,6 +6501,11 @@ class PageManager {
         addBtn.title = 'Aggiungi pagina';
         addBtn.addEventListener('click', () => this.addPage());
         bar.appendChild(addBtn);
+
+        // La larghezza della page-bar è cambiata (pagina aggiunta/rimossa): ricentra il menu
+        if (typeof toolbarMgr !== 'undefined' && toolbarMgr) {
+            requestAnimationFrame(() => toolbarMgr._updateBounds());
+        }
     }
 }
 
@@ -5231,30 +6668,49 @@ class TimerWidget {
         this.el        = null;
         this.visible   = false;
         this._interval = null;
-        this._seconds  = 0;       // secondi rimasti (countdown) o trascorsi (stopwatch)
+        this._seconds      = 0;   // secondi rimasti (countdown) o trascorsi (stopwatch)
+        this._totalSeconds = 0;   // durata impostata (countdown) — riferimento per l'anello
         this._running  = false;
         this._mode     = 'countdown'; // 'countdown' | 'stopwatch'
+        this._state    = 'normal';    // 'normal' | 'fullscreen' | 'minimized'
         this._drag     = { on: false, startX: 0, startY: 0, origX: 0, origY: 0 };
         this._x        = 40;
         this._y        = 100;
+        this._ringR    = 70;
+        this._ringCircumference = 2 * Math.PI * this._ringR;
     }
 
     create() {
         const el = document.createElement('div');
         el.id = 'timer-widget';
         el.innerHTML = `
-            <div class="timer-drag-bar" id="timer-drag-bar" title="Trascina">⠿</div>
-            <div class="timer-display" id="timer-display">00:00</div>
-            <div class="timer-custom-row" id="timer-custom-row" title="Imposta minuti e secondi">
-                <input class="timer-input" id="timer-input-min" type="number" min="0" max="99" value="0" placeholder="mm">
-                <span class="timer-colon">:</span>
-                <input class="timer-input" id="timer-input-sec" type="number" min="0" max="59" value="0" placeholder="ss">
-                <button class="timer-set-btn" id="timer-set-btn" title="Imposta tempo">✓</button>
+            <div class="timer-dial" id="timer-dial" title="Trascina per spostare">
+                <svg class="timer-ring-svg" viewBox="0 0 160 160">
+                    <circle class="timer-ring-bg" cx="80" cy="80" r="${this._ringR}"></circle>
+                    <circle class="timer-ring-progress" id="timer-ring-progress" cx="80" cy="80" r="${this._ringR}"></circle>
+                </svg>
+                <div class="timer-dial-center">
+                    <div class="timer-digit-tap" id="timer-min-tap" data-part="min" title="Tocca sopra/sotto per cambiare i minuti">
+                        <span class="timer-digit-arrow">▲</span>
+                        <span class="timer-digit-value" id="timer-min-display">00</span>
+                        <span class="timer-digit-arrow down">▼</span>
+                    </div>
+                    <span class="timer-colon">:</span>
+                    <div class="timer-digit-tap" id="timer-sec-tap" data-part="sec" title="Tocca sopra/sotto per cambiare i secondi">
+                        <span class="timer-digit-arrow">▲</span>
+                        <span class="timer-digit-value" id="timer-sec-display">00</span>
+                        <span class="timer-digit-arrow down">▼</span>
+                    </div>
+                </div>
             </div>
+            <div class="timer-mini-readout" id="timer-mini-readout" title="Tocca per ripristinare">00:00</div>
             <div class="timer-controls">
                 <button class="timer-btn" id="timer-start" title="Avvia / Pausa">▶</button>
                 <button class="timer-btn" id="timer-reset" title="Reset">↺</button>
-                <button class="timer-mode" id="timer-mode-btn" title="Cambia modalità">⏱</button>
+                <button class="timer-mode" id="timer-mode-btn" title="Timer / Cronometro">⏱</button>
+                <button class="timer-btn timer-fullscreen-btn" id="timer-fullscreen-btn" title="Schermo intero">⛶</button>
+                <button class="timer-btn timer-minimize-btn" id="timer-minimize-btn" title="Riduci a soli numeri in alto">─</button>
+                <button class="timer-btn timer-close" id="timer-close" title="Chiudi">×</button>
             </div>
             <div class="timer-presets" id="timer-presets">
                 <button class="timer-preset" data-sec="60">1'</button>
@@ -5262,28 +6718,29 @@ class TimerWidget {
                 <button class="timer-preset" data-sec="180">3'</button>
                 <button class="timer-preset" data-sec="300">5'</button>
                 <button class="timer-preset" data-sec="600">10'</button>
-            </div>
-            <button class="timer-close" id="timer-close" title="Chiudi">×</button>`;
+            </div>`;
         el.style.display = 'none';
         document.body.appendChild(el);
         this.el = el;
 
-        this._setupDrag();
+        this.el.querySelector('#timer-ring-progress').style.strokeDasharray = String(this._ringCircumference);
+
+        this._setupDialGesture();
 
         el.querySelector('#timer-start').addEventListener('click', () => this._toggleRun());
         el.querySelector('#timer-reset').addEventListener('click', () => this._reset());
         el.querySelector('#timer-close').addEventListener('click', () => this.hide());
         el.querySelector('#timer-mode-btn').addEventListener('click', () => this._toggleMode());
+        el.querySelector('#timer-fullscreen-btn').addEventListener('click', () => this._toggleFullscreen());
+        el.querySelector('#timer-minimize-btn').addEventListener('click', () => this._toggleMinimize());
 
-        // Input manuale minuti:secondi
-        el.querySelector('#timer-set-btn').addEventListener('click', () => this._setCustomTime());
-        el.querySelector('#timer-input-min').addEventListener('keydown', e => { if (e.key === 'Enter') this._setCustomTime(); });
-        el.querySelector('#timer-input-sec').addEventListener('keydown', e => { if (e.key === 'Enter') this._setCustomTime(); });
+        // Numeri in sovraimpressione (stato "ridotto"): un tocco riporta al widget normale
+        el.querySelector('#timer-mini-readout').addEventListener('click', () => this._toggleMinimize());
 
         el.querySelectorAll('.timer-preset').forEach(btn => {
             btn.addEventListener('click', () => {
                 this._mode = 'countdown';
-                this._seconds = parseInt(btn.dataset.sec);
+                this._seconds = this._totalSeconds = parseInt(btn.dataset.sec);
                 this._running = false;
                 clearInterval(this._interval);
                 this._updateDisplay();
@@ -5293,21 +6750,29 @@ class TimerWidget {
         });
     }
 
-    _setCustomTime() {
-        const m = parseInt(this.el.querySelector('#timer-input-min').value) || 0;
-        const s = parseInt(this.el.querySelector('#timer-input-sec').value) || 0;
-        const total = m * 60 + Math.min(s, 59);
-        if (total <= 0) return;
-        clearInterval(this._interval);
-        this._running = false;
-        this._mode = 'countdown';
-        this._seconds = total;
+    // Tocco diretto sulla cifra (metà sopra/sotto) — in modalità cronometro non si tocca
+    // (parte sempre da zero), in countdown regola minuti/secondi anche mentre è in corsa.
+    _adjustDigit(part, delta) {
+        if (this._mode === 'stopwatch') return;
+        let m = Math.floor(this._seconds / 60);
+        let s = this._seconds % 60;
+        if (part === 'min') {
+            m = Math.max(0, Math.min(99, m + delta));
+        } else {
+            s += delta;
+            if (s < 0)  { s = 59; m = Math.max(0, m - 1); }
+            if (s > 59) { s = 0;  m = Math.min(99, m + 1); }
+        }
+        const newTotal = m * 60 + s;
+        if (this._running) {
+            // Sposta anche il riferimento dell'anello della stessa quantità, così non "salta"
+            this._totalSeconds += (newTotal - this._seconds);
+        } else {
+            this._totalSeconds = newTotal;
+        }
+        this._seconds = newTotal;
         this._updateDisplay();
-        this.el.querySelector('#timer-start').textContent = '▶';
-        this.el.querySelector('#timer-mode-btn').textContent = '⏱';
-        this.el.querySelector('#timer-presets').style.display = 'flex';
         this.el.classList.remove('timer-finished');
-        this.el.classList.remove('timer-low');
     }
 
     _toggleRun() {
@@ -5326,7 +6791,7 @@ class TimerWidget {
                         this.el.querySelector('#timer-start').textContent = '▶';
                         this.el.classList.remove('timer-low');
                         this.el.classList.add('timer-finished');
-                        this._playBeep();
+                        this._playChime();
                         setTimeout(() => this.el.classList.remove('timer-finished'), 3000);
                         return;
                     }
@@ -5348,6 +6813,7 @@ class TimerWidget {
         clearInterval(this._interval);
         this._running = false;
         this._seconds = 0;
+        this._totalSeconds = 0;
         this._updateDisplay();
         this.el.querySelector('#timer-start').textContent = '▶';
         this.el.classList.remove('timer-finished');
@@ -5361,63 +6827,140 @@ class TimerWidget {
             this._mode === 'countdown' ? '⏱' : '⏲';
         this.el.querySelector('#timer-presets').style.display =
             this._mode === 'countdown' ? 'flex' : 'none';
+        this.el.classList.toggle('timer-stopwatch-mode', this._mode === 'stopwatch');
     }
 
     _updateDisplay() {
         const m = Math.floor(this._seconds / 60);
         const s = this._seconds % 60;
+        const minEl = this.el.querySelector('#timer-min-display');
+        const secEl = this.el.querySelector('#timer-sec-display');
         const txt = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-        this.el.querySelector('#timer-display').textContent = txt;
+        if (minEl) minEl.textContent = String(m).padStart(2, '0');
+        if (secEl) secEl.textContent = String(s).padStart(2, '0');
+        const miniEl = this.el.querySelector('#timer-mini-readout');
+        if (miniEl) {
+            miniEl.textContent = txt;
+            miniEl.classList.toggle('timer-mini-low', this._mode === 'countdown' && this._seconds <= 10 && this._seconds > 0);
+        }
+
+        // Anello: countdown = si svuota verso lo scadere; cronometro = si riempie ad ogni giro di minuto
+        const ring = this.el.querySelector('#timer-ring-progress');
+        if (ring) {
+            const frac = this._mode === 'countdown'
+                ? (this._totalSeconds > 0 ? Math.max(0, this._seconds / this._totalSeconds) : 0)
+                : (this._seconds % 60) / 60;
+            ring.style.strokeDashoffset = String(this._ringCircumference * (1 - frac));
+        }
+
         // Cambia colore quando il tempo sta per scadere
+        const dial = this.el.querySelector('.timer-dial');
         if (this._mode === 'countdown' && this._seconds <= 10 && this._seconds > 0) {
-            this.el.querySelector('#timer-display').style.color = '#ef4444';
+            dial?.classList.add('timer-dial-low');
         } else {
-            this.el.querySelector('#timer-display').style.color = '';
+            dial?.classList.remove('timer-dial-low');
         }
     }
 
-    _setupDrag() {
-        const bar = this.el.querySelector('#timer-drag-bar');
-        bar.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            bar.setPointerCapture(e.pointerId);
-            this._drag = { on: true, startX: e.clientX, startY: e.clientY,
-                           origX: this._x, origY: this._y };
+    // Gesto unificato sul quadrante: trascinamento per spostare il widget, tocco
+    // secco (senza movimento) su una cifra per cambiarla — così si può afferrare
+    // l'orologio ovunque, anche sopra ai numeri, senza modificarli per sbaglio.
+    _setupDialGesture() {
+        const dial = this.el.querySelector('#timer-dial');
+        const THRESHOLD = 8; // px prima di considerarlo un trascinamento e non un tocco
+
+        dial.addEventListener('pointerdown', (e) => {
+            if (this._state === 'minimized') return;
+            dial.setPointerCapture(e.pointerId);
+            const tapZone = e.target.closest('.timer-digit-tap');
+            this._drag = {
+                on: true, moved: false,
+                startX: e.clientX, startY: e.clientY,
+                origX: this._x, origY: this._y,
+                tapPart: tapZone ? tapZone.dataset.part : null,
+                tapZoneRect: tapZone ? tapZone.getBoundingClientRect() : null,
+            };
         });
-        window.addEventListener('pointermove', (e) => {
+        dial.addEventListener('pointermove', (e) => {
             if (!this._drag.on) return;
-            this._x = this._drag.origX + (e.clientX - this._drag.startX);
-            this._y = this._drag.origY + (e.clientY - this._drag.startY);
-            this.el.style.left = this._x + 'px';
-            this.el.style.top  = this._y + 'px';
+            const dx = e.clientX - this._drag.startX;
+            const dy = e.clientY - this._drag.startY;
+            if (!this._drag.moved && Math.hypot(dx, dy) > THRESHOLD) this._drag.moved = true;
+            if (this._drag.moved && this._state === 'normal') {
+                this._x = this._drag.origX + dx;
+                this._y = this._drag.origY + dy;
+                this.el.style.left = this._x + 'px';
+                this.el.style.top  = this._y + 'px';
+            }
         });
-        window.addEventListener('pointerup', () => { this._drag.on = false; });
+        dial.addEventListener('pointerup', (e) => {
+            if (!this._drag.on) return;
+            const { moved, tapPart, tapZoneRect } = this._drag;
+            this._drag.on = false;
+            if (!moved && tapPart && tapZoneRect) {
+                const delta = (e.clientY - tapZoneRect.top) < tapZoneRect.height / 2 ? 1 : -1;
+                this._adjustDigit(tapPart, delta);
+            }
+        });
     }
 
-    _playBeep() {
+    // Schermo intero: copre tutta la LIM, a scelta del docente — di default resta piccolo.
+    _toggleFullscreen() {
+        this._setState(this._state === 'fullscreen' ? 'normal' : 'fullscreen');
+    }
+
+    // Riduci a icona: pillola in alto, il conteggio continua e il docente può
+    // continuare a scrivere sulla lavagna sotto.
+    _toggleMinimize() {
+        this._setState(this._state === 'minimized' ? 'normal' : 'minimized');
+    }
+
+    _setState(state) {
+        this._state = state;
+        this.el.classList.toggle('timer-fullscreen', state === 'fullscreen');
+        this.el.classList.toggle('timer-minimized', state === 'minimized');
+        if (state === 'normal') {
+            this.el.style.left = this._x + 'px';
+            this.el.style.top  = this._y + 'px';
+        } else {
+            this.el.style.left = '';
+            this.el.style.top  = '';
+        }
+    }
+
+    // Onda triangolare + armonica di quinta (stesso timbro "campanella" usato per EduConnect).
+    _playChime() {
         try {
             const ac = new (window.AudioContext || window.webkitAudioContext)();
-            [0, 0.35, 0.7].forEach(t => {
+            const note = (freq, t, duration, volume) => {
+                const now  = ac.currentTime + t;
                 const osc  = ac.createOscillator();
                 const gain = ac.createGain();
+                osc.type = 'triangle';
                 osc.connect(gain);
                 gain.connect(ac.destination);
-                osc.type = 'sine';
-                osc.frequency.value = 880;
-                gain.gain.setValueAtTime(0.5, ac.currentTime + t);
-                gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + t + 0.3);
-                osc.start(ac.currentTime + t);
-                osc.stop(ac.currentTime + t + 0.3);
-            });
-            setTimeout(() => ac.close(), 2500);
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.0001, now);
+                gain.gain.exponentialRampToValueAtTime(volume, now + 0.015);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+                osc.start(now);
+                osc.stop(now + duration + 0.02);
+            };
+            const chime = (freq, t, duration) => { note(freq, t, duration, 0.45); note(freq * 1.5, t, duration * 0.8, 0.18); };
+            // "Din-don, din-don" — campanella scolastica classica, due rintocchi ripetuti due volte
+            const E6 = 1318.51, C6 = 1046.50;
+            chime(E6, 0,    0.55);
+            chime(C6, 0.42, 0.7);
+            chime(E6, 1.5,  0.55);
+            chime(C6, 1.92, 0.7);
+            setTimeout(() => ac.close(), 3200);
         } catch(e) { /* AudioContext non disponibile */ }
     }
 
     show() {
         this.el.style.display = 'flex';
-        this.el.style.left = this._x + 'px';
-        this.el.style.top  = this._y + 'px';
+        this._setState('normal');
+        this._updateDisplay();
         this.visible = true;
     }
 
@@ -5812,8 +7355,10 @@ document.addEventListener('DOMContentLoaded', () => {
             e.returnValue = 'Salvataggio automatico in corso. Attendere qualche secondo prima di chiudere.';
             return e.returnValue;
         }
-        // Blocca chiusura solo se dirty E non connessi al Drive (nessun auto-save possibile)
-        if (CONFIG.isDirty && !libraryMgr?.currentFileId) {
+        // Blocca chiusura se dirty e l'auto-save non può (più) partire: nessun file Drive aperto,
+        // oppure file aperto ma token Drive scaduto/disconnesso a metà sessione (onDirty() in quel
+        // caso non arma il timer, quindi hasPending() sopra resta false pur essendoci lavoro perso).
+        if (CONFIG.isDirty && (!libraryMgr?.currentFileId || !window.driveMgr?.isConnected())) {
             e.preventDefault();
             e.returnValue = 'Hai modifiche non salvate. Vuoi davvero uscire?';
         }
@@ -5939,21 +7484,56 @@ function _buildPageDataURL(pageIndex) {
         const objCvs = document.getElementById('objects-canvas');
         if (objCvs) ctx.drawImage(objCvs, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
     } else if (pageData) {
-        // Altra pagina: ricostruiamo da drawImageData
+        // Altra pagina: ricostruiamo da drawImageData + oggetti (immagini/PDF)
         ctx.fillStyle = pageData.background ? (pageData.background.color || '#ffffff') : '#ffffff';
         ctx.fillRect(0, 0, cropW, cropH);
+
+        const loaders = [];
+
         if (pageData.drawImageData) {
-            return new Promise(resolve => {
+            loaders.push(new Promise(resolve => {
                 const img = new Image();
                 img.onload = () => {
-                    // Ritaglia all'area del foglio anche per le pagine non correnti
-                    ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-                    resolve(tmp.toDataURL('image/png'));
+                    if (pageData.drawFormat === 'full-canvas-anchored' && pageData.captureRect) {
+                        // drawImageData è l'INTERO canvas: ritaglia SOLO l'area del foglio
+                        // catturata (captureRect) — la stampa esporta sempre e solo quella,
+                        // anche se sul canvas c'è altro contenuto fuori dall'area di stampa.
+                        const cr = pageData.captureRect;
+                        ctx.drawImage(img, cr.px, cr.py, cr.pw, cr.ph, 0, 0, cropW, cropH);
+                    } else {
+                        // Formato legacy: drawImageData è già il ritaglio del foglio A4 —
+                        // va scalato per intero nell'area di destinazione, NON ri-ritagliato
+                        // (altrimenti si legge fuori dai bordi dell'immagine e la pagina risulta vuota).
+                        ctx.drawImage(img, 0, 0, cropW, cropH);
+                    }
+                    resolve();
                 };
-                img.onerror = () => resolve(tmp.toDataURL('image/png'));
+                img.onerror = resolve;
                 img.src = pageData.drawImageData;
-            });
+            }));
         }
+
+        // Disegna anche gli oggetti (immagini/PDF) della pagina — mancavano del tutto
+        (pageData.objects || []).forEach(o => {
+            if (!o.dataUrl) return;
+            loaders.push(new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => {
+                    // Coordinate salvate come frazione di pw, relative all'origine del foglio
+                    // (vedi _captureCurrentPage) — qui il canvas tmp è già page-local.
+                    const ox = pageData.objectFormat === 'page-fraction' ? o.x * cropW : o.x;
+                    const oy = pageData.objectFormat === 'page-fraction' ? o.y * cropW : o.y;
+                    const ow = pageData.objectFormat === 'page-fraction' ? o.w * cropW : o.w;
+                    const oh = pageData.objectFormat === 'page-fraction' ? o.h * cropW : o.h;
+                    ctx.drawImage(img, ox, oy, ow, oh);
+                    resolve();
+                };
+                img.onerror = resolve;
+                img.src = o.dataUrl;
+            }));
+        });
+
+        return Promise.all(loaders).then(() => tmp.toDataURL('image/png'));
     } else {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, cropW, cropH);

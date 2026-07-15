@@ -289,10 +289,12 @@ button {
 #toolbar-wrapper {
     position: fixed;
     bottom: 0;
+    /* left/max-width di fallback statico: ToolbarManager._updateBounds() li
+       sovrascrive via JS misurando lo spazio reale tra page-bar e bottom-right-bar */
     left: 50%;
     transform: translateX(-50%) translateY(calc(100% - 54px));
     transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 200;
+    z-index: 610;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -535,12 +537,20 @@ button {
     flex-wrap: nowrap;        /* mai 2 righe — lo scrolling è orizzontale */
     overflow-x: auto;         /* scroll orizzontale se non entra tutto */
     overflow-y: hidden;
-    scrollbar-width: none;    /* Firefox: nasconde scrollbar */
-    -ms-overflow-style: none; /* IE/Edge */
-    justify-content: center;
+    /* Scrollbar sottile ma VISIBILE (era nascosta): senza un indizio a vista,
+       nessuno scopre che si può scorrere quando i pulsanti non entrano tutti */
+    scrollbar-width: thin;
+    /* "safe center": centra quando entra tutto, ma se il contenuto trabocca
+       si comporta come flex-start invece di tagliare il lato sinistro in modo
+       irraggiungibile (bug noto di justify-content:center + overflow: lo
+       scroll non può andare "negativo", quindi la parte a sinistra resta
+       tagliata per sempre con il solo "center"). */
+    justify-content: safe center;
     padding-bottom: 6px;
 }
-.main-row::-webkit-scrollbar { display: none; } /* Chrome/Safari: nasconde scrollbar */
+.main-row::-webkit-scrollbar { height: 4px; }
+.main-row::-webkit-scrollbar-track { background: transparent; }
+.main-row::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 /* Gruppi di strumenti correlati — pillola separata (Option C) */
 .tool-group {
@@ -1424,6 +1434,17 @@ button {
    RESPONSIVE
    ========================================================================== */
 
+/* Modalità compatta: applicata via JS (ToolbarManager._updateBounds) quando lo
+   spazio reale tra page-bar e bottom-right-bar non basta per le etichette,
+   indipendentemente dalla larghezza dello schermo */
+#toolbar-wrapper.compact .tool-btn span {
+    display: none;
+}
+#toolbar-wrapper.compact .tool-btn {
+    width: 46px;
+    height: 46px;
+}
+
 /* Tablet / mobile medio */
 @media (max-width: 600px) {
     /* Nascondi etichette testuali dei bottoni strumento */
@@ -1931,6 +1952,30 @@ body.fullscreen-mode #canvas-area {
     top: 0 !important;
 }
 
+/* Nome lezione discreto in fullscreen (l'header con project-name è nascosto) */
+#fullscreen-lesson-name {
+    display: none;
+    position: fixed;
+    top: 10px;
+    left: 14px;
+    z-index: 190;
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(15, 23, 42, 0.38);
+    background: rgba(255, 255, 255, 0.55);
+    padding: 3px 10px;
+    border-radius: 20px;
+    pointer-events: none;
+    user-select: none;
+    max-width: 40vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+body.fullscreen-mode #fullscreen-lesson-name {
+    display: block;
+}
+
 /* ===== MODAL — Salva prima di continuare ===== */
 #dirty-modal {
     position: fixed;
@@ -2207,6 +2252,35 @@ body.fullscreen-mode #canvas-area {
     font-size: 0.82rem;
     color: #1e293b;
 }
+/* Selettore colore a due passi: prima i quadretti pronti, poi l'eventuale colore libero */
+.ctx-color-swatches {
+    display: grid;
+    grid-template-columns: repeat(6, 22px);
+    gap: 5px;
+    margin-top: 6px;
+}
+.ctx-swatch-btn {
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    border: 1px solid rgba(15,23,42,0.15);
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.1s;
+}
+.ctx-swatch-btn:hover { transform: scale(1.12); }
+.ctx-swatch-btn.active { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px #3b82f6; }
+.ctx-swatch-custom {
+    background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    text-shadow: 0 0 2px rgba(0,0,0,0.6);
+}
+.ctx-fill-toggle {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.82rem;
+    color: #475569;
+    cursor: pointer;
+}
 
 /* Mantieni retrocompatibilità per ctx-btn usati altrove */
 .ctx-btn {
@@ -2277,7 +2351,10 @@ body.fullscreen-mode #canvas-area {
     padding: 5px 12px;
     background: transparent;
     z-index: 190;
-    overflow-x: visible;
+    max-width: 45vw;
+    /* Con molte pagine i numeri non entrano tutti: prima restavano tagliati e
+       inaccessibili (overflow-x:visible), ora scorrono (regole scrollbar già presenti sotto) */
+    overflow-x: auto;
     scrollbar-width: thin;
 }
 #page-bar::-webkit-scrollbar { height: 4px; }
@@ -2352,6 +2429,83 @@ body.fullscreen-mode #canvas-area {
     padding: 0;
 }
 .page-del-btn:hover { background: #dc2626; }
+
+/* Pulsante "sposta/copia pagina in un'altra lezione" — angolo opposto al pulsante elimina */
+.page-move-btn {
+    position: absolute;
+    top: -6px;
+    left: -6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    font-size: 10px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    padding: 0;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.page-container:hover .page-move-btn,
+.page-container:focus-within .page-move-btn { opacity: 1; }
+.page-move-btn:hover { background: #1d4ed8; }
+
+/* Modal "Sposta/copia pagina": più largo di default e ridimensionabile a mano
+   (trascinando l'angolo in basso a destra) — nomi di lezioni/cartelle lunghi o
+   simili tra loro altrimenti restano tagliati (segnalato da Fabio 11/07/2026) */
+.move-page-modal-box {
+    width: 480px;
+    max-width: min(92vw, 640px);
+    min-width: 320px;
+    resize: horizontal;
+    overflow: auto;
+}
+
+/* Righe del picker "Sposta/copia pagina in un'altra lezione" */
+.move-page-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: var(--bg-elevated);
+    font-size: 0.85rem;
+}
+.move-page-row-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.move-page-row button {
+    flex-shrink: 0;
+    padding: 4px 9px;
+    font-size: 0.76rem;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: #334155;
+    cursor: pointer;
+    font-family: inherit;
+}
+.move-page-row button:hover { background: #f1f5f9; }
+.move-page-row button[data-action="move"]:hover { border-color: #3b82f6; color: #1d4ed8; }
+.move-page-row button[data-action="copy"]:hover { border-color: #16a34a; color: #15803d; }
+
+/* Riordino pagine trascinando (Pointer Events, vedi PageManager._attachPageDragHandle).
+   touch-action:none impostato via JS solo DURANTE il drag effettivo — di default resta
+   auto, altrimenti lo swipe di scorrimento orizzontale della barra pagine si romperebbe. */
+.page-container.page-dragging { opacity: 0.45; }
+.page-container.page-drag-over-before { box-shadow: -2px 0 0 var(--accent); }
+.page-container.page-drag-over-after  { box-shadow: 2px 0 0 var(--accent); }
 
 /* Toolbar allineata con la barra pagine — stesso livello dei numeri pagina e zoom */
 body.has-page-bar #toolbar-wrapper {
@@ -2491,18 +2645,40 @@ body.has-page-bar #zoom-indicator {
 #bottom-right-bar.autosave-saved .autosave-badge {
     opacity: 1;
 }
+/* Stato di errore: badge rosso persistente e cliccabile ("↻" tocca per riprovare) —
+   resta finché il salvataggio non riesce (auto-retry in background) o l'utente
+   tocca per un tentativo immediato (richiesto da Fabio 11/07/2026) */
+#bottom-right-bar.autosave-error .autosave-badge {
+    opacity: 1;
+    background: #ef4444;
+    pointer-events: auto;
+    cursor: pointer;
+    animation: autosave-error-pulse 1.6s ease-in-out infinite;
+}
+@keyframes autosave-error-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.45); }
+    50%      { box-shadow: 0 0 0 4px rgba(239,68,68,0); }
+}
 
-/* Anello rotante saving */
+/* Anello di progresso REALE durante il salvataggio — percentuale vera di byte
+   inviati (aggiornata da AutoSaveManager._setProgress() via upload.onprogress
+   di XMLHttpRequest), non una semplice rotazione indeterminata. Un disco pieno
+   creato con conic-gradient viene "svuotato" al centro con una mask radiale,
+   ottenendo un anello — trucco CSS che evita di dover disegnare un SVG a parte. */
+#bottom-right-bar {
+    --save-progress: 0;
+}
 #bottom-right-bar.autosave-saving #drive-fab::before {
     content: '';
     position: absolute;
     inset: -3px;
     border-radius: 50%;
-    border: 2px solid transparent;
-    border-top-color: #22c55e;
-    animation: spin 1s linear infinite;
+    background: conic-gradient(#22c55e calc(var(--save-progress) * 1%), rgba(34,197,94,0.15) 0);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
     pointer-events: none;
     z-index: 1;
+    transition: background 0.15s linear;
 }
 
 /* Stato pending: highlight giallo sul pulsante account */
@@ -2738,63 +2914,102 @@ body.has-page-bar #zoom-indicator {
    ============================================================================= */
 
 /* --- Timer Widget --- */
+/* Contenitore trasparente — non è più un pannello rettangolare, la forma che
+   si vede è solo il quadrante rotondo (.timer-dial) più i controlli sotto. */
 #timer-widget {
     position: fixed;
     top: 100px;
     right: 20px;
-    background: rgba(20,20,30,0.92);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,0.12);
-    color: #fff;
-    border-radius: 20px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     z-index: 9000;
-    width: 200px;
+    width: 180px;
     user-select: none;
     font-family: 'Segoe UI', sans-serif;
     display: none;
     flex-direction: column;
     align-items: center;
-    gap: 0;
+    gap: 8px;
 }
-.timer-drag-bar, #timer-drag-bar {
-    background: rgba(255,255,255,0.06);
-    border-radius: 20px 20px 0 0;
-    padding: 6px 12px;
+
+/* Quadrante rotondo tipo orologio/cronometro da classe — QUESTA è la forma
+   dell'orologio: cerchio pieno con anello di avanzamento, niente cornice
+   rettangolare intorno. */
+.timer-dial {
+    position: relative;
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #1f2937, #0f172a 75%);
+    box-shadow: 0 10px 34px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.08);
+    touch-action: none; /* niente scroll/zoom del browser durante trascinamento o tocco */
     cursor: grab;
-    font-size: 9px;
-    color: rgba(255,255,255,0.4);
-    text-align: center;
-    width: 100%;
-    box-sizing: border-box;
-    letter-spacing: 2px;
 }
-.timer-drag-bar:active, #timer-drag-bar:active { cursor: grabbing; }
-.timer-display, #timer-display {
-    font-size: 56px;
+.timer-dial:active { cursor: grabbing; }
+.timer-ring-svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg); /* parte dalle ore 12 */
+    pointer-events: none;
+}
+.timer-ring-bg {
+    fill: none;
+    stroke: rgba(255,255,255,0.12);
+    stroke-width: 8;
+}
+.timer-ring-progress {
+    fill: none;
+    stroke: #60a5fa;
+    stroke-width: 8;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.25s linear, stroke 0.3s;
+}
+.timer-dial-low .timer-ring-progress { stroke: #ef4444; }
+.timer-dial-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 34px;
     font-weight: 800;
-    letter-spacing: 2px;
     font-variant-numeric: tabular-nums;
     color: #fff;
-    transition: color 0.3s;
-    padding: 8px 14px 2px;
+    pointer-events: none; /* il gesto è gestito dal .timer-dial (drag + tap unificati) */
 }
+.timer-dial-low .timer-dial-center { color: #ef4444; }
+.timer-digit-tap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-radius: 10px;
+    padding: 2px 6px;
+    line-height: 1;
+    pointer-events: auto; /* riceve il pointerdown iniziale per sapere quale cifra è stata toccata */
+}
+.timer-digit-arrow {
+    font-size: 11px;
+    opacity: 0.4;
+    height: 11px;
+}
+.timer-stopwatch-mode .timer-digit-arrow { visibility: hidden; }
+.timer-colon { color: #ccc; font-size: 30px; font-weight: bold; align-self: center; pointer-events: none; }
+
 .timer-controls {
     display: flex;
-    gap: 8px;
-    padding: 6px 14px;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
 }
 .timer-presets, #timer-presets {
     display: flex;
     gap: 5px;
     flex-wrap: wrap;
     justify-content: center;
-    padding: 4px 10px 10px;
 }
 .timer-preset {
-    background: rgba(255,255,255,0.12);
-    border: none;
+    background: rgba(20,20,30,0.85);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.1);
     color: #fff;
     border-radius: 6px;
     padding: 5px 10px;
@@ -2803,69 +3018,99 @@ body.has-page-bar #zoom-indicator {
     min-height: 32px;
     transition: background 0.2s;
 }
-.timer-preset:hover { background: rgba(255,255,255,0.25); }
-/* Riga input manuale */
-.timer-custom-row {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 14px 4px;
-}
-.timer-input {
-    width: 38px;
-    background: rgba(255,255,255,0.12);
-    border: 1px solid rgba(255,255,255,0.25);
-    border-radius: 6px;
-    color: #fff;
-    font-size: 16px;
-    text-align: center;
-    padding: 2px 4px;
-    -moz-appearance: textfield;
-}
-.timer-input::-webkit-inner-spin-button,
-.timer-input::-webkit-outer-spin-button { -webkit-appearance: none; }
-.timer-input:focus { outline: none; border-color: #60a5fa; }
-.timer-colon { color: #ccc; font-size: 18px; font-weight: bold; }
-.timer-set-btn {
-    background: #2563eb;
-    border: none;
-    color: #fff;
-    border-radius: 6px;
-    padding: 3px 8px;
-    font-size: 14px;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-.timer-set-btn:hover { background: #1d4ed8; }
+.timer-preset:hover { background: rgba(255,255,255,0.2); }
 
 .timer-btn, .timer-mode, .timer-close {
-    background: rgba(255,255,255,0.15);
-    border: none;
+    background: rgba(20,20,30,0.85);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.1);
     color: #fff;
     border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    font-size: 16px;
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: background 0.2s;
     padding: 0;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
 }
-.timer-btn:hover, .timer-mode:hover, .timer-close:hover { background: rgba(255,255,255,0.3); }
-.timer-close { background: rgba(220,50,50,0.3); }
-.timer-close:hover { background: rgba(220,50,50,0.6); }
-#timer-widget.timer-finished {
-    border: 2px solid #ef4444;
-    box-shadow: 0 0 20px rgba(239,68,68,0.4);
+.timer-btn:hover, .timer-mode:hover, .timer-close:hover { background: rgba(255,255,255,0.25); }
+.timer-close { background: rgba(220,50,50,0.55); }
+.timer-close:hover { background: rgba(220,50,50,0.8); }
+#timer-widget.timer-finished .timer-dial {
+    box-shadow: 0 0 24px 4px rgba(239,68,68,0.55), inset 0 0 0 1px rgba(255,255,255,0.08);
 }
-#timer-widget.timer-finished .timer-display,
-#timer-widget.timer-finished #timer-display { color: #ef4444; animation: timer-blink 0.5s step-end 6; }
+#timer-widget.timer-finished .timer-dial-center { color: #ef4444; animation: timer-blink 0.5s step-end 6; }
 @keyframes timer-blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
 @keyframes timer-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.03)} }
-#timer-widget.timer-low .timer-display,
-#timer-widget.timer-low #timer-display { animation: timer-pulse 1s ease-in-out infinite; }
+#timer-widget.timer-low .timer-dial { animation: timer-pulse 1s ease-in-out infinite; }
+
+/* Schermo intero — a scelta del docente, copre tutta la LIM così gli alunni
+   non vedono cosa c'è scritto sotto. Sfondo opaco (non semi-trasparente). */
+#timer-widget.timer-fullscreen {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(160deg, #0f172a, #1e293b);
+    justify-content: center;
+}
+#timer-widget.timer-fullscreen .timer-dial {
+    width: min(64vw, 64vh);
+    height: min(64vw, 64vh);
+    background: none;
+    box-shadow: none;
+    cursor: default;
+}
+#timer-widget.timer-fullscreen .timer-dial-center { font-size: min(13vw, 13vh); }
+#timer-widget.timer-fullscreen .timer-digit-arrow { font-size: min(3.4vw, 3.4vh); height: auto; opacity: 0.55; }
+#timer-widget.timer-fullscreen .timer-btn,
+#timer-widget.timer-fullscreen .timer-mode,
+#timer-widget.timer-fullscreen .timer-close { width: 52px; height: 52px; font-size: 20px; }
+
+/* Ridotto a soli numeri — nessun box, solo la cifra in sovraimpressione
+   leggera in alto pagina: il docente continua a scrivere sulla lavagna
+   sotto, gli alunni vedono comunque il tempo scorrere. Un tocco riporta
+   al widget normale. */
+.timer-mini-readout {
+    display: none;
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 30px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 2px;
+    color: rgba(255,255,255,0.6);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.55), 0 0 12px rgba(0,0,0,0.35);
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 9001;
+    user-select: none;
+    font-family: 'Segoe UI', sans-serif;
+}
+#timer-widget.timer-minimized .timer-mini-readout { display: block; }
+#timer-widget.timer-minimized .timer-dial,
+#timer-widget.timer-minimized .timer-controls,
+#timer-widget.timer-minimized #timer-presets { display: none; }
+
+/* Ultimi 10 secondi: rosso lampeggiante anche da ridotto */
+.timer-mini-readout.timer-mini-low {
+    color: #ef4444;
+    text-shadow: 0 0 10px rgba(239,68,68,0.7), 0 1px 4px rgba(0,0,0,0.55);
+    animation: timer-mini-pulse 1s ease-in-out infinite;
+}
+@keyframes timer-mini-pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
+/* Tempo scaduto: rosso più intenso, lampeggio secco */
+#timer-widget.timer-finished .timer-mini-readout {
+    color: #ff3b3b;
+    text-shadow: 0 0 16px rgba(255,59,59,0.9), 0 1px 4px rgba(0,0,0,0.6);
+    animation: timer-blink 0.5s step-end 6;
+}
 
 /* --- Spotlight --- */
 #spotlight-canvas {

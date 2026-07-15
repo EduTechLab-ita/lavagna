@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v131'; // v131 — Nuova Lavagna applica sfondo/strumento/colore dalle Impostazioni
+const CACHE_NAME = 'eduboard-v2-071'; // v2-071 — Fix avviso chiusura non salvata: mancava se il token Drive scadeva a metà sessione con lezione già aperta
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'Nuova Lavagna ora apre con lo sfondo, lo strumento e il colore salvati nelle Impostazioni.';
+const CHANGELOG  = 'EduBoard V2-071 — Corretto un caso in cui l\'avviso "modifiche non salvate" alla chiusura non compariva: se il collegamento a Drive scadeva mentre si disegnava con una lezione già aperta.';
 
 const urlsToCache = [
   '.',
@@ -23,12 +23,25 @@ self.addEventListener('install', (event) => {
   console.log('[SW] Installing Service Worker...');
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => {
+      .then(async (cache) => {
         console.log('[SW] Cache opened successfully');
-        return cache.addAll(urlsToCache);
+        // cache.addAll() è tutto-o-niente: su connessione instabile basta UN file che
+        // fallisce a scaricarsi per bloccare l'intera installazione — l'app resta con
+        // JS/CSS vecchi in cache mentre index.html (mai cachato) mostra già il nuovo
+        // numero di versione, un disallineamento confuso (visto dal vivo l'11/07/2026,
+        // hotspot in montagna). Con Promise.allSettled i singoli file che falliscono
+        // vengono solo saltati (verranno ritentati al prossimo aggiornamento del SW),
+        // invece di far fallire in blocco tutti gli altri che erano andati a buon fine.
+        const results = await Promise.allSettled(
+          urlsToCache.map((url) => cache.add(url))
+        );
+        const failed = results
+          .map((r, i) => (r.status === 'rejected' ? urlsToCache[i] : null))
+          .filter(Boolean);
+        if (failed.length) console.warn('[SW] File non cacheati (rete instabile?):', failed);
+        else console.log('[SW] All resources cached');
       })
       .then(() => {
-        console.log('[SW] All resources cached');
         // Forza l'attivazione immediata del nuovo SW
         return self.skipWaiting();
       })
@@ -87,14 +100,15 @@ self.addEventListener('fetch', (event) => {
     url.includes('accounts.google.com') ||
     url.includes('drive.google.com') ||
     url.includes('script.google.com') ||
-    url.includes('workers.dev')
+    url.includes('workers.dev') ||
+    url.includes('firebasedatabase.app')
   ) {
     return;
   }
 
   // CRITICO: mai intercettare sw.js e index.html — devono sempre arrivare dal network
   // così il browser può rilevare nuove versioni del SW e dell'app senza rimanere bloccato.
-  if (url.includes('sw.js') || url.includes('index.html') || url.endsWith('/')) {
+  if (url.includes('sw.js') || url.includes('index.html') || url.includes('connect.html') || url.endsWith('/')) {
     return;
   }
 
