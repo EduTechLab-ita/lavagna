@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v2-071'; // v2-071 — Fix avviso chiusura non salvata: mancava se il token Drive scadeva a metà sessione con lezione già aperta
+const CACHE_NAME = 'eduboard-v2-074'; // v2-074 — Trascinamento e ridimensionamento di immagini e PDF resi fluidi
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'EduBoard V2-071 — Corretto un caso in cui l\'avviso "modifiche non salvate" alla chiusura non compariva: se il collegamento a Drive scadeva mentre si disegnava con una lezione già aperta.';
+const CHANGELOG  = 'EduBoard V2-074 — Spostare e ridimensionare immagini e PDF ora è fluido: prima ogni movimento ricalcolava da capo tutti gli oggetti della pagina, filtri compresi. Corretti anche i pulsanti di contatto nelle impostazioni.';
 
 const urlsToCache = [
   '.',
@@ -15,7 +15,19 @@ const urlsToCache = [
   './connect.html',
   './connect-manifest.json',
   './jsqr.min.js',
-  './qrcode.min.js'
+  './qrcode.min.js',
+  // PDF.js in locale: caricata su richiesta da _ensurePdfJs(), ma messa in cache subito,
+  // così l'import PDF funziona anche offline e dove il firewall blocca i CDN esterni.
+  './pdf.min.js',
+  './pdf.worker.min.js',
+  // Font Inter, solo il subset "latin": copre l'italiano per intero (~47 KB a peso).
+  // I file "latin-ext" sono nel repo ma NON qui: servono solo per caratteri di altre
+  // lingue e sarebbero 400 KB di cache in più scaricati da tutti per niente.
+  './fonts/inter-400-latin.woff2',
+  './fonts/inter-500-latin.woff2',
+  './fonts/inter-600-latin.woff2',
+  './fonts/inter-700-latin.woff2',
+  './fonts/inter-800-latin.woff2'
 ];
 
 // Installazione del Service Worker
