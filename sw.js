@@ -1,6 +1,6 @@
-const CACHE_NAME = 'eduboard-v2-075'; // v2-075 — Corretto l'indirizzo della richiesta assistenza anche in EduConnect
+const CACHE_NAME = 'eduboard-v2-082'; // v2-082 — Fix definitivo dimensione/posizione import multiplo immagini
 // Testo mostrato sulla LIM e su EduConnect dopo ogni aggiornamento automatico
-const CHANGELOG  = 'EduBoard V2-075 — Corretta la richiesta di assistenza in EduConnect: la mail partiva verso una casella inesistente, quindi le segnalazioni non arrivavano a nessuno.';
+const CHANGELOG  = 'EduBoard V2-082 — Corretto per davvero l\'import di più immagini insieme: restano tutte della stessa dimensione, centrate dentro l\'area di stampa, senza più sconfinare dal bordo. Corretta anche la dimensione delle foto ricevute dal telefono via EduConnect.';
 
 const urlsToCache = [
   '.',
