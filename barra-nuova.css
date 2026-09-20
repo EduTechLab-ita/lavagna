@@ -1,0 +1,917 @@
+/* Restyling barra EduBoard — 20/09/2026.
+   Foglio a parte, caricato da index.html (dopo style.css): tutte le regole
+   qui dentro sono scoped su `body.v2` così l'index.html di test (produzione futura)
+   resta invariato. Passi successivi (Magic Box, Gestione File, pannello pagine, lazo)
+   si aggiungono qui via /salva + piano in lavagna-eduboard.md. */
+
+/* ---------- STEP 2: scala 75% sulle barre, non sui pannelli/popup —
+   valore confermato da Fabio sul banco di prova (20/09/2026, provato sulla LIM). ---------- */
+/* Tutte e tre le barre poggiano sulla STESSA linea (banco: bottom:16px per dock,
+   pagebar e corner) e sono scalate allo stesso 75%. Prima il dock stava più in basso
+   perché il wrapper è ancorato a bottom:0 e #floating-toolbar ha una spalla inferiore
+   di 12px: qui si toglie quella spalla e si porta il wrapper a 16px. */
+body.v2 #toolbar-wrapper {
+    bottom: 16px;
+    transform: translateX(-50%) translateY(calc(100% - 54px)) scale(.75);
+    transform-origin: bottom center;
+}
+body.v2 #toolbar-wrapper.visible {
+    transform: translateX(-50%) translateY(0) scale(.75);
+}
+body.v2 #floating-toolbar {
+    padding-bottom: 0;
+}
+/* ---- Barra pagine e angolo zoom: pillole identiche alla barra principale ----
+   Nel banco (.pagebar / .corner) sono due pillole bianche con bordo, raggio 50px e
+   la stessa ombra del dock, con i pulsanti PIATTI dentro. Nell'app invece #page-bar
+   è trasparente e ogni pulsante ha il suo riquadro bianco, e #bottom-right-bar ha
+   raggio 10px: era questa la "bordatura diversa". Qui si riallineano ai valori del
+   banco (scala 1: le icone native 28px sono già alla misura giusta). */
+body.v2 #page-bar,
+body.v2 #bottom-right-bar {
+    /* Un filo più strette del banco: richiesta di Fabio del 20/09 sera, per far
+       stare le due barre laterali più raccolte (icone più vicine fra loro). */
+    padding: 4px 7px;
+    gap: 0;
+    background: rgba(255, 255, 255, .97);
+    border: 1px solid rgba(15, 23, 42, .08);
+    border-radius: 50px;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, .10);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+body.v2 #page-bar {
+    left: 16px;
+    bottom: 16px;
+    max-width: 45vw;
+    overflow: visible;
+    /* Stessa scala del dock: nel banco le tre barre si rimpiccioliscono insieme
+       (--ui). I pulsanti interni sono già alla misura del banco (38px), quindi
+       il 75% li porta ai 28,5px effettivi giusti. */
+    transform: scale(.75);
+    transform-origin: bottom left;
+}
+body.v2 #bottom-right-bar {
+    right: 16px;
+    bottom: 16px;
+    transform: scale(.75);
+    transform-origin: bottom right;
+}
+/* Angolo zoom: misure del banco (.corner .tb 38px, .avatar 34px, zoom 12,5px) */
+body.v2 #bottom-right-bar .bottom-bar-zoom-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    font-size: 1.15rem;
+}
+body.v2 #bottom-right-bar .bottom-bar-zoom-btn:hover {
+    background: #f1f5f9;
+}
+body.v2 #zoom-display {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #475569;
+    min-width: 46px;
+    text-align: center;
+}
+body.v2 #drive-fab {
+    width: 34px;
+    height: 34px;
+}
+/* Campanella sempre visibile come nel banco (prima compariva solo con foto in
+   arrivo): il badge rosso resta legato al conteggio vero. */
+body.v2 #photo-bell-btn {
+    display: flex !important;
+    width: 38px;
+    height: 38px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    font-size: 1.25rem;
+    padding: 0;
+}
+body.v2 #photo-bell-btn:hover {
+    background: #f1f5f9;
+}
+/* Presentazione attiva: resta accesa in azzurro finché si è a schermo intero */
+body.v2 .v2-present-btn.v2-on {
+    background: rgba(59, 130, 246, .15);
+    border-color: rgba(59, 130, 246, .40);
+}
+/* Pulsanti piatti dentro le pillole (banco: .pagebar .tb / .corner .tb) */
+body.v2 #page-bar .page-bar-icon-btn,
+body.v2 #bottom-right-bar .page-bar-icon-btn {
+    width: 38px;
+    height: 38px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: transparent;
+    box-shadow: none;
+}
+body.v2 #page-bar .page-bar-icon-btn:hover,
+body.v2 #bottom-right-bar .page-bar-icon-btn:hover {
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+}
+body.v2 #page-bar .page-bar-icon-btn svg,
+body.v2 #bottom-right-bar .page-bar-icon-btn svg {
+    width: 21px;
+    height: 21px;
+}
+/* Contatore pagine "N/M" (banco: .pagechip) */
+body.v2 .v2-pagechip {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: #0f172a;
+    padding: 6px 12px;
+    /* Bordino scuro attorno all'ovale del contatore: così si distingue subito
+       dalla pillola bianca su cui poggia (richiesta di Fabio). */
+    border: 1.5px solid #0f172a;
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+    background: #fff;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+body.v2 .v2-pagechip:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+body.v2 .v2-pagechip.v2-on {
+    background: rgba(59, 130, 246, .15);
+    border-color: rgba(59, 130, 246, .40);
+    color: #1d4ed8;
+}
+/* I pulsanti pagina originali dell'app restano nel DOM (app.js li usa) ma non si
+   vedono più: al loro posto c'è il contatore, come deciso nel banco. */
+body.v2 #page-bar .page-container,
+body.v2 #page-bar .page-btn--add {
+    display: none !important;
+}
+/* Separatore dentro le pillole laterali (banco: .sep) */
+body.v2 .v2-barsep {
+    width: 1px;
+    height: 26px;
+    background: #e2e8f0;
+    margin: 0 4px;
+    flex-shrink: 0;
+}
+
+/* Pulsante "Presentazione" iniettato da barra-nuova.js nella barra pagine —
+   stesso stile dei pulsanti icona già presenti lì (.page-bar-icon-btn). */
+body.v2 .v2-present-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
+/* ---------- STEP 3b: barra fissa, niente più "espandi/richiudi" ----------
+   barra-nuova.js tiene toolbarMgr sempre nello stato aperto: qui si nascondono
+   solo i controlli dell'apri/chiudi che non servono più (quick-strip/mini-bar
+   erano l'alternativa "chiusa", la freccetta ∨ serviva a richiudere). La
+   pillola colori/dimensioni (#tool-options-row) NON si tocca: resta gestita
+   da app.js, che la mostra/nasconde da solo secondo lo strumento scelto. */
+body.v2 #toolbar-top-row {
+    display: none;
+}
+body.v2 #toolbar-toggle-open {
+    display: none;
+}
+body.v2 #toolbar-controls-row {
+    justify-content: center;
+}
+
+/* ---------- STEP 4: UNA pillola sola, come nel banco ----------
+   Oggi ogni .tool-group è una pillola bianca A SÉ (sfondo/bordo/ombra propri) con
+   uno spazio vuoto fra l'una e l'altra; nel banco tutta la barra è UN'UNICA pillola
+   con separatori sottili fra i gruppi. Si sposta lo stile pillola da .tool-group al
+   contenitore .main-row (struttura identica, solo l'aspetto cambia), e si riaccende
+   .tool-separator (oggi display:none) come sottile linea verticale — esattamente
+   .sep del banco. Le etichette di testo spariscono SEMPRE (non solo in "compact"):
+   nel banco la barra principale è sempre e solo icone. */
+body.v2 .main-row {
+    gap: 2px;
+    padding: 5px 8px;
+    background: rgba(255, 255, 255, .97);
+    border: 1px solid rgba(15, 23, 42, .08);
+    border-radius: 50px;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, .10);
+    /* La pillola si stringe sulle icone invece di allargarsi a tutto il wrapper
+       (nel banco .dock è larga quanto il suo contenuto). */
+    width: max-content;
+    max-width: 100%;
+    margin: 0 auto;
+}
+body.v2 #floating-toolbar {
+    width: auto;
+}
+body.v2 .tool-group {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0;
+    gap: 2px;
+}
+body.v2 .tool-separator {
+    display: block;
+    width: 1px;
+    height: 26px;
+    background: #e2e8f0;
+    margin: 0 3px;
+    flex-shrink: 0;
+}
+body.v2 .tool-btn {
+    width: 46px;
+    height: 46px;
+    flex-direction: row;
+}
+body.v2 .tool-btn span {
+    display: none;
+}
+body.v2 .tool-btn svg {
+    width: 30px;
+    height: 30px;
+}
+
+/* Gruppo zoom ritraibile — stesso pattern del banco (.corner .fold) */
+body.v2 .v2-zoomgroup {
+    display: inline-flex;
+    align-items: center;
+    overflow: hidden;
+    max-width: 260px;
+    transition: max-width .28s ease, opacity .2s ease;
+}
+body.v2 .v2-zoomgroup.v2-folded {
+    max-width: 0;
+    opacity: 0;
+}
+body.v2 #v2-zoom-fold svg {
+    width: 15px;
+    height: 15px;
+}
+
+/* ---------- STEP 3d: header sfoltito (decisione di Fabio, 20/09/2026) ----------
+   Nuova/Stampa/Espandi/Salva sono ormai duplicati (Gestione File + barra pagine):
+   si NASCONDONO con CSS, non si cancellano dal markup — Gestione File e la barra
+   pagine cliccano ancora questi stessi pulsanti veri (proxy in barra-nuova.js).
+   Resta in header solo il nome/stato della connessione account. */
+body.v2 #btn-new-board-header,
+body.v2 #btn-export,
+body.v2 #btn-fullscreen,
+body.v2 #btn-save {
+    display: none;
+}
+/* Nome lezione centrato in header, staccato da logo/account (richiesta 20/09/2026) */
+body.v2 #project-name {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    max-width: min(320px, 40vw);
+}
+
+/* =========================================================================
+   STEP 3+5: IL SISTEMA DI PANNELLI DEL BANCO, PORTATO DI PESO.
+   Le regole qui sotto sono la traduzione 1:1 del foglio di stile di
+   `banco-barra-2026-09-20.html` sugli elementi veri dell'app:
+      .panel → .v2-panel + i popup nativi (#shape-popup/#bg-popup/#geo-popup/
+               #color-palette-popup: erano SCURI, nel banco sono bianchi)
+      .panel-head/h3 → .v2-panel-head + .popup-title
+      .x       → .popup-close-btn
+      .tray    → .v2-trayv     (pila verticale: titolo sopra, icone sotto)
+      .mbsec   → .v2-tray      (due colonne: testo a sinistra, icone a destra —
+                                usata SOLO dal Magic Box, come nel banco)
+      .pick    → .v2-pick, .shape-opt, .bg-opt, i .tool-btn dentro i pannelli
+      .nib     → .size-btn     (pillole grigie ORIZZONTALI, mai pallini:
+                                decisione esplicita di Fabio)
+      .swatch  → .color-swatch
+   Valori esadecimali espliciti, non le var() dell'app (che sono tarate su un
+   pannello scuro). ========================================================= */
+
+/* ---- Guscio del pannello (banco: .panel) ---- */
+body.v2 .popup-panel {
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, .10);
+    border-radius: 18px;
+    box-shadow: 0 22px 60px rgba(15, 23, 42, .22);
+    padding: 16px 16px 14px;
+    color: #0f172a;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    /* Senza questo il contenuto sbordava sotto la barra invece di scorrere dentro
+       il pannello (app.js imposta già una max-height calcolata sullo spazio libero). */
+    overflow-y: auto;
+}
+/* Forme: 15 forme con etichetta facevano un pannello altissimo. Griglia più fitta
+   e icone più piccole così sta tutto sopra la barra, come nel banco. */
+body.v2 #shape-popup {
+    width: min(420px, calc(100vw - 36px));
+}
+body.v2 #shape-popup .shape-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+}
+body.v2 #shape-popup .shape-opt {
+    padding: 6px 3px;
+    gap: 2px;
+    border-radius: 10px;
+}
+body.v2 #shape-popup .shape-opt svg {
+    width: 26px;
+    height: 26px;
+}
+body.v2 #shape-popup .shape-opt span {
+    font-size: 9.5px;
+}
+body.v2 .v2-panel {
+    width: min(440px, calc(100vw - 36px));
+    max-height: min(62vh, 430px);
+    overflow-y: auto;
+    /* Apertura con dissolvenza + scivolata (banco: .panel → .panel.open): il
+       pannello resta SEMPRE nel flusso, la visibilità è opacità+pointer-events,
+       perché una transizione CSS non può partire da display:none. */
+    display: block !important;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(8px);
+    transition: opacity .18s ease, transform .18s ease;
+}
+body.v2 .v2-panel.v2-open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* ---- Intestazione (banco: .panel-head + h3) — NON maiuscoletto grigio ---- */
+body.v2 .v2-panel-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 13px;
+}
+body.v2 .v2-panel-head svg {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+}
+body.v2 .popup-panel .popup-title {
+    font-size: 15.5px;
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: normal;
+    color: #0f172a;
+    margin-bottom: 13px;
+    padding-right: 34px;
+}
+body.v2 .v2-panel-head .popup-title {
+    margin-bottom: 0;
+    flex: 1;
+}
+body.v2 .popup-panel .popup-title-sub {
+    color: #64748b;
+}
+
+/* ---- × di chiusura (banco: .x) ---- */
+body.v2 .popup-panel .popup-close-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 21px;
+}
+body.v2 .popup-panel .popup-close-btn:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+/* ---- Vassoio verticale (banco: .tray + .tray-title + .row) ---- */
+body.v2 .v2-trayv {
+    background: #f6f8fb;
+    border-radius: 13px;
+    padding: 12px;
+}
+body.v2 .v2-trayv + .v2-trayv {
+    margin-top: 10px;
+}
+body.v2 .v2-trayv-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 9px;
+}
+body.v2 .v2-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+/* Ogni tray: testo descrittivo a sinistra, icone a destra — stesso schema del banco */
+body.v2 .v2-tray {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 11px;
+    border-radius: 13px;
+    background: #f6f8fb;
+}
+body.v2 .v2-tray + .v2-tray {
+    margin-top: 9px;
+}
+body.v2 .v2-tray-txt {
+    flex: 1;
+    min-width: 112px;
+}
+body.v2 .v2-tray-txt strong {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 2px;
+    color: #0f172a;
+}
+body.v2 .v2-tray-txt span {
+    display: block;
+    font-size: 12.2px;
+    color: #64748b;
+    line-height: 1.45;
+}
+body.v2 .v2-tray-tools {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+/* ---- Icone dentro i pannelli (banco: .pick) — 46px, solo icona ----
+   Vale sia per le icone del Magic Box (.v2-tray-tools) sia per quelle dei vassoi
+   verticali (.v2-row): nel banco sono lo stesso identico pulsante. */
+body.v2 .v2-tray-tools .tool-btn,
+body.v2 .v2-tray-tools .shape-opt,
+body.v2 .v2-row .tool-btn,
+body.v2 .v2-row .eraser-mode-btn {
+    width: 46px;
+    height: 46px;
+    min-width: 0;
+    padding: 0;
+    border-radius: 12px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: row;
+    font-size: 0;            /* nasconde l'eventuale testo ("Area"/"Tratto") */
+}
+body.v2 .v2-tray-tools .tool-btn:hover,
+body.v2 .v2-tray-tools .shape-opt:hover,
+body.v2 .v2-row .tool-btn:hover,
+body.v2 .v2-row .eraser-mode-btn:hover {
+    background: #e9eef6;
+    border-color: transparent;
+}
+body.v2 .v2-tray-tools .tool-btn.active,
+body.v2 .v2-tray-tools .tool-btn.geo-active,
+body.v2 .v2-tray-tools .shape-opt.geo-active,
+body.v2 .v2-row .tool-btn.active,
+body.v2 .v2-row .eraser-mode-btn.active {
+    background: rgba(59, 130, 246, .15);
+    border-color: rgba(59, 130, 246, .4);
+}
+body.v2 .v2-tray-tools .tool-btn svg,
+body.v2 .v2-tray-tools .shape-opt svg,
+body.v2 .v2-row .tool-btn svg,
+body.v2 .v2-row .eraser-mode-btn svg {
+    width: 29px;
+    height: 29px;
+}
+body.v2 .v2-tray-tools .tool-btn span,
+body.v2 .v2-tray-tools .shape-opt span,
+body.v2 .v2-row .tool-btn span {
+    display: none;
+}
+
+/* ---- Spessore punta (banco: .nib) — PILLOLE GRIGIE ORIZZONTALI, mai pallini.
+   Decisione esplicita di Fabio: i cerchi si confondono coi pallini del colore.
+   Il `width` del pallino è inline nell'HTML dell'app, quindi serve !important;
+   l'altezza inline resta e diventa lo spessore rappresentato. ---- */
+body.v2 .v2-options-slot #options-sizes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+body.v2 .v2-options-slot .size-btn {
+    width: 52px;
+    height: 38px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background: #eef2f7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+body.v2 .v2-options-slot .size-btn:hover {
+    background: #e2e8f0;
+}
+body.v2 .v2-options-slot .size-btn.active {
+    background: #fff;
+    border-color: rgba(59, 130, 246, .4);
+    box-shadow: 0 1px 4px rgba(15, 23, 42, .10);
+}
+body.v2 .v2-options-slot .size-dot {
+    width: 30px !important;
+    border-radius: 99px;
+    background: #94a3b8;
+}
+body.v2 .v2-options-slot .size-btn.active .size-dot {
+    background: #475569;
+}
+
+/* ---- Colori (banco: .swatch / .addcol) ---- */
+body.v2 .v2-options-slot #options-colors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+body.v2 .v2-options-slot .color-swatch {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+}
+body.v2 .v2-options-slot .color-swatch.active {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px #fff inset;
+}
+body.v2 .v2-options-slot #color-custom {
+    border: 1.5px dashed #94a3b8;
+    background: #fff;
+    color: #475569;
+}
+body.v2 .v2-options-slot #color-custom:hover {
+    border-color: #3b82f6;
+    color: #3b82f6;
+}
+/* La pillola perde il suo guscio quando vive dentro un pannello: lì il "guscio"
+   è già il vassoio grigio. */
+body.v2 .v2-options-slot #tool-options-row {
+    display: block !important;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    border-radius: 0;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+body.v2 .v2-options-slot .options-divider {
+    display: none !important;
+}
+
+/* ---- Popup nativi (Forme / Sfondo / Geometria / Tavolozza): erano scuri,
+   nel banco tutti i pannelli sono bianchi. Qui si ritinteggiano soltanto —
+   struttura e comportamento restano quelli di app.js. ---- */
+body.v2 .shape-opt,
+body.v2 .bg-opt {
+    background: #f6f8fb;
+    border: 1px solid transparent;
+    color: #475569;
+}
+body.v2 .shape-opt:hover,
+body.v2 .bg-opt:hover {
+    background: #e9eef6;
+    color: #0f172a;
+}
+body.v2 .shape-opt.active,
+body.v2 .bg-opt.active {
+    background: rgba(59, 130, 246, .15);
+    border-color: rgba(59, 130, 246, .4);
+    color: #1d4ed8;
+}
+body.v2 .bg-orient-btn {
+    background: #f6f8fb;
+    border: 1px solid transparent;
+    color: #475569;
+}
+body.v2 .bg-orient-btn.active {
+    background: rgba(59, 130, 246, .15);
+    border-color: rgba(59, 130, 246, .4);
+    color: #1d4ed8;
+}
+body.v2 .bg-color-label,
+body.v2 .shape-fill-row,
+body.v2 .toggle-label {
+    color: #475569;
+}
+
+/* Intestazione e riga orientamento del pannello Sfondo: restano "appiccicate" in
+   alto mentre si scorre, e avevano ancora il fondo SCURO del tema vecchio — testo
+   scuro su fondo scuro, illeggibile (segnalato da Fabio con schermata). */
+body.v2 #bg-popup .popup-title,
+body.v2 #bg-popup .bg-orient-row {
+    background: #ffffff;
+}
+body.v2 #bg-popup .bg-color-label span,
+body.v2 #bg-popup .bg-section-header {
+    color: #64748b;
+}
+body.v2 #bg-page-color-btn {
+    border: 1px solid #cbd5e1;
+    background: #f6f8fb;
+}
+
+/* ---- Sfondi presi dal Drive: anteprime più grandi e su fondo chiaro ----
+   Erano 90×65 su `--bg-elevated`, che in questo tema è quasi nero: dentro il
+   pannello bianco non si distinguevano e non si riusciva a scegliere. */
+body.v2 .bg-drive-grid {
+    gap: 10px;
+}
+body.v2 .bg-drive-thumb {
+    width: 124px;
+    height: 88px;
+    background: #f6f8fb;
+    border: 2px solid #cbd5e1;
+}
+body.v2 .bg-drive-thumb:hover {
+    border-color: #3b82f6;
+}
+/* Barra di scorrimento grigia: era bianca su bianco e non si vedeva */
+body.v2 .bg-drive-grid {
+    scrollbar-color: #94a3b8 #e2e8f0;
+}
+body.v2 .bg-drive-grid::-webkit-scrollbar {
+    height: 9px;
+}
+body.v2 .bg-drive-grid::-webkit-scrollbar-track {
+    background: #e2e8f0;
+    border-radius: 99px;
+}
+body.v2 .bg-drive-grid::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 99px;
+}
+body.v2 .bg-drive-grid::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+/* Stessa cura per ogni altro pannello che scorre (Forme, Guida, libreria…) */
+body.v2 .popup-panel {
+    scrollbar-color: #94a3b8 transparent;
+}
+body.v2 .popup-panel::-webkit-scrollbar {
+    width: 9px;
+}
+body.v2 .popup-panel::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 99px;
+}
+body.v2 .popup-panel::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+body.v2 .bg-drive-loading,
+body.v2 .bg-drive-empty {
+    color: #64748b;
+}
+body.v2 .bg-upload-btn {
+    background: #f6f8fb;
+    border: 1px solid #cbd5e1;
+    color: #0f172a;
+}
+
+/* ---- Comandi dei contenuti incorporati: misura FISSA sullo schermo ----
+   #embed-layer vive dentro #canvas-area, che è scalato dallo zoom della lavagna.
+   A "100%" lo zoom reale è circa 0,3 (il canvas è tre volte la finestra), quindi i
+   38px dei pulsanti diventavano ~12px: illeggibili, e per vederli bisognava
+   ingrandire il contenuto. Qui si moltiplica ogni misura per l'INVERSO dello zoom
+   (--v2-inv, aggiornato da barra-nuova.js ad ogni pan/zoom): sullo schermo restano
+   sempre della stessa grandezza, qualunque sia l'ingrandimento. */
+body.v2 .embed-header {
+    height: calc(46px * var(--v2-inv, 1));
+    gap: calc(4px * var(--v2-inv, 1));
+    padding: 0 calc(5px * var(--v2-inv, 1));
+    border-radius: calc(8px * var(--v2-inv, 1)) calc(8px * var(--v2-inv, 1)) 0 0;
+}
+body.v2 .embed-btn {
+    width: calc(40px * var(--v2-inv, 1));
+    height: calc(40px * var(--v2-inv, 1));
+    font-size: calc(1.3rem * var(--v2-inv, 1));
+    border-radius: calc(8px * var(--v2-inv, 1));
+}
+body.v2 .embed-header-url {
+    font-size: calc(0.82rem * var(--v2-inv, 1));
+    padding: 0 calc(6px * var(--v2-inv, 1));
+}
+body.v2 .embed-resize-handle {
+    width: calc(32px * var(--v2-inv, 1));
+    height: calc(32px * var(--v2-inv, 1));
+}
+/* Scheda "Link": anche il suo contenuto resta leggibile a qualunque zoom */
+body.v2 .embed-link-icon {
+    font-size: calc(1.6rem * var(--v2-inv, 1));
+}
+body.v2 .embed-link-host {
+    font-size: calc(0.95rem * var(--v2-inv, 1));
+}
+body.v2 .embed-link-cta {
+    font-size: calc(0.78rem * var(--v2-inv, 1));
+}
+
+/* ---- Pannello pagine (banco: .panel-pages / .pagerow / .rowbtn / .addpagebtn) ---- */
+body.v2 #v2-pages-panel {
+    width: min(330px, calc(100vw - 36px));
+}
+body.v2 .v2-pagelist {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    position: relative;   /* riferimento per la riga grigia di inserimento */
+}
+/* Riga che mostra dove finirà la pagina mentre la si trascina */
+body.v2 .v2-drop-line {
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    height: 3px;
+    border-radius: 99px;
+    background: #94a3b8;
+    pointer-events: none;
+    display: none;
+}
+body.v2 .v2-pagerow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 11px;
+    border: 1px solid transparent;
+    background: #f6f8fb;
+    cursor: pointer;
+    /* Tutta la riga è trascinabile: col dito il browser non deve interpretare il
+       gesto come uno scorrimento del pannello. */
+    touch-action: none;
+}
+body.v2 .v2-pagerow.v2-current {
+    background: rgba(59, 130, 246, .15);
+    border-color: rgba(59, 130, 246, .40);
+}
+body.v2 .v2-pagerow.v2-dragging {
+    opacity: .6;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, .18);
+}
+/* Maniglia di trascinamento (banco: .grip) */
+body.v2 .v2-grip {
+    color: #94a3b8;
+    font-size: 15px;
+    line-height: 1;
+    letter-spacing: -2px;
+    cursor: grab;
+    touch-action: none;
+    flex-shrink: 0;
+    padding: 0 2px;
+}
+body.v2 .v2-grip:active {
+    cursor: grabbing;
+}
+/* Anteprima della pagina (banco: .thumb) */
+body.v2 .v2-thumb {
+    width: 56px;
+    height: 40px;
+    border-radius: 6px;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    flex-shrink: 0;
+    overflow: hidden;
+    display: block;
+    object-fit: contain;
+}
+/* Menù ⋮ di riga */
+body.v2 .v2-rowmenu {
+    position: fixed;
+    z-index: 300;
+    background: #fff;
+    border: 1px solid rgba(15, 23, 42, .10);
+    border-radius: 12px;
+    box-shadow: 0 18px 44px rgba(15, 23, 42, .22);
+    padding: 6px;
+    min-width: 232px;
+}
+body.v2 .v2-rowmenu button {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 9px 10px;
+    border: none;
+    background: transparent;
+    border-radius: 9px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13.5px;
+    color: #0f172a;
+    text-align: left;
+}
+body.v2 .v2-rowmenu button:hover {
+    background: #f1f5f9;
+}
+body.v2 .v2-rowmenu svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+body.v2 .v2-pagename {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: #0f172a;
+    min-width: 0;
+}
+body.v2 .v2-pagename em {
+    font-style: normal;
+    color: #64748b;
+    font-size: 11.6px;
+}
+body.v2 .v2-rowbtn {
+    width: 30px;
+    height: 30px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    flex-shrink: 0;
+}
+body.v2 .v2-rowbtn svg {
+    width: 19px;
+    height: 19px;
+}
+body.v2 .v2-rowbtn:hover {
+    background: rgba(15, 23, 42, .07);
+}
+body.v2 .v2-addpagebtn {
+    margin-top: 10px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 11px;
+    border: 1.5px dashed #cbd5e1;
+    background: #fff;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+}
+body.v2 .v2-addpagebtn svg {
+    width: 19px;
+    height: 19px;
+}
+body.v2 .v2-addpagebtn:hover {
+    border-color: #3b82f6;
+    color: #3b82f6;
+}
+
+/* Gestione File — elenco verticale bianco, stesso linguaggio del Magic Box */
+body.v2 .v2-filenav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+body.v2 .v2-filenav button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 8px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13.5px;
+    color: #0f172a;
+    text-align: left;
+    width: 100%;
+}
+body.v2 .v2-filenav button:hover {
+    background: #f1f5f9;
+}
+body.v2 .v2-filenav button svg {
+    width: 19px;
+    height: 19px;
+    flex-shrink: 0;
+}
+body.v2 .v2-filenote {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 12.3px;
+    line-height: 1.5;
+    color: #64748b;
+}

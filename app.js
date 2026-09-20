@@ -1108,6 +1108,14 @@ class CanvasManager {
     _onStart(e) {
         const { x, y } = this.getCoords(e);
 
+        // Gomma-lazo: si cerchia a mano libera e al rilascio sparisce solo ciò che sta
+        // dentro. Come la gomma-tratto NON tocca gli oggetti importati (immagini/PDF):
+        // quelli si eliminano con Seleziona + Canc, scelta già presa il 19/09/2026.
+        if (CONFIG.currentTool === 'eraser' && CONFIG.eraserMode === 'lasso') {
+            this._eraserLassoPath = [{ x, y }];
+            return;
+        }
+
         // Modalità gomma-tratto: premi e scorri per cancellare (stile OneNote)
         // Cancella in un tocco solo un tratto/forma intera — MAI un oggetto importato
         if (CONFIG.currentTool === 'eraser' && CONFIG.eraserMode === 'stroke') {
@@ -1169,6 +1177,15 @@ class CanvasManager {
     }
 
     _onMove(e) {
+        // Gomma-lazo: accumula il tracciato e lo disegna tratteggiato sull'overlay
+        if (CONFIG.currentTool === 'eraser' && CONFIG.eraserMode === 'lasso') {
+            if (!this._eraserLassoPath) return;
+            const p = this.getCoords(e);
+            this._eraserLassoPath.push({ x: p.x, y: p.y });
+            this._drawEraserLasso();
+            return;
+        }
+
         // Gomma-tratto: se sto premendo → cancella subito; altrimenti → evidenzia hover
         if (CONFIG.currentTool === 'eraser' && CONFIG.eraserMode === 'stroke') {
             const { x, y } = this.getCoords(e);
@@ -1234,6 +1251,12 @@ class CanvasManager {
     }
 
     _onEnd(e) {
+        // Gomma-lazo: al rilascio si cancella ciò che è racchiuso nel tracciato
+        if (CONFIG.currentTool === 'eraser' && CONFIG.eraserMode === 'lasso') {
+            this._commitEraserLasso();
+            return;
+        }
+
         // Gomma-tratto: rilascia la modalità press-and-swipe
         if (CONFIG.currentTool === 'eraser' && CONFIG.eraserMode === 'stroke' && this._erasingStrokes) {
             this._erasingStrokes = false;
@@ -1444,6 +1467,50 @@ class CanvasManager {
         window.autoSaveMgr?.onDirty();
     }
 
+    // ── Gomma-lazo (20/09/2026) ────────────────────────────────────────────────
+    // Disegna il tracciato mentre lo si traccia. Stesso tratteggio azzurro del lazo
+    // di selezione, così il gesto si riconosce subito come "cerchia e togli".
+    _drawEraserLasso() {
+        const oc = this.overlayCanvas, ctx = this.overlayCtx;
+        if (!oc || !ctx || !this._eraserLassoPath || this._eraserLassoPath.length < 2) return;
+        ctx.clearRect(0, 0, oc.width, oc.height);
+        ctx.save();
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(this._eraserLassoPath[0].x, this._eraserLassoPath[0].y);
+        for (let i = 1; i < this._eraserLassoPath.length; i++) {
+            ctx.lineTo(this._eraserLassoPath[i].x, this._eraserLassoPath[i].y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // Al rilascio: toglie i tratti/forme il cui centro cade dentro il tracciato.
+    // Riusa _findItemsInLasso() del lazo di SELEZIONE (stesso criterio, stesso
+    // punto-in-poligono) invece di riscriverne uno proprio.
+    _commitEraserLasso() {
+        const path = this._eraserLassoPath;
+        this._eraserLassoPath = null;
+        if (this.overlayCtx && this.overlayCanvas) {
+            this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+        }
+        if (!path || path.length < 3 || typeof selectMgr === 'undefined' || !selectMgr) return;
+        const strokes = selectMgr._findItemsInLasso(path).filter(it => it.type === 'stroke');
+        if (!strokes.length) return;
+
+        this._saveUndo();
+        strokes.forEach(it => {
+            const idx = this._pageStrokes.indexOf(it.ref);
+            if (idx >= 0) this._pageStrokes.splice(idx, 1);
+        });
+        this._redrawAllStrokes();
+        CONFIG.isDirty = true;
+        window.autoSaveMgr?.onDirty();
+    }
+
     // Ripulisce il draw-canvas e riplotta ogni tratto/forma rimasto in _pageStrokes,
     // nell'ordine originale — i tratti sovrapposti restano intatti perché vengono
     // ridisegnati esattamente come la prima volta, solo senza quello cancellato.
@@ -1458,6 +1525,29 @@ class CanvasManager {
     // bitmap statico del drag). destCtx di default è il canvas reale, ma può essere un
     // canvas offscreen (vedi _buildDragStaticBitmap).
     _replayStroke(stroke, destCtx = this.ctx) {
+        // Scritte dello strumento Testo: si ridisegnano dai loro dati, così dopo aver
+        // cancellato qualcos'altro col lazo restano al loro posto invece di sparire.
+        if (stroke.tool === 'text') {
+            destCtx.save();
+            destCtx.font = stroke.font;
+            destCtx.fillStyle = stroke.color;
+            destCtx.textBaseline = 'alphabetic';
+            const righe = String(stroke.text || '').split('\n');
+            righe.forEach((riga, i) => {
+                destCtx.fillText(riga, stroke.x, stroke.y + i * stroke.lineH);
+                if (stroke.underline) {
+                    const w = destCtx.measureText(riga).width;
+                    destCtx.strokeStyle = stroke.color;
+                    destCtx.lineWidth = stroke.underlineWidth || 1;
+                    destCtx.beginPath();
+                    destCtx.moveTo(stroke.x, stroke.y + i * stroke.lineH + 2);
+                    destCtx.lineTo(stroke.x + w, stroke.y + i * stroke.lineH + 2);
+                    destCtx.stroke();
+                }
+            });
+            destCtx.restore();
+            return;
+        }
         if (stroke.tool === 'shape') {
             this.brush.shape(destCtx, stroke.shapeType, stroke.x0, stroke.y0, stroke.x1, stroke.y1, stroke.size, stroke.color, stroke.fill, stroke.fillColor || stroke.color, stroke.fillAlpha ?? 0.15);
             return;
@@ -1665,6 +1755,15 @@ class CanvasManager {
     clear() {
         this._saveUndo();
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        // I tratti vanno tolti anche dall'elenco VETTORIALE, non solo dai pixel:
+        // altrimenti la gomma-a-tratto continua a riconoscerli e, passandoci sopra,
+        // fa ricomparire l'evidenziazione di righe che non ci sono più
+        // (segnalato da Fabio il 20/09/2026). L'undo li riporta indietro lo stesso,
+        // perché _saveUndo() qui sopra ne ha già preso la fotografia.
+        this._pageStrokes = [];
+        if (this.overlayCtx && this.overlayCanvas) {
+            this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+        }
         this.laser.clear();
     }
 
@@ -1998,6 +2097,7 @@ class ToolbarManager {
         let cursor = cursorMap[CONFIG.currentTool] || 'default';
         // Modalità gomma-tratto: usa cursore puntatore per indicare "clicca per cancellare"
         if (CONFIG.currentTool === 'eraser' && CONFIG.eraserMode === 'stroke') cursor = 'pointer';
+        if (CONFIG.currentTool === 'eraser' && CONFIG.eraserMode === 'lasso')  cursor = 'crosshair';
         if (canvas) canvas.style.cursor = cursor;
     }
 
@@ -2578,10 +2678,12 @@ class TextManager {
         // Testo multilinea
         const lines = text.split('\n');
         const lineH = this.fontSize * scaleY * 1.3;
+        let larghezzaMax = 0;
         lines.forEach((line, i) => {
             ctx.fillText(line, x, y + i * lineH);
+            const w = ctx.measureText(line).width;
+            if (w > larghezzaMax) larghezzaMax = w;
             if (this.underline) {
-                const w = ctx.measureText(line).width;
                 ctx.strokeStyle = this.color;
                 ctx.lineWidth   = Math.max(1, this.fontSize * scaleY * 0.06);
                 ctx.beginPath();
@@ -2591,6 +2693,25 @@ class TextManager {
             }
         });
         ctx.restore();
+
+        // La scritta viene registrata anche come OGGETTO (non solo come pixel):
+        // senza questo il lazo di selezione e la gomma non potevano "vederla",
+        // perché cercano dentro _pageStrokes (segnalato da Fabio il 20/09/2026).
+        if (typeof canvasMgr !== 'undefined' && canvasMgr) {
+            canvasMgr._pageStrokes.push({
+                tool: 'text',
+                text,
+                x, y,
+                font: fontString,
+                color: this.color,
+                lineH,
+                underline: this.underline,
+                underlineWidth: Math.max(1, this.fontSize * scaleY * 0.06),
+                w: larghezzaMax,
+                h: lines.length * lineH,
+                ascent: this.fontSize * scaleY
+            });
+        }
     }
 
     activate()   { this.active = true; }
@@ -3083,9 +3204,12 @@ function setupFullscreen() {
             if (btnExit) btnExit.style.display = 'flex';
             if (icon)    icon.innerHTML = '<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>';
             if (label)   label.textContent = 'Riduci';
-            // Modalità compatta: chiudi la toolbar automaticamente in fullscreen
-            // La linguetta (toggle) rimane visibile per riaprirla al bisogno
-            if (typeof toolbarMgr !== 'undefined' && toolbarMgr?.visible) {
+            // Modalità compatta: chiudi la toolbar automaticamente in fullscreen.
+            // La linguetta (toggle) rimane visibile per riaprirla al bisogno.
+            // ECCEZIONE (restyling barra, 20/09/2026, solo body.v2):
+            // con la barra nuova più corta conviene tenerla sempre a portata sulla LIM,
+            // quindi lì la Presentazione NON nasconde più i comandi — decisione di Fabio.
+            if (typeof toolbarMgr !== 'undefined' && toolbarMgr?.visible && !document.body.classList.contains('v2')) {
                 toolbarMgr.hide();
             }
         } else {
@@ -3227,7 +3351,11 @@ function setupProjectName() {
         if (fileId && window.libraryMgr?.drive?.isConnected?.()) {
             try {
                 await window.libraryMgr.drive.renameItem(fileId, newName);
-                window.libraryMgr.refresh(); // aggiorna l'albero
+                // Stesso aggiornamento sul posto usato dalla matita nella libreria
+                // (20/09/2026). Prima qui si chiamava refresh(), che ora — giustamente —
+                // non ricostruisce più l'albero già caricato: il nome in libreria
+                // restava quello vecchio finché non si ricaricava la pagina.
+                window.libraryMgr.aggiornaNomeOvunque(fileId, newName);
                 toast('Rinominato!', 'success');
             } catch (err) {
                 toast('Errore rinomina Drive: ' + err.message, 'error');
@@ -4430,15 +4558,22 @@ class SelectManager {
     _deleteSelectedItems() {
         if (!this.selectedItems.length) return;
         if (typeof canvasMgr !== 'undefined') canvasMgr._saveUndo();
+        let toltoUnTratto = false;
         this.selectedItems.forEach(it => {
             if (it.type === 'object') {
-                objectLayer.removeObject(it.ref.id);
+                objectLayer.removeObject(it.ref.id);        // vive sul suo canvas: nulla da ridisegnare
             } else if (typeof canvasMgr !== 'undefined') {
                 const idx = canvasMgr._pageStrokes.indexOf(it.ref);
-                if (idx >= 0) canvasMgr._pageStrokes.splice(idx, 1);
+                if (idx >= 0) { canvasMgr._pageStrokes.splice(idx, 1); toltoUnTratto = true; }
             }
         });
-        if (typeof canvasMgr !== 'undefined') canvasMgr._redrawAllStrokes();
+        // ⚠️ _redrawAllStrokes() ripulisce il canvas del disegno e riplotta SOLO i tratti
+        // vettoriali: tutto ciò che è pixel e basta (lo sfondo incollato, il contenuto
+        // ripristinato da un salvataggio) sparirebbe. Eliminando una IMMAGINE — che vive
+        // su un altro canvas — non c'è nulla da ridisegnare qui: chiamarlo lo stesso
+        // svuotava l'intera pagina (segnalato da Fabio il 20/09/2026, eliminando una
+        // cattura schermo appena incollata). Si ridisegna solo se è caduto un tratto.
+        if (toltoUnTratto && typeof canvasMgr !== 'undefined') canvasMgr._redrawAllStrokes();
         this.selectedItems = [];
         this._clearSelection();
         this._hideContextPanel();
@@ -4649,6 +4784,16 @@ class SelectManager {
             return { x: o.x, y: o.y, w: o.w, h: o.h };
         }
         const s = item.ref;
+        if (s.tool === 'text') {
+            // La y salvata è la linea di base della prima riga: l'ingombro parte sopra
+            const margine = 4;
+            return {
+                x: s.x - margine,
+                y: s.y - (s.ascent || s.lineH || 0) - margine,
+                w: (s.w || 0) + margine * 2,
+                h: (s.h || 0) + margine * 2
+            };
+        }
         if (s.tool === 'shape') {
             const margin = (s.size || 0) / 2;
             const minX = Math.min(s.x0, s.x1) - margin, maxX = Math.max(s.x0, s.x1) + margin;
@@ -6934,6 +7079,15 @@ class PageManager {
     _restorePage(pageData) {
         this._restoring = true;
 
+        // GETTONE ANTI-SOVRAPPOSIZIONE (20/09/2026, segnalato da Fabio).
+        // Il ripristino di una pagina carica le immagini in modo ASINCRONO. Se si cambia
+        // pagina prima che abbia finito, la vecchia immagine arriva DOPO e si disegna
+        // sulla pagina nuova: i tratti di una pagina comparivano sull'altra, e da lì
+        // anche la gomma si comportava in modo incoerente (i pixel erano di una pagina,
+        // l'elenco dei tratti dell'altra). Ogni ripristino prende un numero: le callback
+        // che arrivano in ritardo, con un numero ormai superato, non disegnano più nulla.
+        const token = (this._restoreToken = (this._restoreToken || 0) + 1);
+
         // ── 0. Ripristina orientamento/sfondo PRIMA di qualsiasi _getPageRect ──
         // CRITICO: _getPageRect usa bgMgr.orientation. Se fosse ancora impostato
         // sull'orientamento della pagina precedente, disegno e oggetti sarebbero
@@ -6962,7 +7116,11 @@ class PageManager {
                 const destW = cr.canvasW * scale;
                 const destH = cr.canvasH * scale;
                 allRestorePromises.push(new Promise(res => {
-                    img.onload = () => { ctx.drawImage(img, destX, destY, destW, destH); res(); };
+                    img.onload = () => {
+                        if (token !== this._restoreToken) { res(); return; }   // ripristino superato
+                        ctx.drawImage(img, destX, destY, destW, destH);
+                        res();
+                    };
                     img.onerror = res;
                 }));
             } else if (pageData.drawFormat === 'page' && typeof bgMgr !== 'undefined') {
@@ -6970,7 +7128,11 @@ class PageManager {
                 // Disegna SCALANDO alla dimensione corrente del foglio → funziona su qualsiasi schermo.
                 const r = bgMgr._getPageRect(drawCanvas.width, drawCanvas.height);
                 allRestorePromises.push(new Promise(res => {
-                    img.onload = () => { ctx.drawImage(img, r.px, r.py, r.pw, r.ph); res(); };
+                    img.onload = () => {
+                        if (token !== this._restoreToken) { res(); return; }
+                        ctx.drawImage(img, r.px, r.py, r.pw, r.ph);
+                        res();
+                    };
                     img.onerror = res;
                 }));
             } else {
@@ -6982,7 +7144,11 @@ class PageManager {
                     offsetY = curr.py - pageData.pagePy;
                 }
                 allRestorePromises.push(new Promise(res => {
-                    img.onload = () => { ctx.drawImage(img, offsetX, offsetY); res(); };
+                    img.onload = () => {
+                        if (token !== this._restoreToken) { res(); return; }
+                        ctx.drawImage(img, offsetX, offsetY);
+                        res();
+                    };
                     img.onerror = res;
                 }));
             }
@@ -6995,6 +7161,7 @@ class PageManager {
             if (!o.dataUrl) { resolve(); return; }
             const img = new Image();
             img.onload = () => {
+                if (token !== this._restoreToken) { resolve(); return; }   // pagina ormai cambiata
                 let x, y, w, h;
                 if (pageData.objectFormat === 'page-fraction') {
                     // Formato corrente: tutte le coordinate come frazione di pw (unico fattore).
@@ -7029,6 +7196,19 @@ class PageManager {
                 const offY  = r2.py - cr.py * scale;
                 this.canvasManager._pageStrokes = pageData.strokes.map(s => {
                     if (!s) return s;
+                    if (s.tool === 'text') {
+                        // Anche le scritte vanno riposizionate/riscalate come il resto,
+                        // compresa la misura dentro la stringa del font ("28px Arial").
+                        return { ...s,
+                            x: s.x * scale + offX,
+                            y: s.y * scale + offY,
+                            w: (s.w || 0) * scale,
+                            h: (s.h || 0) * scale,
+                            lineH: (s.lineH || 0) * scale,
+                            ascent: (s.ascent || 0) * scale,
+                            underlineWidth: Math.max(1, (s.underlineWidth || 1) * scale),
+                            font: String(s.font || '').replace(/([\d.]+)px/, (_, n) => (parseFloat(n) * scale) + 'px') };
+                    }
                     if (s.tool === 'shape') {
                         return { ...s,
                             x0: s.x0 * scale + offX, y0: s.y0 * scale + offY,
@@ -7045,6 +7225,9 @@ class PageManager {
         }
 
         Promise.all([...allRestorePromises, ...loadPromises]).then(() => {
+            // Se nel frattempo è partito un ripristino più recente, comanda quello:
+            // qui non si disegna e non si riabilita la cattura (ci penserà lui).
+            if (token !== this._restoreToken) return;
             this.objectLayerRef.render();
             this._restoring = false;
         });
@@ -7900,7 +8083,11 @@ class SpotlightTool {
         // Drag area — 1 dito: sposta; 2 dita: ridimensiona (pinch)
         const dragArea = document.createElement('div');
         dragArea.id = 'spotlight-drag-area';
-        dragArea.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:161;display:none;cursor:none;touch-action:none;';
+        // cursor:crosshair, non 'none': col mouse il puntatore spariva dentro l'area
+        // scurita e non si capiva più dove si era, quindi non si riuscivano a centrare
+        // i comandi del Focus (segnalato da Fabio il 20/09/2026). Sulla LIM a tocco
+        // non cambia nulla, il cursore lì non esiste comunque.
+        dragArea.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:161;display:none;cursor:crosshair;touch-action:none;';
         document.body.appendChild(dragArea);
         this._dragArea = dragArea;
 
