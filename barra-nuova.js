@@ -618,8 +618,15 @@
             }
             positionV2Panel(panel, btn);
             panel.classList.add('v2-open');
+            // La lavagna resta VIVA sotto i pannelli dello strumento (penna, gomma,
+            // testo): scelto il colore o la modalità, il tocco successivo scrive —
+            // prima serviva un tocco in più solo per chiudere il pannello, e in classe
+            // sembrava che la LIM non rispondesse. Per i pannelli di servizio (Magic
+            // Box, File, Pagine) il blocco resta: lì il tocco sulla lavagna vuole solo
+            // chiudere, e un segno involontario sarebbe un fastidio.
             const overlay = document.getElementById('overlay-canvas');
-            if (overlay) overlay.style.pointerEvents = 'none';
+            const PANNELLI_STRUMENTO = ['v2-pen-panel', 'v2-eraser-panel', 'v2-text-panel'];
+            if (overlay) overlay.style.pointerEvents = PANNELLI_STRUMENTO.includes(id) ? 'auto' : 'none';
         }
     }
 
@@ -633,13 +640,83 @@
         if (use && V2_PEN_ICONS[tool]) use.setAttribute('href', V2_PEN_ICONS[tool]);
     }
 
+    // Gomma: stesso trattamento della penna — il pulsante di barra mostra la modalità
+    // in uso (area / tratto / lazo) e ci resta finché non si cambia. Si riusano le
+    // TRE icone che esistono già nel pannello: chi le ha già viste ritrova lo stesso
+    // disegno in barra, senza un simbolo nuovo da imparare.
+    const V2_ERASER_ICONS = { area: '#ic-eraser', stroke: '#ic-eraser-stroke', lasso: '#ic-eraser-lasso' };
+    function syncEraserTriggerIcon(mode) {
+        const use = document.querySelector('.main-row .tool-btn[data-tool="eraser"] use');
+        if (use && V2_ERASER_ICONS[mode]) use.setAttribute('href', V2_ERASER_ICONS[mode]);
+    }
+
+    // Ultimo tipo di tratto scelto: è quello che il primo tap sul pulsante Penna
+    // rimette in uso, senza passare dal pannello.
+    let ultimoTratto = 'pen';
+
+    // Pallino del colore in uso sul pulsante della scrittura. Si aggancia all'UNICO
+    // punto da cui app.js annuncia ogni cambio di colore — l'evento `minicolor:update`,
+    // che parte dalla tavolozza, dal colore libero e dal riallineamento di strumento —
+    // invece di inseguire i singoli pulsanti: così nessuna strada resta scoperta.
+    function syncColoreTratto(colore) {
+        const btn = document.getElementById('v2-pen-btn');
+        if (!btn) return;
+        if (colore) btn.style.setProperty('--v2-colore-tratto', colore);
+        btn.classList.toggle('v2-senza-colore', ultimoTratto === 'laser');
+    }
+    document.addEventListener('minicolor:update', (e) => syncColoreTratto(e.detail && e.detail.color));
+
+    // ---- Selettori colore nativi: il pannello si apre DOVE HAI PREMUTO (21/09/2026) --
+    // I quattro `input[type=color]` dell'app sono nascosti a dimensione zero e vengono
+    // aperti da JS (il "+" della tavolozza, il colore pagina, il bordo e il
+    // riempimento nel menù contestuale). Un elemento senza dimensioni non dà a Chrome
+    // nessun ancoraggio: il pannello nasce nell'angolo in alto a sinistra della
+    // finestra, mezzo fuori bordo, e i suoi pulsanti di chiusura diventano
+    // irraggiungibili (trovato da Fabio provando il "Colore personalizzato").
+    // Rimedio valido per TUTTI, anche per quelli creati a runtime: restano invisibili
+    // ma diventano un punto vero di 1px, portato sotto il pulsante appena premuto.
+    function ancoraSelettoreColore(inp) {
+        if (inp.dataset.v2Ancorato) return true;
+        const st = getComputedStyle(inp);
+        const r = inp.getBoundingClientRect();
+        // Un selettore che l'app mostrasse davvero non va toccato: qui si ancorano
+        // solo quelli nascosti, che sono gli unici aperti via codice.
+        if (st.display !== 'none' && st.opacity !== '0' && r.width > 2) return false;
+        inp.dataset.v2Ancorato = '1';
+        inp.style.cssText = 'position:fixed;width:1px;height:1px;padding:0;border:none;' +
+                            'opacity:0;pointer-events:none;z-index:1;';
+        return true;
+    }
+    document.addEventListener('pointerdown', (e) => {
+        // Solo sui pulsanti: durante il disegno non si fa nulla.
+        const btn = e.target.closest && e.target.closest('button');
+        if (!btn) return;
+        const r = btn.getBoundingClientRect();
+        document.querySelectorAll('input[type="color"]').forEach(inp => {
+            if (!ancoraSelettoreColore(inp)) return;
+            inp.style.left = Math.round(r.left + r.width / 2) + 'px';
+            inp.style.top = Math.round(r.bottom) + 'px';
+        });
+    }, true);
+
     function setupV2Panels() {
+        // DUE TAP (Penna e Gomma, i due strumenti più usati — 21/09/2026).
+        // Primo tap: rimette in uso l'ultimo tratto scelto e basta, così si scrive
+        // subito. Prima questo pulsante apriva solo il pannello SENZA selezionare
+        // niente (è l'unico della barra senza `data-tool`, quindi app.js non lo vede):
+        // tornando dalla Mano si toccava la LIM e la pagina continuava a spostarsi.
+        // Secondo tap, a penna già in uso: apre il pannello per cambiare tratto.
         document.getElementById('v2-pen-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (typeof CONFIG !== 'undefined' && !PEN_FAMILY.includes(CONFIG.currentTool)) {
+                closeV2Panels();
+                document.querySelector('#v2-pen-panel .tool-btn[data-tool="' + ultimoTratto + '"]')?.click();
+                return;
+            }
             openV2Panel('v2-pen-panel', e.currentTarget);
         });
-        // Gomma: apre il suo pannello (modi + dimensione) oltre a selezionare lo
-        // strumento — il click nativo di app.js è già attaccato e continua a valere.
+        // Gomma: stessa regola dei due tap. Qui lo strumento lo seleziona già app.js
+        // col suo `data-tool`, quindi al primo tap basta NON aprire il pannello.
         const eraserBtn = document.querySelector('.main-row .tool-btn[data-tool="eraser"]');
         if (eraserBtn) {
             // Icone nuove sui due modi già esistenti (Area / Tratto): si sostituisce
@@ -648,9 +725,26 @@
             const strokeBtn = document.querySelector('#eraser-mode-btns [data-mode="stroke"]');
             if (areaBtn) areaBtn.innerHTML = '<svg viewBox="0 0 24 24"><use href="#ic-eraser"/></svg>';
             if (strokeBtn) strokeBtn.innerHTML = '<svg viewBox="0 0 24 24"><use href="#ic-eraser-stroke"/></svg>';
+            // Lo stato va letto al `pointerdown`: il listener di app.js è registrato
+            // prima del nostro e ha già messo CONFIG.currentTool a 'eraser' quando
+            // arriva il click, quindi al click i due tap sarebbero indistinguibili.
+            let gommaGiaInUso = false;
+            eraserBtn.addEventListener('pointerdown', () => {
+                gommaGiaInUso = (typeof CONFIG !== 'undefined') && CONFIG.currentTool === 'eraser';
+            });
             eraserBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                if (!gommaGiaInUso) { closeV2Panels(); return; }
                 openV2Panel('v2-eraser-panel', eraserBtn);
+            });
+            // Scelta una modalità, il pannello si chiude e il pulsante di barra ne
+            // prende l'icona — come fa la penna col tipo di tratto. Prima restava
+            // aperto: il tocco successivo sulla LIM serviva solo a chiuderlo.
+            document.querySelectorAll('#eraser-mode-btns .eraser-mode-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    syncEraserTriggerIcon(btn.dataset.mode);
+                    closeV2Panels();
+                });
             });
         }
         // Testo: stesso trattamento di Penna/Gomma/Forme — il colore sta nel suo
@@ -718,10 +812,16 @@
         // e il pulsante di barra prende la sua icona — stesso comportamento del banco.
         document.querySelectorAll('#v2-pen-panel [data-tool]').forEach(btn => {
             btn.addEventListener('click', () => {
+                ultimoTratto = btn.dataset.tool;
                 syncPenTriggerIcon(btn.dataset.tool);
+                syncColoreTratto();
                 closeV2Panels();
             });
         });
+
+        // Stato iniziale del pallino: all'avvio nessun evento di colore è ancora
+        // passato, quindi lo si legge una volta da CONFIG.
+        if (typeof CONFIG !== 'undefined') syncColoreTratto(CONFIG.currentColor);
 
         // × interna ai pannelli nuovi (il listener nativo su .popup-close-btn
         // chiude solo i popup nativi, non conosce questi id)
@@ -810,8 +910,17 @@
         // (apre solo il pannello), quindi _updateActiveBtn() di app.js non lo tocca
         // mai — qui gli si dà/toglie ".active" a mano secondo lo strumento scelto.
         captureOptionHomes();
+        // Pulsanti che un pannello lo aprono di loro: per quelli la chiusura qui sotto
+        // richiuderebbe subito ciò che hanno appena aperto (i nostri listener sono
+        // registrati prima di questo).
+        const APRONO_PANNELLO = ['eraser', 'text'];
         document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
             btn.addEventListener('click', () => {
+                // Cambiando strumento dalla barra, un pannello rimasto aperto va
+                // chiuso: restava a mezz'aria, di uno strumento ormai non più in uso.
+                if (!APRONO_PANNELLO.includes(btn.dataset.tool) && !btn.closest('.v2-panel')) {
+                    closeV2Panels();
+                }
                 toolbarMgr._updateOptionsRow();
                 syncOptionOwnership(btn.dataset.tool);
                 syncOptionsRowVisibility();
