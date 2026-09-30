@@ -80,6 +80,63 @@ async function _fetchWithTimeout(url, options = {}, timeoutMs = 25000) {
     }
 }
 
+// Errore di Drive spiegato a chi fa lezione: un toast da 3 s con «Drive API error 400 — https://…»
+// spaventava e non diceva cosa fare. Il testo tecnico resta sotto «Dettagli per l'assistenza».
+function mostraErroreDrive(azione, err) {
+    const tecnico = String((err && err.message) || err || '');
+    let causa, mostraCaratteri = false;
+    if (/ 40[13]\b/.test(tecnico) || /non connesso|not connected/i.test(tecnico)) {
+        causa = 'Il collegamento a Google Drive è scaduto. Premi «Rinnova» nella fascia in alto, poi riprova.';
+    } else if (/timeout|Failed to fetch|NetworkError|Load failed/i.test(tecnico)) {
+        causa = 'Sembra mancare la connessione a internet. Riprova quando la rete torna.';
+    } else if (/ 400\b/.test(tecnico)) {
+        causa = 'Drive non ha accettato il nome. Cambialo e riprova.';
+        mostraCaratteri = true;
+    } else {
+        causa = 'Riprova fra qualche istante. Se non funziona, prova a cambiare il nome.';
+        mostraCaratteri = true;
+    }
+
+    document.getElementById('errore-drive-modal')?.remove();
+    const el = (tag, css, testo) => {
+        const n = document.createElement(tag);
+        if (css) n.style.cssText = css;
+        if (testo != null) n.textContent = testo;
+        return n;
+    };
+    const overlay = el('div', 'display:flex;z-index:100000');
+    overlay.id = 'errore-drive-modal';
+    overlay.className = 'modal-overlay';
+    const box = el('div', 'max-width:560px;font-size:1.1rem;line-height:1.45');
+    box.className = 'modal-box';
+    box.appendChild(el('h3', 'margin-top:0', `Non sono riuscito a ${azione} su Drive`));
+    box.appendChild(el('p', 'font-weight:600;margin:0 0 12px', 'Il tuo lavoro è ancora sullo schermo: non chiudere la lavagna.'));
+    box.appendChild(el('p', 'margin:0 0 12px', causa));
+    if (mostraCaratteri) {
+        box.appendChild(el('p', 'margin:0 0 8px', 'Nei nomi di lezioni e cartelle non usare questi caratteri:'));
+        const riga = el('div', 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px');
+        for (const c of ['\\', '/', ':', '*', '?', '"', '<', '>', '|']) {
+            riga.appendChild(el('span',
+                'font:700 1.4rem/1 monospace;min-width:40px;padding:8px 0;text-align:center;border-radius:8px;background:#fee2e2;color:#991b1b', c));
+        }
+        box.appendChild(riga);
+        box.appendChild(el('p', 'font-size:.95rem;opacity:.8;margin:0 0 8px', 'Apostrofo, lettere accentate, trattini e numeri vanno bene.'));
+    }
+    const det = el('details', 'margin:10px 0;font-size:.85rem;opacity:.75');
+    det.appendChild(el('summary', 'cursor:pointer', 'Dettagli per l\'assistenza'));
+    det.appendChild(el('div', 'word-break:break-all;font-family:monospace;margin-top:6px', tecnico));
+    box.appendChild(det);
+    const azioni = el('div');
+    azioni.className = 'modal-actions';
+    const ok = el('button', 'min-width:160px;font-size:1.1rem;padding:12px 20px', 'Ho capito');
+    ok.className = 'btn-primary';
+    ok.onclick = () => overlay.remove();
+    azioni.appendChild(ok);
+    box.appendChild(azioni);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+}
+
 /**
  * Upload con progresso reale (byte inviati/totali) — richiede XMLHttpRequest,
  * fetch() non espone questa informazione durante l'invio. Usato per il
@@ -888,9 +945,14 @@ class DriveManager {
     // HELPER INTERNI
     // ──────────────────────────────────────────────────────────────────────────
 
+    // Un apostrofo nel nome («ATTIVITA' 6-7») chiude la stringa della query Drive → errore 400.
+    _qNome(name) {
+        return String(name).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    }
+
     /** Trova o crea una cartella Drive per nome. */
     async _findOrCreateFolder(name, parentId) {
-        let q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+        let q = `name='${this._qNome(name)}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
         if (parentId) q += ` and '${parentId}' in parents`;
         const resp = await this._apiFetch(
             `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`
@@ -911,7 +973,7 @@ class DriveManager {
     /** Cerca un file per nome in una cartella specifica. Restituisce fileId o null. */
     async _findFileInFolder(name, folderId) {
         const q = encodeURIComponent(
-            `name='${name}' and '${folderId}' in parents and trashed=false`
+            `name='${this._qNome(name)}' and '${folderId}' in parents and trashed=false`
         );
         const resp = await this._apiFetch(
             `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`
@@ -1760,7 +1822,7 @@ class LibraryManager {
                 toast('Cartella creata!', 'success');
                 this._forceRefresh();
             } catch (err) {
-                toast('Errore creazione cartella: ' + err.message, 'error');
+                mostraErroreDrive('creare la cartella', err);
             }
         });
     }
@@ -1828,6 +1890,20 @@ class LibraryManager {
             // Lezioni salvate prima: le pagine 'image' senza immagine propria ricevono quella della
             // lezione, l'unica che esiste — si fonde, non si sostituisce.
             const conPagine = Array.isArray(lesson.pages) && lesson.pages.length > 0;
+            // Lezione nel formato vecchio (senza pagine): non passa da _restorePage, quindi
+            // tratti, pagine e «Annulla» della lezione precedente restavano in memoria — la
+            // gomma-lazo ridipingeva le sue scritte qui e il salvataggio ci copiava le sue pagine.
+            if (!conPagine) {
+                canvasMgr.ctx.clearRect(0, 0, canvasMgr.canvas.width, canvasMgr.canvas.height);
+                canvasMgr._pageStrokes = [];
+                canvasMgr._azzeraCronologia();
+                canvasMgr._haFondo = false;
+                if (window.pageManager) {
+                    window.pageManager.pages = [{ drawImageData: null, objects: [], background: { type: lesson.background?.key || 'white', color: '#ffffff', orientation: bgMgr.orientation } }];
+                    window.pageManager.currentIndex = 0;
+                    window.pageManager._renderPageBar();
+                }
+            }
             if (conPagine && lesson.background?.imageBase64) {
                 lesson.pages.forEach(p => {
                     if (p?.background?.type === 'image' && !p.background.imageData) p.background.imageData = lesson.background.imageBase64;
@@ -1864,9 +1940,10 @@ class LibraryManager {
                     offsetY = curr.py - lesson.pagePy;
                 }
                 img.onload = () => {
-                    canvasMgr._saveUndo();
                     canvasMgr.ctx.clearRect(0, 0, canvasMgr.canvas.width, canvasMgr.canvas.height);
                     canvasMgr.ctx.drawImage(img, offsetX, offsetY);
+                    canvasMgr._azzeraCronologia();
+                    canvasMgr._segnaFondo();
                 };
                 img.src = lesson.drawing;
             }
@@ -1971,7 +2048,7 @@ class LibraryManager {
             toast('Lezione salvata su Drive!', 'success');
             this._forceRefresh();
         } catch (err) {
-            toast('Errore salvataggio: ' + err.message, 'error');
+            mostraErroreDrive('salvare la lezione', err);
         }
     }
 
@@ -2022,7 +2099,7 @@ class LibraryManager {
                 toast('Lezione sovrascritta su Drive!', 'success');
             }
         } catch (err) {
-            if (!silent) toast('Errore sovrascrittura: ' + err.message, 'error');
+            if (!silent) mostraErroreDrive('salvare la lezione', err);
             throw err; // rilancia per auto-save error handling
         }
     }
@@ -2084,7 +2161,7 @@ class LibraryManager {
                 // ricaricare la pagina (segnalato da Fabio).
                 this._lastBgRefresh = 0; // il prossimo aggiornamento vero potrà partire subito
             } catch (err) {
-                toast('Errore rinomina: ' + err.message, 'error');
+                mostraErroreDrive('rinominare', err);
             }
         });
     }
