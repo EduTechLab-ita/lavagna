@@ -159,7 +159,10 @@
                         const y = (pagina.objectFormat === 'page-fraction') ? o.y * r.pw : (o.y - r.py);
                         const w = (pagina.objectFormat === 'page-fraction') ? o.w * r.pw : o.w;
                         const h = (pagina.objectFormat === 'page-fraction') ? o.h * r.pw : o.h;
-                        try { cctx.drawImage(oi, x, y, w, h); } catch (_) {}
+                        try {
+                            if (typeof _drawImgRitaglio === 'function') _drawImgRitaglio(cctx, oi, o, x, y, w, h);
+                            else cctx.drawImage(oi, x, y, w, h);
+                        } catch (_) {}
                         res();
                     };
                     oi.onerror = res;
@@ -675,8 +678,15 @@
     // e la si confronta con l'ultima già vista su questo dispositivo. Funziona anche se
     // il ricaricamento automatico viene saltato perché c'è lavoro non salvato.
     const swEraGiaAttivo = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+    const swAllApertura = navigator.serviceWorker ? navigator.serviceWorker.controller : null;
     async function avvisaSeVersioneNuova() {
         if (!('serviceWorker' in navigator)) return;
+        // La versione nuova ha preso il posto mentre questa pagina si apriva: fra un attimo la
+        // pagina si ricarica da sola e l'avviso lo mostra quella nuova. Mostrarlo qui faceva
+        // comparire una finestra «lampo» prima di quella giusta (Fabio, 03/10/2026). Se invece
+        // il ricaricamento viene saltato (lavoro non salvato), l'avviso arriva alla prossima
+        // apertura: la versione NON viene segnata come vista.
+        if (swAllApertura && navigator.serviceWorker.controller !== swAllApertura) return;
         let reg;
         try { reg = await navigator.serviceWorker.ready; } catch (_) { return; }
         const sw = reg && reg.active;
@@ -690,6 +700,7 @@
             catch (_) { clearTimeout(scadenza); resolve(null); }
         });
         if (!risposta || !risposta.version) return;
+        if (swAllApertura && navigator.serviceWorker.controller !== swAllApertura) return;
         const CHIAVE = 'eduboard_versione_vista';
         let vista = null;
         try {
