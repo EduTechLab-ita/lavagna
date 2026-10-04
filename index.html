@@ -82,7 +82,7 @@
                 <img src="./icon-192x192.png" alt="EduBoard" class="logo-icon">
                 <div class="logo-info">
                     <span class="logo-text"><span class="logo-edu">Edu</span><span class="logo-board">Board</span></span>
-                    <span class="logo-sub">v2-115 &nbsp;&nbsp; © EduTechLab di Rizzotto Fabio</span>
+                    <span class="logo-sub">v2-121 &nbsp;&nbsp; © EduTechLab di Rizzotto Fabio</span>
                 </div>
             </div>
             <div class="project-badge" id="project-name">Nuova Lavagna</div>
@@ -485,12 +485,28 @@
                     <span>Righello</span>
                 </button>
                 <button class="shape-opt" id="btn-geo-protractor" title="Goniometro draggabile">
-                    <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M6 32 A16 16 0 0 1 34 32"/>
+                    <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <path d="M6 32 A14 14 0 0 1 34 32"/>
                         <line x1="6" y1="32" x2="34" y2="32"/>
-                        <line x1="20" y1="32" x2="20" y2="16"/>
+                        <line x1="20" y1="32" x2="20" y2="19" stroke-width="1.4"/>
+                        <line x1="10.3" y1="25" x2="12.9" y2="23.5" stroke-width="1.1"/>
+                        <line x1="29.7" y1="25" x2="27.1" y2="23.5" stroke-width="1.1"/>
+                        <line x1="15.1" y1="19.9" x2="16.6" y2="22.5" stroke-width="1.1"/>
+                        <line x1="24.9" y1="19.9" x2="23.4" y2="22.5" stroke-width="1.1"/>
+                        <circle cx="20" cy="32" r="1.3" fill="currentColor" stroke="none"/>
                     </svg>
                     <span>Goniometro</span>
+                </button>
+                <button class="shape-opt" id="btn-geo-compass" title="Compasso: perno fisso, trascina la matita per aprire e disegnare">
+                    <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="20" cy="9" r="2.4" fill="currentColor" stroke="none"/>
+                        <path d="M20 9 L9 33"/>
+                        <path d="M20 9 L31 33"/>
+                        <circle cx="9" cy="33" r="1.8" fill="currentColor" stroke="none"/>
+                        <circle cx="31" cy="33" r="2.6"/>
+                        <path d="M9 33 A11 11 0 0 1 31 33" stroke-dasharray="2 2.4"/>
+                    </svg>
+                    <span>Compasso</span>
                 </button>
                 <button class="shape-opt" id="btn-geo-sq45" title="Squadra 45° (90°, 45°, 45°)">
                     <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2">
@@ -598,6 +614,11 @@
     <div id="shape-popup" class="popup-panel" style="display:none">
         <button class="popup-close-btn" title="Chiudi">&times;</button>
         <div class="popup-title">Forme</div>
+        <div class="shape-tabs">
+            <button class="shape-tab-btn active" data-shapetab="piane">Piane</button>
+            <button class="shape-tab-btn" data-shapetab="solide">Solide</button>
+        </div>
+        <div class="shape-tab-panel" data-shapetabpanel="piane">
         <div class="shape-grid">
             <button class="shape-opt active" data-shape="line" title="Linea retta">
                 <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="34" x2="34" y2="6"/></svg>
@@ -663,6 +684,76 @@
                 <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M30,4 C20,4 22,20 14,20 C22,20 20,36 30,36"/></svg>
                 <span>Parentesi</span>
             </button>
+            <!-- Richiesta di una professoressa, 03/10/2026 -->
+            <button class="shape-opt" data-shape="square" title="Quadrato">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="7" y="7" width="26" height="26" rx="2"/></svg>
+                <span>Quadrato</span>
+            </button>
+            <button class="shape-opt" data-shape="parallelogram" title="Parallelogramma">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="14,8 36,8 26,32 4,32"/></svg>
+                <span>Parallelogr.</span>
+            </button>
+            <button class="shape-opt" data-shape="trapezoid-right" title="Trapezio rettangolo">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="6,8 26,8 34,32 6,32"/></svg>
+                <span>Trap. rett.</span>
+            </button>
+            <button class="shape-opt" data-shape="trapezoid-isosceles" title="Trapezio isoscele">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13,8 27,8 34,32 6,32"/></svg>
+                <span>Trap. isosc.</span>
+            </button>
+            <button class="shape-opt" data-shape="trapezoid-scalene" title="Trapezio scaleno">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="10,8 22,8 34,32 6,32"/></svg>
+                <span>Trap. scal.</span>
+            </button>
+        </div>
+        </div>
+        <div class="shape-tab-panel" data-shapetabpanel="solide" style="display:none">
+        <div class="shape-grid">
+            <button class="shape-opt" data-shape="cube" title="Cubo">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M8,32 L22,32 L22,18 L8,18 Z M8,18 L16,12 L30,12 L22,18 M22,32 L30,26 L30,12"/>
+                    <path d="M8,32 L16,26 L30,26 M16,26 L16,12" stroke-dasharray="3 3"/>
+                </svg>
+                <span>Cubo</span>
+            </button>
+            <button class="shape-opt" data-shape="cuboid" title="Parallelepipedo">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M4,32 L26,32 L26,18 L4,18 Z M4,18 L12,12 L34,12 L26,18 M26,32 L34,26 L34,12"/>
+                    <path d="M4,32 L12,26 L34,26 M12,26 L12,12" stroke-dasharray="3 3"/>
+                </svg>
+                <span>Parallelep.</span>
+            </button>
+            <button class="shape-opt" data-shape="pyramid-square" title="Piramide a base quadrata">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M20,6 L6,24 L20,30 L34,24 L20,6"/>
+                    <path d="M20,6 L20,18 M6,24 L20,18 L34,24" stroke-dasharray="3 3"/>
+                </svg>
+                <span>Piramide</span>
+            </button>
+            <button class="shape-opt" data-shape="cone" title="Cono">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M20,6 L8,30 M20,6 L32,30 M8,30 Q20,36 32,30"/>
+                    <path d="M8,30 Q20,24 32,30" stroke-dasharray="3 3"/>
+                </svg>
+                <span>Cono</span>
+            </button>
+            <button class="shape-opt" data-shape="cylinder" title="Cilindro">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <ellipse cx="20" cy="10" rx="12" ry="4"/>
+                    <path d="M8,10 L8,30 M32,10 L32,30 M8,30 Q20,36 32,30"/>
+                    <path d="M8,30 Q20,24 32,30" stroke-dasharray="3 3"/>
+                </svg>
+                <span>Cilindro</span>
+            </button>
+            <button class="shape-opt" data-shape="sphere" title="Sfera">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <circle cx="20" cy="20" r="15"/>
+                    <path d="M5,20 Q20,26 35,20"/>
+                    <path d="M5,20 Q20,14 35,20" stroke-dasharray="3 3"/>
+                </svg>
+                <span>Sfera</span>
+            </button>
+        </div>
         </div>
         <div class="shape-fill-row">
             <label class="toggle-label">
@@ -1154,7 +1245,7 @@
                     <img src="./icon-192x192.png" alt="EduBoard" width="64" height="64" style="border-radius:14px">
                     <div>
                         <div class="settings-info-appname"><span style="color:#3b82f6">Edu</span>Board</div>
-                        <div class="settings-info-version" id="info-version-text">v2-115</div>
+                        <div class="settings-info-version" id="info-version-text">v2-121</div>
                     </div>
                 </div>
                 <div class="settings-section">
@@ -1200,6 +1291,34 @@
             </div>
             <div class="settings-panel" id="tab-novita">
                 <div class="settings-section">
+                    <div class="settings-changelog-item">
+                        <div class="settings-changelog-ver">v2-121 — Ottobre 2026</div>
+                        <div class="settings-changelog-desc">🧰 <strong>Magic Box</strong>: i pulsanti degli strumenti (righello, goniometro, squadre, compasso) restano evidenziati di azzurro solo quando lo strumento è davvero aperto — prima il compasso restava acceso anche da chiuso, pur non essendo mai stato usato</div>
+                    </div>
+                    <div class="settings-changelog-item">
+                        <div class="settings-changelog-ver">v2-120 — Ottobre 2026</div>
+                        <div class="settings-changelog-desc">🧭 <strong>Compasso</strong>: corretta per davvero l'inversione — ora specchia solo <strong>destra/sinistra</strong> a qualunque apertura della matita, prima a certi angoli ribaltava ancora sopra/sotto</div>
+                    </div>
+                    <div class="settings-changelog-item">
+                        <div class="settings-changelog-ver">v2-119 — Ottobre 2026</div>
+                        <div class="settings-changelog-desc">🧭 <strong>Compasso, ritocchi</strong>: l'inversione ora specchia la matita a <strong>destra/sinistra</strong> (non più sopra/sotto) · icona <strong>⇆</strong> di apri/chiudi diversa da quella di inversione · pulsanti tutti della stessa misura, inclinati come il braccio destro e <strong>fuori dal compasso</strong> (prima coprivano l'interno) · ago sottile e matita (legno + mina nel colore scelto) ora si distinguono bene · si riapre sempre <strong>al centro della pagina</strong>, in posizione di riposo quasi chiusa · la misura nell'ovale blu si può <strong>toccare e scrivere a tastiera</strong>, allargando il compasso se serve più spazio · anche il <strong>righello</strong> ora si apre al centro · icona del <strong>goniometro</strong> nel Magic Box più classica</div>
+                    </div>
+                    <div class="settings-changelog-item">
+                        <div class="settings-changelog-ver">v2-119 — Ottobre 2026</div>
+                        <div class="settings-changelog-desc">📁 <strong>Libreria</strong>: una lezione nuova ora compare alla prossima apertura della libreria anche se era chiusa al momento del salvataggio — prima serviva ricaricare la pagina</div>
+                    </div>
+                    <div class="settings-changelog-item">
+                        <div class="settings-changelog-ver">v2-118 — Ottobre 2026</div>
+                        <div class="settings-changelog-desc">🧭 <strong>Compasso vero</strong> nel Magic Box: due bracci rigidi incernierati, l'<strong>ago fisso</strong> dove lo metti, si apre sempre dritto. <strong>×</strong> chiude · <strong>⚙</strong> angolo numerico, dimensione e unità mm/cm/in (sempre in scala vera, come il righello) · <strong>👁</strong> mostra/nasconde la misura fra le due punte · <strong>⇆</strong> trascina per aprire/chiudere senza disegnare · <strong>⇄</strong> inverte · <strong>✏️</strong> tieni premuto e gira il dito intorno all'ago: disegna l'arco col colore, lo spessore e il tipo di tratto scelti nello strumento di disegno a mano libera</div>
+                    </div>
+                    <div class="settings-changelog-item">
+                        <div class="settings-changelog-ver">v2-117 — Ottobre 2026</div>
+                        <div class="settings-changelog-desc">🔵 Nelle Forme → <strong>Solide</strong> è arrivata anche la <strong>sfera</strong>, accanto a cubo, parallelepipedo, piramide, cono e cilindro</div>
+                    </div>
+                    <div class="settings-changelog-item">
+                        <div class="settings-changelog-ver">v2-116 — Ottobre 2026</div>
+                        <div class="settings-changelog-desc">🔺 <strong>Nuove forme, richieste da una professoressa.</strong> Nel pannello Forme ci sono ora due linguette: <strong>«Piane»</strong> (le forme di prima più <strong>quadrato, parallelogramma</strong> e i tre <strong>trapezi</strong> — rettangolo, isoscele e scaleno) e <strong>«Solide»</strong>, tutta nuova: <strong>cubo, parallelepipedo, piramide a base quadrata, cono e cilindro</strong>. Si disegnano trascinando come tutte le altre forme; gli spigoli che restano nascosti dietro il solido sono <strong>tratteggiati</strong>, per capire subito cosa si vede e cosa no</div>
+                    </div>
                     <div class="settings-changelog-item">
                         <div class="settings-changelog-ver">v2-115 — Ottobre 2026</div>
                         <div class="settings-changelog-desc">⌨️ <strong>Le scritte fatte con lo strumento Testo si possono correggere</strong>: con lo strumento Testo tocca la scritta e si riapre con la tastiera, con le sue parole, il suo colore e la sua grandezza; oppure selezionala con Seleziona e dai un <strong>tocco breve</strong>. Premendo e <strong>trascinando</strong>, invece, la scritta si sposta · 🖼️ Dal telefono si possono mandare anche <strong>foto dalla galleria</strong>, una o più insieme, oltre a quelle scattate al momento · 📁 Salvando una lezione nuova, il messaggio dice <strong>in quale cartella</strong> è finita · ✂️ <strong>Ritaglia le immagini</strong> con le maniglie: selezionala, tocca <strong>Ritaglia</strong>, trascina angoli e lati, poi <strong>✓ Ritaglia</strong>. L'originale non si perde: <strong>Tutta l'immagine</strong> la riporta com'era · 🔍 <strong>Immagini nitide ingrandendo</strong>: prima, zoomando sulla LIM, le foto si sgranavano anche se l'originale era nitido; ora restano definite. Le pagine dei <strong>PDF</strong> entrano a risoluzione più alta · 🪢 Il <strong>lazo</strong> di Seleziona può partire <strong>sopra un'immagine</strong>: cerchiando le scritte fatte su una foto prendi solo le scritte, non più tutta la foto · 💧 <strong>Contagocce</strong> nella tavolozza completa: prende il colore da qualunque punto dello schermo, anche da una foto · 📄 Una <strong>lezione nuova</strong> si salva <strong>subito sotto quella su cui stavi lavorando</strong>, non più in fondo alla cartella · 🎨 I pulsanti dell'<strong>ingranaggio</strong> (immagini, PDF, scritte selezionate) sono <strong>colorati e hanno il nome scritto sotto</strong>, per capirli al volo · 📰 La <strong>finestra delle novità</strong> dopo un aggiornamento è più larga e <strong>non si chiude più da sola</strong>: si legge con calma e si chiude con la X, «Ho capito» o un tocco fuori</div>
@@ -1417,8 +1536,9 @@
                 '<div class="settings-guide-item">⚡ <strong>Penna e Gomma funzionano a due tocchi</strong>, perché sono quelle che si usano di più mentre si spiega. <strong>Primo tocco</strong>: lo strumento torna in uso esattamente com\'era — stesso tratto, stesso colore, stessa modalità — e si scrive o si cancella subito. <strong>Secondo tocco</strong>: si apre il pannello, se vuoi cambiare qualcosa. Dentro al pannello basta <strong>un solo tocco</strong> sul colore o sullo spessore: non serve riselezionare lo strumento</div>' +
                 '<div class="settings-guide-item"><strong>✏️ Scrittura</strong> — penna, matita, pastello, evidenziatore, spessore della punta e ultimi colori usati. L\'icona in barra mostra <strong>l\'ultimo tratto scelto</strong>, e il <strong>pallino nel suo angolo dice con che colore stai scrivendo</strong>; il colore resta quello che hai impostato anche se passi ad un altro strumento e poi torni</div>' +
                 '<div class="settings-guide-item"><strong>🩹 Gomma</strong> — modo di cancellazione e dimensione. Anche qui l\'icona in barra mostra <strong>la modalità in uso</strong> (area, tratto o lazo) e ci resta finché non la cambi</div>' +
-                '<div class="settings-guide-item"><strong>T Testo</strong> · <strong>🔺 Forme</strong> · <strong>📐 Strumenti geometrici</strong> (righello, goniometro e squadre, dentro Magic Box)</div>' +
-                '<div class="settings-guide-item"><strong>✨ Magic Box</strong> — tutto quello che si aggiunge alla lezione: <em>Incorpora</em>, <em>Link</em>, <em>YouTube</em>, <em>Timer</em>, <em>Focus</em>, <em>Tendina</em>, <em>Righello</em>, <em>Goniometro</em>, <em>Squadre</em></div>' +
+                '<div class="settings-guide-item"><strong>T Testo</strong> · <strong>🔺 Forme</strong> · <strong>📐 Strumenti geometrici</strong> (righello, goniometro, compasso e squadre, dentro Magic Box)</div>' +
+                '<div class="settings-guide-item"><strong>✨ Magic Box</strong> — tutto quello che si aggiunge alla lezione: <em>Incorpora</em>, <em>Link</em>, <em>YouTube</em>, <em>Timer</em>, <em>Focus</em>, <em>Tendina</em>, <em>Righello</em>, <em>Goniometro</em>, <em>Compasso</em>, <em>Squadre</em></div>' +
+                '<div class="settings-guide-item"><strong>Compasso</strong> — l\'ago (punto 0) resta fermo dove lo trascini; si apre sempre dritto. Nella colonna di comandi: <strong>×</strong> chiude · <strong>⚙</strong> apre angolo numerico, dimensione e unità (mm/cm/in, sempre in scala vera) · <strong>👁</strong> mostra/nasconde la misura fra le due punte · <strong>⇆</strong> trascina per aprire/chiudere senza disegnare · <strong>⇄</strong> inverte il compasso · <strong>✏️</strong> tieni premuto e gira il dito intorno all\'ago: disegna l\'arco col colore, lo spessore e il tipo di tratto che hai scelto nello strumento di disegno a mano libera (penna, matita, biro o pastello)</div>' +
                 '<div class="settings-guide-item"><strong>📁 Gestione File</strong> — <em>Crea nuova lavagna</em>, <em>Salva</em>, <em>Apri libreria lezioni</em>, <em>Cattura</em>, <em>Stampa / Esporta PDF</em></div>' +
                 '<div class="settings-guide-item">In basso a destra restano <strong>schermo intero</strong>, <strong>adatta alla vista</strong>, la <strong>campanella</strong> degli avvisi e l\'<strong>icona account</strong>. A sinistra, la barra delle <strong>pagine</strong> con lo zoom</div>'},
 
@@ -1439,7 +1559,8 @@
                 '<div class="settings-guide-item">Colore e dimensione del tratto <strong>predefiniti</strong> per ogni nuova lavagna si scelgono in Impostazioni — vedi capitolo <em>Personalizzare l\'app</em></div>'},
 
             {id:"forme", ic:"🔺", t:"Forme e geometria", c:
-                '<div class="settings-guide-item"><strong>Forme</strong> — linea, rettangolo, cerchio/ellisse, cerchio perfetto, triangolo, freccia (anche doppia o solo a destra), stella, rombo, pentagono, esagono, nuvoletta, cuore, parentesi graffa</div>' +
+                '<div class="settings-guide-item"><strong>Forme → Piane</strong> — linea, rettangolo, cerchio/ellisse, cerchio perfetto, triangolo, freccia (anche doppia o solo a destra), stella, rombo, pentagono, esagono, nuvoletta, cuore, parentesi graffa, quadrato, parallelogramma, trapezio rettangolo/isoscele/scaleno</div>' +
+                '<div class="settings-guide-item"><strong>Forme → Solide</strong> — cubo, parallelepipedo, piramide a base quadrata, cono, cilindro, sfera (gli spigoli tratteggiati sono quelli nascosti dietro il solido)</div>' +
                 '<div class="settings-guide-item"><strong>Righello</strong> — trascinabile e ruotabile: il tratto scivola lungo il bordo per linee perfettamente dritte. La scala è quella dei quadretti veri (1 cm = un quadretto da 1 cm) e segue lo zoom; ingrandendo compaiono anche i millimetri</div>' +
                 '<div class="settings-guide-item"><strong>Goniometro</strong> — trascinabile, per misurare e disegnare angoli: appoggia la penna sul bordo curvo e il tratto segue l\'arco</div>' +
                 '<div class="settings-guide-item"><strong>Squadre 45° e 30°/60°</strong> — la penna scorre dritta lungo il lato più vicino, anche quello lungo; sui due lati corti c\'è la scala in centimetri, uguale ai quadretti. Al centro della squadra ci sono i comandi: sposta, ruota, ingrandisci, gradi, capovolgi (angolo retto a destra o a sinistra) e chiudi. Si possono usare insieme al righello, per esempio per tracciare le parallele: il tratto va allo strumento il cui bordo è più vicino alla penna</div>' +
